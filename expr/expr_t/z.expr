@@ -1,0 +1,10 @@
+#define XXXXXX(x) 9*(x)
+#define AAAA(x,y,z) 3*(x)+5*(y)-8/(z)+XXXXXX(3*(z))
+
+#ifndef AAAA
+	printf("AAAAA.\n");
+#else
+	AAAA(3*x,5*y,8/z);
+	printf("BBBBB.\n");
+#endif
+

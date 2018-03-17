@@ -1,0 +1,27 @@
+{
+goto aa;
+	setfilefmt("bin0:{0:1}:0");
+	initdate(300);
+	
+	setfmt(t_call_type,	"00","%02d",posp("0:2"));
+	setfmt(t_imsi,		" ","%-15s",posp("2:15"));
+	setfmt(t_calling_nbr,	" ","%-15s",posp("17:15"));
+	setfmt(t_called_nbr,	" ","%-24s",posp("32:24"));
+	setfmt(t_start_time,	" ","%-8s",posp("56:14"));
+	setfmt(t_duration,	" ","%06d",posp("70:6"));
+	setfmt(t_msc,		" ","%-10s",posp("76:10"));
+aa:
+	ticketvalid=1;
+	t_start_time="20"+HEX_OCTET_STRING(getfixpos(t_ori,fixp("1:6")));
+	t_duration=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("7:2")));
+	t_msc=itoa(HEX_OCTET_INT4B(getfixpos(t_ori,fixp("9:2"))));
+	l=t_len-12;
+	temp=HEX_OCTET_STRING(getfixpos(t_ori,fixp("11:22")));
+	t_call_type=atoi(substr(temp,0,1));
+	l1=htoi(substr(temp,1,1));
+	t_calling_nbr=substr(temp,2,l1);
+	t_called_nbr=substr(temp,2+l1,l*2-2-l1);
+	t_imsi="";
+	maxdatadate(substr(t_start_time,0,8));
+}
+

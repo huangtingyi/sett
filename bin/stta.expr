@@ -1,0 +1,89 @@
+{
+goto aa;
+setfmt(st_usage_event_id        	," ","%-18s",posp("0:18"));
+setfmt(st_source_id        			," ","%-6s",posp("18:6"));
+setfmt(st_home_area_code        	," ","%-6s",posp("24:6"));
+setfmt(st_msisdn        			," ","%-30s",posp("30:30"));
+setfmt(st_sett_city        			," ","%-6s",posp("60:6"));
+setfmt(st_opp_area_code      	  	," ","%-6s",posp("66:6"));
+setfmt(st_other_party        		," ","%-30s",posp("72:30"));
+setfmt(st_call_type        			," ","%-2s",posp("102:2"));
+setfmt(st_start_time        		," ","%-14s",posp("104:14"));
+setfmt(st_end_time        			," ","%-14s",posp("118:14"));
+setfmt(st_duration       			," ","%-8s",posp("132:8"));
+setfmt(st_audit_type        		," ","%-2s",posp("140:2"));
+
+aa:
+	ticketvalid=1;/*设置为有效话单*/
+	tariffflag=0; /*设置为不要批价*/
+/*取原始记录到中间变量*/
+
+
+	st_usage_event_id        		=trimcut(t_ori,0,18);
+	st_source_id								="";
+	st_call_type								=trimcut(t_ori,497,2);
+	st_start_time        				=trimcut(t_ori,140,14);
+	st_end_time        					=trimcut(t_ori,156,14);
+	st_duration       					=trimcut(t_ori,172,8);
+	st_audit_type="0";
+		
+	if(st_call_type=="09"){
+		st_call_type 							="01";
+		st_home_area_code        	=trimcut(t_ori,46,6);
+		st_msisdn        					=trimcut(t_ori,54,30);
+		st_sett_city        			=trimcut(t_ori,28,6);
+		st_opp_area_code					=trimcut(t_ori,102,6);
+		st_other_party						=trimcut(t_ori,110,30);
+	}
+	else{
+		st_call_type 							="02";
+		st_home_area_code        	=trimcut(t_ori,102,6);
+		st_msisdn        					=trimcut(t_ori,110,30);
+		st_sett_city        			=trimcut(t_ori,84,6);
+		st_opp_area_code					=trimcut(t_ori,46,6);
+		st_other_party						=trimcut(t_ori,54,30);		
+	}
+	
+	if(substr(st_msisdn,0,4) == "1001"){
+		ticketvalid=-1;
+		return;
+	}
+	
+	itd_len = strlen(st_opp_area_code);
+	if(substr(st_other_party,0,1) == 'E'){
+		st_other_party = substr(st_other_party,1,29);
+	}
+	else if(substr(st_other_party,0,itd_len) == substr(st_opp_area_code,0,itd_len)){
+		st_other_party = substr(st_other_party,itd_len,26);
+	}
+	else if(substr(st_other_party,0,2) == "86" && strlen(st_other_party)>11){
+		st_other_party = substr(st_other_party,2,28);
+	}
+
+	itd_len = strlen(st_home_area_code);
+	if(substr(st_msisdn,0,1) == 'E'){
+		st_msisdn = substr(st_msisdn,1,29);
+	}
+	else if(substr(st_other_party,0,itd_len) == substr(st_home_area_code,0,itd_len)){
+		st_msisdn = substr(st_msisdn,itd_len,26);
+	}
+	else if(substr(st_msisdn,0,2) == "86" && strlen(st_msisdn)>11){
+		st_msisdn = substr(st_msisdn,2,28);
+	}
+		
+	itd_len = strlen(st_home_area_code);
+	if(substr(st_home_area_code,0,1) == "0"){
+		st_home_area_code = substr(st_home_area_code,1,itd_len-1);
+	}
+
+	itd_len = strlen(st_opp_area_code);
+	if(substr(st_opp_area_code,0,1) == "0"){
+		st_opp_area_code = substr(st_opp_area_code,1,itd_len-1);
+	}
+
+	itd_len = strlen(st_sett_city);
+	if(substr(st_sett_city,0,1) == "0"){
+		st_sett_city = substr(st_sett_city,1,itd_len-1);
+	}
+	
+}

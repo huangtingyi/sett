@@ -1,0 +1,337 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <bintree.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdir.h>
+#include <list.h>
+#include <expr.h>
+#include <expr_var.h>
+#include <expr_fun.h>
+#include <wwsupp.h>
+#include <wwdb.h>
+#include <wwfile.h>
+
+#include "settle_supp.h"
+
+struct TemplateMidSttTicketStruct *gMidSttList=NULL;
+
+int data_search_mid_stt(void *pValue,void *pData)
+{
+	int iResult=0;
+	
+	struct TemplateMidSttTicketStruct *pSource=(struct TemplateMidSttTicketStruct*)pValue;
+	struct TemplateMidSttTicketStruct *pTarget=(struct TemplateMidSttTicketStruct*)pData;
+
+	if((iResult=strcmp(pSource->sProdID,		pTarget->sProdID))!=0) return iResult;
+	if((iResult=strcmp(pSource->sMsisdn,		pTarget->sMsisdn))!=0) return iResult;
+	if((iResult=strcmp(pSource->sOtherParty,	pTarget->sOtherParty))!=0) return iResult;
+/*
+	if((iResult=strcmp(pSource->sSettLatnID,	pTarget->sSettLatnID))!=0) return iResult;
+	if((iResult=pSource->iReportItemID - pTarget->iReportItemID)!=0) return iResult;
+	if((iResult=strcmp(pSource->sCallType,		pTarget->sCallType))!=0) return iResult;
+	if((iResult=strcmp(pSource->sHomeAreaCode,	pTarget->sHomeAreaCode))!=0) return iResult;
+	if((iResult=strcmp(pSource->sOppAreaCode,	pTarget->sOppAreaCode))!=0) return iResult;
+	if((iResult=strcmp(pSource->sMyDistanceType,	pTarget->sMyDistanceType))!=0) return iResult;
+	if((iResult=strcmp(pSource->sOppDistanceType,	pTarget->sOppDistanceType))!=0) return iResult;
+	if((iResult=strcmp(pSource->sMyNbrType,		pTarget->sMyNbrType))!=0) return iResult;
+	if((iResult=strcmp(pSource->sOppNbrType,	pTarget->sOppNbrType))!=0) return iResult;
+	if((iResult=strcmp(pSource->sMy3gFlag,		pTarget->sMy3gFlag))!=0) return iResult;
+	if((iResult=strcmp(pSource->sOpp3gFlag,		pTarget->sOpp3gFlag))!=0) return iResult;
+	if((iResult=strcmp(pSource->sMyCarrID,		pTarget->sMyCarrID))!=0) return iResult;
+	if((iResult=strcmp(pSource->sOppCarrID,		pTarget->sOppCarrID))!=0) return iResult;
+	if((iResult=strcmp(pSource->sServFlag,		pTarget->sServFlag))!=0) return iResult;
+*/		
+	return iResult;
+}
+
+void assign_insert_bintree_mid_stt(void **ppData,void *pData)
+{
+	InsertList((LIST **)ppData,(LIST *)pData);
+}
+
+int append_bintree_to_list_mid_stt(void **ppData)
+{
+	struct TemplateMidSttTicketStruct *pTemp=(struct TemplateMidSttTicketStruct*)(*ppData);
+
+	pTemp->pLoadNext=gMidSttList;
+	gMidSttList=pTemp;
+
+	return 0;
+}
+int CheckParam(int argc,char **argv)
+{	
+	char sType[4],sBillDate[9];
+	
+	strcpy(sBillDate,argv[1]);
+	strcpy(sType,argv[2]);
+	
+	if(ChkDate(sBillDate)<0) goto err_step;
+	
+	if(argc==3){
+		if((strcmp(sType,"SMS")!=0) && (strcmp(sType,"MMS")!=0)){
+			printf("Usage: %s BillDate SMS/MMS",argv[0]);
+			return -1;
+		}
+	}
+	else if(argc==5){
+		if((strcmp(sType,"STT")!=0)){
+			printf("Usage: %s BillDate STT NetWork CarrID",argv[0]);
+			return -1;
+		}
+	}
+	else{
+err_step:	
+		printf("参数错误!\n");
+		printf("	Usage: %s BillDate Type [NetWork] [CarrID].\n",argv[0]);
+		printf("	BillDate说明: 	时间（YYYYMMDD）\n");
+		printf("	Type说明: 	STT 为语音,SMS 为短信,MMS 为彩信\n");
+		printf("	NetWork说明: 	移动:YD、固网:GW\n");
+		printf("	CarrID说明: 	电信:CT、电信CDMA:CTC、铁通：CRC、移动：CM\n");
+		return -1;
+	}
+	
+	return 0;
+}
+
+
+void mvDetailtoMidtable(char sPart[],struct TemplateSttTicketStruct *pi,
+	struct TemplateMidSttTicketStruct *po)
+{
+	int iSettDuration=0;
+	
+	bzero((void*)po,sizeof(struct TemplateMidSttTicketStruct));
+	
+	strncpy(po->sSettLatnID,	pi->sSettLatnID,1);
+	
+	po->iReportItemID=pi->iReportItemID;
+	
+	strncpy(po->sProdID,		pi->sProdID,10);
+	strncpy(po->sCallType,		pi->sCallType,1);
+	strncpy(po->sHomeAreaCode,	pi->sHomeAreaCode,5);
+	strncpy(po->sMsisdn,		pi->sMsisdn,15);
+	strncpy(po->sOppAreaCode,	pi->sOppAreaCode,5);
+	strncpy(po->sOtherParty,	pi->sOtherParty,15);
+	strncpy(po->sSettDate,sPart,8);
+
+	po->iCnt=1;
+	po->iDuration=pi->iDuration;
+	
+	iSettDuration=(po->iDuration+59)/60;
+	po->iSettDuration=iSettDuration*60;
+	
+	po->iSettFee=pi->iSettFee;
+	
+	strncpy(po->sMyDistanceType,	pi->sMyDistanceType,1);
+	strncpy(po->sOppDistanceType,	pi->sOppDistanceType,1);
+	strncpy(po->sMyNbrType,		pi->sMyNbrType,1);
+	strncpy(po->sOppNbrType,	pi->sOppNbrType,1);
+	strncpy(po->sMy3gFlag,		pi->sMy3gFlag,1);
+	strncpy(po->sOpp3gFlag,		pi->sOpp3gFlag,1);
+	strncpy(po->sMyCarrID,		pi->sMyCarrID,1);
+	strncpy(po->sOppCarrID,		pi->sOppCarrID,1);
+	strncpy(po->sServFlag,		pi->sServFlag,1);
+	strncpy(po->sGroupID,		pi->sGroupID,2);
+	
+	AllTrim(po->sOtherParty);
+	strncpy(po->sOtherGroupID,po->sOtherParty+strlen(po->sOtherParty)-2,2);
+
+	AllTrim(po->sSettLatnID);
+	AllTrim(po->sProdID);
+	AllTrim(po->sCallType);
+	AllTrim(po->sHomeAreaCode);
+	AllTrim(po->sMsisdn);
+	AllTrim(po->sOppAreaCode);
+	AllTrim(po->sOtherParty);
+	AllTrim(po->sSettDate);
+	AllTrim(po->sMyDistanceType);
+	AllTrim(po->sOppDistanceType);
+	AllTrim(po->sMyNbrType);
+	AllTrim(po->sOppNbrType);
+	AllTrim(po->sMy3gFlag);
+	AllTrim(po->sOpp3gFlag);
+	AllTrim(po->sMyCarrID);
+	AllTrim(po->sOppCarrID);
+	AllTrim(po->sServFlag);
+	AllTrim(po->sGroupID);
+	AllTrim(po->sOtherGroupID);
+	
+}
+int LoadTabletoBintree(int iGroupID,char sPart[],char sTableNameIn[],BINTREE **pptRoot)
+{
+	unsigned long ulRecCnt=0,ulold=0,ulnew=0;
+	struct TemplateSttTicketStructIn TempIn;
+	struct TemplateSttTicketStruct Temp;
+	struct TemplateMidSttTicketStruct TempMid;
+	struct TemplateMidSttTicketStruct *pTemp=NULL;
+	struct TemplateMidSttTicketStruct *ptFound=NULL;
+	
+	bzero((void*)&TempIn,sizeof(struct TemplateSttTicketStructIn));
+	bzero((void*)&Temp,sizeof(struct TemplateSttTicketStruct));
+	
+	/*strcpy(TempIn.sTableName,sTableNameIn);
+	strcpy(TempIn.sCondition,"");*/
+	
+	sprintf(TempIn.sTableName,"%s PARTITION(PART%s)",sTableNameIn,sPart);
+	sprintf(TempIn.sCondition,"WHERE GROUP_ID='%02d'",iGroupID);
+	
+	
+	TempIn.iFirstFlag = true;
+	TempIn.iBufEmpty=true;
+	Temp.pNext = NULL;
+	Temp.pLoadNext = NULL;
+	
+	while(EGetTemplateSttTicketToStruct(&Temp,&TempIn)) {
+		
+		/*转换结构体格式*/
+		if(strcmp(Temp.sMsisdn,"")==0) continue;
+		mvDetailtoMidtable(sPart,&Temp,&TempMid);
+		
+		if(SearchBin(*pptRoot,&TempMid,data_search_mid_stt,(void**)&ptFound)==FOUND){
+			ptFound->iCnt += 1;
+			ptFound->iDuration += TempMid.iDuration;
+			ptFound->iSettDuration += TempMid.iSettDuration;
+			ptFound->iSettFee += TempMid.iSettFee;
+			ulold++;
+		}
+		else{
+			if((pTemp=(struct TemplateMidSttTicketStruct*)
+				malloc(sizeof(struct TemplateMidSttTicketStruct)))==NULL){
+				WriteProcMsg("malloc struct TemplateMidSttTicketStruct 失败!!!");
+				return -1;
+			}
+			bzero((void*)pTemp,sizeof(struct TemplateMidSttTicketStruct));
+			memcpy((void*)pTemp,(void*)&TempMid,sizeof(struct TemplateMidSttTicketStruct));
+
+			if(InsertBin(pptRoot,pTemp,data_search_mid_stt,
+					assign_insert_bintree_mid_stt)<0){
+				WriteProcMsg("生成二叉树 TemplateMidSttTicketStruct 失败.");
+				return -1;
+			}
+			ulnew++;
+		}
+		ulRecCnt++;
+		/*if((++ulRecCnt)%10000==0){
+			WriteProcMsg("从表中 %s 读取数据 %d 条. ",sTableNameIn,ulRecCnt);
+		}*/
+		
+	}
+	
+	WriteProcMsg("组号：%02d ,从表中 %s 读取数据 %d 条. 新增 %d 条,累加 %d 条",iGroupID,sTableNameIn,ulRecCnt,ulnew,ulold);
+	
+	return 0;
+}
+int EInsertList2TableStt(char sTableName[],struct TemplateMidSttTicketStruct *ptHead)
+{
+	unsigned long ulRecCnt=0;
+	struct TemplateMidSttTicketStructOut TempOut;
+	struct TemplateMidSttTicketStruct *ptCur=NULL;
+	struct TemplateMidSttTicketStruct *ptLoadCur=NULL;
+
+	bzero(&TempOut,sizeof(struct TemplateMidSttTicketStructOut));
+
+	strcpy(TempOut.sTableName,sTableName);
+	
+	while(ptHead!=NULL){
+		ptLoadCur=ptHead;
+		ptHead=ptHead->pLoadNext;
+		
+		while(ptLoadCur!= NULL){
+			ptCur = ptLoadCur;
+			ptLoadCur = ptLoadCur->pNext;
+			
+			if((++ulRecCnt)%10000==0){
+				if(EInsertStructToTemplateMidSttTicket(NULL,true,&TempOut)<0){
+					WriteProcMsg("写表%s错误.",sTableName);
+					WriteErrStackAlert();
+					RollbackWorkRelease();
+					return -1;
+				}
+				CommitWork();
+				WriteProcMsg("当前输出数据到 %s 表记录数 %lu 条.",
+					sTableName,ulRecCnt);
+			}
+			if(EInsertStructToTemplateMidSttTicket(ptCur,false,&TempOut)<0){
+				WriteProcMsg("写表%s错误.",sTableName);
+				WriteErrStackAlert();
+				RollbackWorkRelease();
+				return -1;
+			}
+			free(ptCur);
+		}
+	}
+	if(EInsertStructToTemplateMidSttTicket(NULL,true,&TempOut)<0){
+		WriteProcMsg("写表%s错误.",sTableName);
+		WriteErrStackAlert();
+		RollbackWorkRelease();
+		return -1;
+	}
+	
+	CommitWork();
+	
+	WriteProcMsg("输出数据到 %s 表总记录数 %lu 条.",sTableName,ulRecCnt);
+	
+	return 0;
+}
+int DealSTTProcMain(char sPart[],char sTableNameIn[],char sTableNameOut[])
+{
+	int iGroupID=0;
+	BINTREE *pRoot=NULL;
+	while(iGroupID<100){
+		/*从详单表中加载数据*/	
+		if(LoadTabletoBintree(iGroupID,sPart,sTableNameIn,&pRoot)<0) return -1;
+		
+		TravelBin(pRoot,append_bintree_to_list_mid_stt);
+		/*数据入库到中间统计表*/			
+		if(EInsertList2TableStt(sTableNameOut,gMidSttList)<0) return -1;
+		
+		DestroyBin(pRoot);
+		pRoot=NULL;
+		gMidSttList=NULL;
+		iGroupID++;
+	}
+	return 0;
+}
+int DealMsgProcMain(char sTableNameIn[],char sTableNameOut[])
+{
+	
+	return 0;
+}
+int main(int argc,char **argv)
+{
+	
+	char sNetWork[4],sCarrID[4];
+	char sMonth[3],sPart[9];
+	char sTableNameIn[31],sTableNameOut[31];
+
+	/*检查参数*/	
+	if(CheckParam(argc,argv)<0) return -1;
+	
+	strcpy(sPart,argv[1]);
+	strncpy(sMonth,sPart+4,2);sMonth[2]=0;
+	
+	InitAppRes(argv[0]);
+	if(ConnectDataDB()<0) return -1;
+		
+	WriteProcMsg("中间统计程序开始执行...");
+	if(argc==3){
+		/*短信、彩信 表待定*/
+		DealMsgProcMain(sTableNameIn,sTableNameOut);
+	}
+	else{
+		strcpy(sNetWork,argv[3]);
+		strcpy(sCarrID,argv[4]);
+		
+		sprintf(sTableNameIn,"ST_%s_TICKET_%s_%s_TEST",sNetWork,sCarrID,sMonth);
+		sprintf(sTableNameOut,"ST_%s_M_TICKET_%s_%s_TEST",sNetWork,sCarrID,sMonth);
+		
+		DealSTTProcMain(sPart,sTableNameIn,sTableNameOut);
+		WriteProcMsg("从详单表 %s 统计到中间表 %s 完成.",sTableNameIn,sTableNameOut);
+	}
+	
+
+	DisconnectDatabase();	
+	WriteProcMsg("中间统计程序执行完成.");
+	return 0;
+}

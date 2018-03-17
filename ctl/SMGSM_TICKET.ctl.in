@@ -1,0 +1,34 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+REQ_NO            position(1  :18 ),    
+MSG_ID            position(19 :28 ),    
+CALLING_NBR       position(29 :48 ),   
+CALLING_TON       position(49 :51 ), 
+CALLING_NPI       position(52 :54 ),  
+CALLED_NBR        position(55 :74 ),  
+CALLED_TON        position(75 :77 ),  
+CALLED_NPI        position(78 :80 ),  
+REGISTER_TIME     position(81 :99 ), 
+SEND_TIME         position(100:118),
+PRIORITY          position(119:121),
+SSR               position(122:124),
+PID               position(125:127),
+DCS               position(128:130),
+MSG_LEN           position(131:133),
+LAST_STATUS       position(134:136),
+ERR_CODE          position(137:139),
+MSG_TYPE          position(140:143),
+SERVICE_TYPE      position(144:148),
+PPS_FLAG          position(149:149),
+ORG_ACCOUNT       position(150:159),
+DEST_ACCOUNT      position(160:169),
+RIGHT_RESULT      position(170:179),
+UDHI              position(180:180),
+MR                position(181:181),
+RN                position(182:183),
+MN                position(184:184),
+SN                position(185:185)
+)
+

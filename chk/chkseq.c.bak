@@ -1,0 +1,178 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <list.h>
+#include <bintree.h>
+#include <wwlog.h>
+#include <wwfile.h>
+#include <wwtiny.h>
+#include <wwdb.h>
+
+#include <dbsupp.h>
+
+
+int InitPickLog2List(char sBeginDate[],char sEndDate[],
+	char sSourceID[],struct PickLogStruct **pptHead)
+{
+	int iCnt=0;
+	struct PickLogStruct Temp,*pTemp;
+	struct PickLogStructIn TempIn;
+	
+	*pptHead=NULL;
+	bzero((void*)&TempIn,sizeof(struct PickLogStructIn));
+	sprintf(TempIn.sTableName,"PICK_LOG");
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+	sprintf(TempIn.sCondition,"\n\
+		WHERE 	DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			DEAL_END_DATE<to_date('%s','yyyymmddhh24miss') AND\n\
+			SOURCE_ID='%s'",sBeginDate,sEndDate,sSourceID);
+
+	while(EGetPickLogToStruct(&Temp,&TempIn)){
+		iCnt++;
+		if((pTemp=malloc(sizeof(struct PickLogStruct)))==NULL){
+			printf("分配内存PickLogStruct错误\n");
+			return -1;
+		}
+		memcpy((void*)pTemp,(void*)&Temp,sizeof(struct PickLogStruct));
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+	}
+	return iCnt;
+}
+/*参数：外部要插入的结构，当前结点的数据区*/
+int data_search_bintree_pick_log_e(void *pValue,void*pData)
+{               
+	struct PickLogStruct *pSource=(struct PickLogStruct *)pValue;
+	struct PickLogStruct *pTarget=(struct PickLogStruct *)pData;
+
+	return pSource->iSeq-pTarget->iSeq;
+}
+int key_comp_pick_log_e(LIST *pValue,LIST *pData)
+{
+        struct PickLogStruct *pSource=(struct PickLogStruct *)pValue;
+        struct PickLogStruct *pTarget=(struct PickLogStruct *)pData;
+        
+        return strcmp(pSource->sDealEndDate,pTarget->sDealEndDate);
+        
+}
+void assign_insert_bintree_pick_log_e(void **pptHead,void *pData)
+{
+        InsertListSort((LIST**)pptHead,(LIST*)pData,key_comp_pick_log_e);
+}
+int node_print_pick_log_e(void **ppHead)
+{
+	
+	struct PickLogStruct *ptHead=(*ppHead),*pTemp;
+	
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		printf("%s,%d,%s.\n",
+			pTemp->sDealEndDate,pTemp->iSeq,pTemp->sFileName);
+		
+	}
+	return 0;
+}                   
+void GetBgnEndSeq(struct PickLogStruct *ptLkHead,int iMinSeq,int iMaxSeq,
+	int *piBgnSeq,int *piEndSeq)
+{
+	int iCnt=0,iMinDateSeq,sMinDate[15];
+	struct PickLogStruct *ptHead,*pTemp;
+
+	*piBgnSeq=*pEndSeq=0;
+	
+	iCnt=CountList((LIST*)ptHead);
+	
+	ptHead=ptLkHead;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		
+	
+	
+	
+	
+}
+
+/*生成目标文件*/
+int main(int argc,char *argv[])
+{
+	BINTREE *pRoot=NULL;
+	int iMaxSeq=0,iMinSeq=0,iBgnSeq=0,iEndSeq=0;
+	struct PickLogStruct *ptLkHead=NULL,*ptHead,*pTemp;
+	char sSourceID[20],sTemp[30],sBeginDate[15],sEndDate[15];
+					
+	if(argc !=5 ){
+		printf("Usage %s sourceid date minseq maxseq.\n",argv[0]);
+		printf("date参数说明:\n");
+		printf("	Ddate1date2 要检查date1到date2,yyyymmdd格式\n");
+		printf("	-n 	忽略date参数,用当前系统时间检查\n");
+		printf("	date 	要检查日期,yyyymmdd格式\n");
+		return -1;		
+	}
+	
+/*初始化参数部分*/
+	strcpy(sSourceID,argv[1]);	
+	strcpy(sTemp,argv[2]);
+
+/*处理日期参数*/
+	if(strstr(sTemp,"-n")!=NULL){
+		GetHostTime(sBeginDate);sBeginDate[8]=0;
+		strcpy(sEndDate,sBeginDate);
+	}
+	else if(strncmp(sTemp,"D",1)==0){
+		strncpy(sBeginDate,sTemp+1,8);sBeginDate[8]=0;
+		strncpy(sEndDate,sTemp+9,8);sEndDate[8]=0;
+	}
+	else{
+		strncpy(sBeginDate,sTemp,8);sBeginDate[8]=0;
+		strcpy(sEndDate,sBeginDate);
+	}
+	strcat(sBeginDate,"000000");
+	strcat(sEndDate,"000000");AddDates(sEndDate,1);
+
+	iMinSeq=atoi(argv[3]);
+	iMaxSeq=atoi(argv[4]);
+	
+/**检查参数合法性*******/
+	if(strcmp(sEndDate,sBeginDate)<=0){
+		printf("结束日期必须大于起始日期.\n");
+		return -1;
+	}
+	if(iMaxSeq<=iMinSeq)	{
+		printf("最大序列号参数必须大于最小序列号参数.\n");
+		return -1;
+	}
+	
+	if(ConnectDataDB()<0){
+		printf("无法连接数据库.\n");
+		return -1;
+	}
+/*加载待检测数据到内存*/
+	if(InitPickLog2List(sBeginDate,sEndDate,sSourceID,&ptLkHead)<0)
+		return -1;
+	
+	ptHead=ptLkHead;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		if(InsertBin(&pRoot,(void*)pTemp,
+			data_search_bintree_pick_log_e,
+			assign_insert_bintree_pick_log_e)<0){
+			printf("生成平衡二叉树失败.\n");
+			return -1;
+		}
+	}
+/*取得开始和结束的SEQ*/
+	GetBgnEndSeq(ptLkHead,iMinSeq,iMaxSeq,iBgnSeq,iEndSeq);
+	
+/*做一个循环将所有的东西打印出来*/
+	TravelBin(pRoot,node_print_pick_log_e);
+	
+	DisconnectDatabase();
+	
+	return 0;
+}
+

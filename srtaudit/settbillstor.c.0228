@@ -1,0 +1,697 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <bintree.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdir.h>
+#include <list.h>
+#include <expr.h>
+#include <expr_var.h>
+#include <expr_fun.h>
+#include <wwsupp.h>
+#include <wwdb.h>
+#include <wwfile.h>
+
+#include "../include/table_field.h"
+#include "../include/extend_intf.h"
+#include "../extract/tab_xstr_impl.h"
+
+#include "sett_supp.h"
+#define Maxsize 1024
+
+struct TTemplateYdGwUeStruct *gSettStatList=NULL;
+unsigned long long lCurUseMem=0ULL;
+
+int arry[]={18,10,14,14,14,8,30,30,30,30,8,8,20,20,4,18,4,20,8,10,10,
+		30,30,10,10,18,8,8,18,18,8,18,60,18,3,8,18,8,30,30,30,
+		8,1,8,5,12,8,18,4,1,9,9,30,18,18,18,20,18,18,15,15,18,18,
+		15,15,18,18,18,18,1,30,50,10,20,8,30,30,4,30,10,30,10,20,
+		20,4,10,18,20,20,4,10,18,20,20,20,20,20,20,20,20,20,30,10};
+	
+
+int data_search_day_stat(void *pValue,void *pData)
+{
+	int iResult=0;
+	struct TTemplateYdGwUeStruct *pSource=(struct TTemplateYdGwUeStruct*)pValue;
+	struct TTemplateYdGwUeStruct *pTarget=(struct TTemplateYdGwUeStruct*)pData;
+
+	if((iResult=strcmp(pSource->sUsageEventID,pTarget->sUsageEventID))!=0) return iResult;		
+
+	return 0;
+
+}
+void assign_insert_bintree_day_stat(void **ppData,void *pData)
+{
+	InsertList((LIST **)ppData,(LIST *)pData);
+}
+int append_bintree_to_list_day_stat(void **ppData)
+{
+	struct TTemplateYdGwUeStruct *pTemp=(struct TTemplateYdGwUeStruct*)(*ppData);
+
+	pTemp->pLoadNext=gSettStatList;
+	gSettStatList=pTemp;
+
+	return 0;
+}	
+void AddTrime(char sStr[],int i,char sTemp[])
+{
+	int iLen=0;
+	int iCnt=0;
+	int m=0;
+	
+	iLen=strlen(sStr);
+	iCnt=arry[i]-iLen;
+	if(iCnt<=0)
+		iCnt=0;
+	while(m<iCnt){
+		strncat(sStr," ",iCnt);
+		m++;
+	}
+	strcpy(sTemp,sStr);
+	
+}
+int GenSettleStr(char sStr[],char sResult[],int i)
+{
+	int iLen=0; 
+	char sTemp[128];
+	
+	AddTrime(sStr,i,sTemp);
+	iLen=sprintf(sResult,"%s",sTemp);
+
+	return iLen;
+}
+int EInsertList2Table(char sTableName[],struct TTemplateYdGwUeStruct *ptHead)
+{
+	unsigned long ulRecCnt=0;
+	struct TTemplateYdGwUeStructOut TempOut;
+	struct TTemplateYdGwUeStruct *ptCur=NULL;
+	struct TTemplateYdGwUeStruct *ptLoadCur=NULL;
+
+	bzero(&TempOut,sizeof(struct TTemplateYdGwUeStructOut));
+
+	strcpy(TempOut.sTableName,sTableName);
+	
+	while(ptHead!=NULL){
+		ptLoadCur=ptHead;
+		ptHead=ptHead->pLoadNext;
+		
+		while(ptLoadCur!= NULL){
+			ptCur = ptLoadCur;
+			ptLoadCur = ptLoadCur->pNext;
+			
+			if((++ulRecCnt)%10000==0){
+				if(EInsertStructToTTemplateYdGwUe(NULL,true,&TempOut)<0){
+					WriteProcMsg("写表%s错误.",sTableName);
+					WriteErrStackAlert();
+					RollbackWorkRelease();
+					return -1;
+				}
+				CommitWork();
+				WriteProcMsg("当前输出数据到 %s 表记录数 %lu 条.",
+					sTableName,ulRecCnt);
+			}
+			if(EInsertStructToTTemplateYdGwUe(ptCur,false,&TempOut)<0){
+				WriteProcMsg("写表%s错误.",sTableName);
+				WriteErrStackAlert();
+				RollbackWorkRelease();
+				return -1;
+			}
+			lCurUseMem -= sizeof(struct TTemplateYdGwUeStructOut);
+			lCurUseMem -= sizeof(BINTREE);
+		}
+	}
+	if(EInsertStructToTTemplateYdGwUe(NULL,true,&TempOut)<0){
+		WriteProcMsg("写表%s错误.",sTableName);
+		WriteErrStackAlert();
+		RollbackWorkRelease();
+		return -1;
+	}
+	
+	CommitWork();
+	
+	WriteProcPrint("输出数据到 %s 表总记录数 %lu 条.",sTableName,ulRecCnt);
+	
+	return 0;
+}
+int GetAsBintreeArrayTable(struct SettleBintreeStruct asBintreeArray[])
+{
+	strcpy(asBintreeArray[0].sNetWork,"GW");
+	strcpy(asBintreeArray[1].sNetWork,"GW");
+	strcpy(asBintreeArray[2].sNetWork,"GW");
+	strcpy(asBintreeArray[3].sNetWork,"GW");
+	strcpy(asBintreeArray[4].sNetWork,"YD");
+	strcpy(asBintreeArray[5].sNetWork,"YD");
+	strcpy(asBintreeArray[6].sNetWork,"YD");
+	strcpy(asBintreeArray[7].sNetWork,"YD");
+	strcpy(asBintreeArray[8].sNetWork,"OTH");
+	strcpy(asBintreeArray[9].sNetWork,"YD");
+	strcpy(asBintreeArray[10].sNetWork,"GW");
+	strcpy(asBintreeArray[11].sNetWork,"YD");
+	
+	strcpy(asBintreeArray[0].sOperators,"CT");
+	strcpy(asBintreeArray[1].sOperators,"CM");
+	strcpy(asBintreeArray[2].sOperators,"CRC");
+	strcpy(asBintreeArray[3].sOperators,"OTH");
+	strcpy(asBintreeArray[4].sOperators,"CT");
+	strcpy(asBintreeArray[5].sOperators,"CM");
+	strcpy(asBintreeArray[6].sOperators,"CRC");
+	strcpy(asBintreeArray[7].sOperators,"OTH");
+	strcpy(asBintreeArray[8].sOperators,"OTH");
+	strcpy(asBintreeArray[9].sOperators,"CNC");
+	strcpy(asBintreeArray[10].sOperators,"CTC");
+	strcpy(asBintreeArray[11].sOperators,"CTC");
+	
+	asBintreeArray[0].ptRoot=NULL;
+	asBintreeArray[1].ptRoot=NULL;
+	asBintreeArray[2].ptRoot=NULL;
+	asBintreeArray[3].ptRoot=NULL;
+	asBintreeArray[4].ptRoot=NULL;
+	asBintreeArray[5].ptRoot=NULL;
+	asBintreeArray[6].ptRoot=NULL;
+	asBintreeArray[7].ptRoot=NULL;
+	asBintreeArray[8].ptRoot=NULL;
+	asBintreeArray[9].ptRoot=NULL;
+	asBintreeArray[10].ptRoot=NULL;
+	asBintreeArray[11].ptRoot=NULL;
+	
+	return 0;
+}
+int GenerationBinTree(char sStr[],struct SettleBintreeStruct asBintreeArray[])
+{	
+	static int iLen=sizeof(struct TTemplateYdGwUeStruct);
+	static int iLen_f=sizeof(struct FTTemplateYdGwUeStruct);
+	struct TTemplateYdGwUeStruct *pTemp;
+	struct FTTemplateYdGwUeStruct *pFp;
+	char sInNetWork[3],sOutNetWork[3];
+	char sInOperators[3],sOutOperators[3];
+	int i=0,m=0;
+	int iStat=1;
+	
+	if((pTemp=(struct TTemplateYdGwUeStruct*)malloc(iLen))==NULL){
+		WriteProcMsg("malloc struct TTemplateYdGwUeStruct 失败!!!");
+		return -1;
+	}
+	if((pFp=(struct FTTemplateYdGwUeStruct*)malloc(iLen_f))==NULL){
+		WriteProcMsg("malloc struct FTTemplateYdGwUeStruct 失败!!!");
+		return -1;
+	}
+	
+	bzero((void*)pTemp,sizeof(struct TTemplateYdGwUeStruct));
+	bzero((void*)pFp,sizeof(struct FTTemplateYdGwUeStruct));
+	
+	sprintf((char *)pFp,"%s",sStr);
+	
+	mvitem_fmttemplateydgwue(pFp,pTemp);
+	
+	if(ChkTime(pTemp->sStartTime)<0
+		&& ChkTime(pTemp->sEndTime)<0
+		&& ChkTime(pTemp->sRateTime)<0){
+			return -1;
+	}
+	
+	strncpy(sInNetWork,pTemp->sInTrunkGroup+1,1);
+	sInNetWork[1]=0;
+	strncpy(sInOperators,pTemp->sInTrunkGroup+3,1);
+	sInOperators[1]=0;
+	strncpy(sOutNetWork,pTemp->sOutTrunkGroup+1,1);
+	sOutNetWork[1]=0;
+	strncpy(sOutOperators,pTemp->sOutTrunkGroup+3,1);
+	sOutOperators[1]=0;
+	
+	if((strcmp(sInOperators,"3")==0 && strcmp(sOutOperators,"3")==0)) return 0;
+	
+	/*1--移网，0--固网*/
+	/*5--电信，1--网通，2--移动，3--联通，4--铁通*/
+	if(strcmp(sInNetWork,"0")==0 && strcmp(sOutNetWork,"0")==0){
+		/*GW_CT*/
+		if((strcmp(sInOperators,"5")==0 
+			&& strcmp(sOutOperators,"1")==0)
+			|| (strcmp(sInOperators,"1")==0 
+				&& strcmp(sOutOperators,"5")==0) ){
+			if(strncmp(pTemp->sCallingGroupID,"C007",4)==0 
+				|| strncmp(pTemp->sCallingGroupID,"C207",4)==0
+				|| strncmp(pTemp->sCalledGroupID,"C007",4)==0
+				|| strncmp(pTemp->sCalledGroupID,"C207",4)==0
+				){
+				if(InsertBin(&(asBintreeArray[10].ptRoot),pTemp,data_search_day_stat,
+					assign_insert_bintree_day_stat)<0){
+					WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+					return -1;
+				}
+			}else{
+				if(InsertBin(&(asBintreeArray[0].ptRoot),pTemp,data_search_day_stat,
+					assign_insert_bintree_day_stat)<0){
+					WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+					return -1;
+				}
+			}
+		}else if((strcmp(sInOperators,"2")==0 /*GW_CM*/
+			&& strcmp(sOutOperators,"1")==0)
+			|| (strcmp(sInOperators,"1")==0 
+				&& strcmp(sOutOperators,"2")==0) ){
+			if(InsertBin(&(asBintreeArray[1].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}	
+		}else if((strcmp(sInOperators,"4")==0 /*GW_CRC*/
+			&& strcmp(sOutOperators,"1")==0)
+			|| (strcmp(sInOperators,"1")==0 
+				&& strcmp(sOutOperators,"4")==0) ){
+			if(InsertBin(&(asBintreeArray[2].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}	
+		}else{/*GW_OTH*/
+			if(InsertBin(&(asBintreeArray[3].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}
+		}
+	}else if(strcmp(sInNetWork,"1")==0 && strcmp(sOutNetWork,"1")==0){
+		if(strncmp(pTemp->sInTrunkGroup,"S127",4)==0
+			|| strncmp(pTemp->sOutTrunkGroup,"S127",4)==0){
+			if(InsertBin(&(asBintreeArray[11].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}
+		}else if(strncmp(pTemp->sCallingGroupID,"C007",4)==0 
+			|| strncmp(pTemp->sCallingGroupID,"C207",4)==0
+			|| strncmp(pTemp->sCalledGroupID,"C007",4)==0
+			|| strncmp(pTemp->sCalledGroupID,"C207",4)==0){
+			if(InsertBin(&(asBintreeArray[11].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}
+		}else if((strcmp(sInOperators,"5")==0 
+			&& strcmp(sOutOperators,"3")==0)
+			|| (strcmp(sInOperators,"3")==0 
+				&& strcmp(sOutOperators,"5")==0) ){
+			if(InsertBin(&(asBintreeArray[4].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}		
+		}else if((strcmp(sInOperators,"2")==0 /*YD_CM*/
+			&& strcmp(sOutOperators,"3")==0)
+			|| (strcmp(sInOperators,"3")==0 
+				&& strcmp(sOutOperators,"2")==0) ){
+			if(InsertBin(&(asBintreeArray[5].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}	
+		}else if((strcmp(sInOperators,"4")==0 /*YD_CRC*/
+			&& strcmp(sOutOperators,"3")==0)
+			|| (strcmp(sInOperators,"3")==0 
+				&& strcmp(sOutOperators,"4")==0) ){
+			if(InsertBin(&(asBintreeArray[6].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}	
+		}else if((strcmp(sInOperators,"1")==0 /*YD_CNC*/
+			&& strcmp(sOutOperators,"3")==0)
+			|| (strcmp(sInOperators,"3")==0 
+				&& strcmp(sOutOperators,"1")==0) ){
+			if(InsertBin(&(asBintreeArray[9].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}	
+		}else{/*YD_OTH*/
+			if(InsertBin(&(asBintreeArray[7].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}
+		}
+	}else if(strcmp(sInNetWork,"1")==0 && strcmp(sOutNetWork,"0")==0
+		 || strcmp(sInNetWork,"0")==0 && strcmp(sOutNetWork,"1")==0){
+		if(strncmp(pTemp->sInTrunkGroup,"S127",4)==0
+			|| strncmp(pTemp->sOutTrunkGroup,"S127",4)==0){
+			if(InsertBin(&(asBintreeArray[11].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}
+		}else if(strncmp(pTemp->sCallingGroupID,"C007",4)==0 
+			|| strncmp(pTemp->sCallingGroupID,"C207",4)==0
+			|| strncmp(pTemp->sCalledGroupID,"C007",4)==0
+			|| strncmp(pTemp->sCalledGroupID,"C207",4)==0){
+			if(InsertBin(&(asBintreeArray[11].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}
+		}else if((strcmp(sInOperators,"2")==0 /*YD_CM*/
+			&& strcmp(sOutOperators,"3")==0)
+			|| (strcmp(sInOperators,"3")==0 
+				&& strcmp(sOutOperators,"2")==0) ){
+			if(InsertBin(&(asBintreeArray[5].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}	
+		}else if(strcmp(sInOperators,"1")==0 && strcmp(sOutOperators,"2")==0
+			|| strcmp(sInOperators,"2")==0 && strcmp(sOutOperators,"1")==0){
+			if(InsertBin(&(asBintreeArray[1].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}
+		}else if(strcmp(sInOperators,"1")==0 && strcmp(sOutOperators,"5")==0
+			|| strcmp(sInOperators,"5")==0 && strcmp(sOutOperators,"1")==0){
+			if(strncmp(pTemp->sCallingGroupID,"C007",4)==0 
+				|| strncmp(pTemp->sCallingGroupID,"C207",4)==0
+				|| strncmp(pTemp->sCalledGroupID,"C007",4)==0
+				|| strncmp(pTemp->sCalledGroupID,"C207",4)==0
+				){
+				if(InsertBin(&(asBintreeArray[10].ptRoot),pTemp,data_search_day_stat,
+					assign_insert_bintree_day_stat)<0){
+					WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+					return -1;
+				}
+			}else{
+				if(InsertBin(&(asBintreeArray[0].ptRoot),pTemp,data_search_day_stat,
+					assign_insert_bintree_day_stat)<0){
+					WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+					return -1;
+				}
+			}
+		}else if(strcmp(sInOperators,"1")==0 && strcmp(sOutOperators,"4")==0
+			|| strcmp(sInOperators,"4")==0 && strcmp(sOutOperators,"1")==0){
+			if(InsertBin(&(asBintreeArray[2].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}	
+		}else{
+			if(InsertBin(&(asBintreeArray[3].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}
+		}
+	}else if(strcmp(sInNetWork,"1")==0 && strcmp(sOutNetWork,"0")==0
+		 || strcmp(sInNetWork,"0")==0 && strcmp(sOutNetWork,"1")==0){
+		 if(strncmp(pTemp->sInTrunkGroup,"S127",4)==0
+			|| strncmp(pTemp->sOutTrunkGroup,"S127",4)==0){
+			if(InsertBin(&(asBintreeArray[11].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}
+		}else if(strncmp(pTemp->sCallingGroupID,"C007",4)==0 
+			|| strncmp(pTemp->sCallingGroupID,"C207",4)==0
+			|| strncmp(pTemp->sCalledGroupID,"C007",4)==0
+			|| strncmp(pTemp->sCalledGroupID,"C207",4)==0){
+			if(InsertBin(&(asBintreeArray[11].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}
+		}else if((strcmp(sInOperators,"5")==0 
+			&& strcmp(sOutOperators,"3")==0)
+			|| (strcmp(sInOperators,"3")==0 
+				&& strcmp(sOutOperators,"5")==0) ){
+			if(InsertBin(&(asBintreeArray[4].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}		
+		}else if((strcmp(sInOperators,"2")==0 /*YD_CM*/
+			&& strcmp(sOutOperators,"3")==0)
+			|| (strcmp(sInOperators,"3")==0 
+				&& strcmp(sOutOperators,"2")==0) ){
+			if(InsertBin(&(asBintreeArray[5].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}	
+		}else if((strcmp(sInOperators,"4")==0 /*YD_CRC*/
+			&& strcmp(sOutOperators,"3")==0)
+			|| (strcmp(sInOperators,"3")==0 
+				&& strcmp(sOutOperators,"4")==0) ){
+			if(InsertBin(&(asBintreeArray[6].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}	
+		}else if((strcmp(sInOperators,"1")==0 /*YD_CNC*/
+			&& strcmp(sOutOperators,"3")==0)
+			|| (strcmp(sInOperators,"3")==0 
+				&& strcmp(sOutOperators,"1")==0) ){
+			if(InsertBin(&(asBintreeArray[9].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}	
+		}else{/*YD_OTH*/
+			if(InsertBin(&(asBintreeArray[7].ptRoot),pTemp,data_search_day_stat,
+				assign_insert_bintree_day_stat)<0){
+				WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+				return -1;
+			}
+		}
+		
+	}else{
+		/*OTH*/
+		if(InsertBin(&(asBintreeArray[8].ptRoot),pTemp,data_search_day_stat,
+			assign_insert_bintree_day_stat)<0){
+			WriteProcMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+			return -1;
+		}
+	}
+	
+	return 0;
+}
+int SettleMentYD(char str[],struct SettleBintreeStruct asBintreeArray[])
+{
+	
+	int i=0;
+	int iOffset=0;
+	int iLen=0;
+	char *p;
+	char Temp[4096],sTemp[4096];
+	char delims=44;
+	
+	p=str;
+	while(*p!='\0'){
+		if(*p==','){
+			iLen++;
+		}
+		p++;
+	}
+	while(i<iLen){
+		GetSepStr(str,',',i,Temp);
+		iOffset+=GenSettleStr(Temp,sTemp+iOffset,i);
+		i++;
+	}
+	
+	if(GenerationBinTree(sTemp,asBintreeArray)<0){
+		printf("%s\n",sTemp);
+		return -1;
+	}
+	
+	return 0;
+}	
+int TravelFileList(struct FileControlStruct *ptHead,
+			char sMark[],struct SettleBintreeStruct asBintreeArray[])
+{
+	char sStr[2048];
+	struct FileControlStruct *pTemp;
+	int iLen;
+	int iCnt=0;
+	
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		memcpy(sStr,pTemp->pData,pTemp->iLen);
+		sStr[pTemp->iLen]=0;
+		
+		iCnt+=strlen(sStr);
+		
+		if((strcmp(sMark,"YD"))==0 || (strcmp(sMark,"GW"))==0){
+			if(SettleMentYD(sStr,asBintreeArray)<0) return -1;
+		}else{
+			/*用于扩展*/
+		}
+		strcpy(sStr,"");
+	}
+	
+	return iCnt;
+}
+
+int MyChkDir(char sPath[])
+{
+	if(strcmp(sPath,"/nil/")==0) return -1;
+	return CheckDir(sPath);
+}
+int FreeMemList(struct TTemplateYdGwUeStruct *ptHead)
+{
+	int iCnt=0;
+	struct TTemplateYdGwUeStruct *pTemp=NULL;
+	
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		hfree(pTemp,sizeof(struct TTemplateYdGwUeStruct));
+			
+		iCnt++;
+	}
+	
+	ptHead=NULL;
+	
+	return iCnt;
+}
+int ProcessMain(struct DispParamStruct *pParam,char sMark[],
+char sSourceDir[],char sTargetDir[],struct SettleBintreeStruct asBintreeArray[])
+{
+	int l=0,iSum=0,i=0;
+	int iCnt=0,iM=0;
+	char sMonth[5],sCommondMV[2048];
+	char sFileName[256],sTempName[256];
+	char sCommond[2048],sTableName[Maxsize];
+	struct FileControlStruct *ptList=NULL;
+	struct FileControlStruct *ptHead=NULL,*pTemp,*ptLkHead=NULL;
+	struct TTemplateYdGwUeStruct *pStatList=NULL;
+/*生成一个文件列表*/
+	if(dir2list(pParam->sSourcePath,pParam->sFilter,&ptHead)<0){
+		printALERT("生成文件列表失败 %s %s",
+			pParam->sSourcePath,pParam->sFilter);
+		return -1;
+	}
+	
+	ptLkHead=ptHead;
+
+	/*编译入库文件*/
+	while( ptHead != NULL ){
+
+		pTemp = ptHead;
+		ptHead = ptHead->pNext;
+
+		strncpy(sFileName,(char*)(pTemp->pData),pTemp->iLen);
+		sFileName[pTemp->iLen]=0;
+		
+		strncpy(sMonth,sFileName+18,2);
+		sMonth[2]=0;
+		
+		sprintf(sTempName,"%s%s",sSourceDir,sFileName);
+		
+		while(iM<12){
+			strcpy(asBintreeArray[iM].sNetWork,"");
+			strcpy(asBintreeArray[iM].sOperators,"");
+			iM++;
+		}
+		
+		GetAsBintreeArrayTable(asBintreeArray);
+		
+		if(TxtFileToList(sTempName,&ptList)<0) return -1;
+	
+		if(iSum=TravelFileList(ptList,sMark,asBintreeArray)<0){
+			sprintf(sCommond,"mv %s %s.err",sTempName,sTempName);
+			system(sCommond);
+			continue;
+		}
+		
+		while(i<12){
+			gSettStatList=NULL;
+			
+			TravelBin(asBintreeArray[i].ptRoot,append_bintree_to_list_day_stat);	
+			
+			sprintf(sTableName,"T_%s_UE_%s_%s",asBintreeArray[i].sNetWork,
+					asBintreeArray[i].sOperators,sMonth);
+			
+			pStatList=gSettStatList;
+			
+			if(EInsertList2Table(sTableName,gSettStatList)<0) return -1;
+			
+			FreeMemList(pStatList);
+			
+			DestroyBin(asBintreeArray[i].ptRoot);
+			
+			i++;
+		}
+		
+		i=0;
+		sprintf(sCommondMV,"rm %s%s",sSourceDir,sFileName);
+		
+		system(sCommondMV);
+		printNORMAL("对文件%s分解成功",sFileName);
+		
+	}
+	listfree(&ptLkHead);
+	
+	return 0;
+}
+
+int main(int argc,char *argv[])
+{
+	int iGroupID,iRet,iNum;
+	char sSourceDir[256],sTargetDir[256];
+	char sFileName[Maxsize],sTemp[Maxsize];
+	char sMark[10];
+	char sTablefile[80],sDirFileName[Maxsize],sFile[Maxsize];
+	struct SettleBintreeStruct asBintreeArray[13];
+	struct DispParamStruct *ptHead=NULL,*pTemp,*ptLkHead=NULL;
+	int iSize=0,j=0,m=0;
+	
+	if(argc != 3){
+		WriteProcPrint("Usage: ./settlement *.ini GroupID!!!");
+		return -1;
+	}
+
+	
+	strcpy(sDirFileName,argv[1]);
+	iGroupID=atoi(argv[2]);
+	
+	InitAppRes(argv[0]);
+	
+	if(ConnectDataDB()<0) return -1;
+		
+	if(GetDispParamList(sDirFileName,iGroupID,&ptHead)<0) return -1;
+	
+	ptLkHead=ptHead;
+
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+
+		/*检查参数合法性.*/
+
+		if(IsDir(pTemp->sSourcePath)==FALSE){
+			printALERT("输入目录%s无效.",pTemp->sSourcePath);
+			continue;
+		}
+
+		/*目标目录不存在则建立,考虑/nil目录
+		if(MyChkDir(pTemp->sDestPath1)<0)strcpy(pTemp->sDestPath1,"");
+		if(MyChkDir(pTemp->sDestPath2)<0)strcpy(pTemp->sDestPath2,"");
+		if(MyChkDir(pTemp->sDestPath3)<0)strcpy(pTemp->sDestPath3,"");
+		if(MyChkDir(pTemp->sDestPath4)<0)strcpy(pTemp->sDestPath4,"");
+		*/
+		strcpy(sSourceDir,pTemp->sDestPath1);
+		strcpy(sTargetDir,pTemp->sDestPath2);
+		strncpy(sMark,pTemp->sDestPath3,2);
+		sMark[2]=0;
+		
+		iRet=ProcessMain(pTemp,sMark,sSourceDir,sTargetDir,asBintreeArray);
+
+		if(iRet<0){
+			printALERT("分发文件失败!");
+			return -1;
+		}
+		if(iRet>0) break;
+	}		
+	
+	DisconnectDatabase();	
+	
+	return 0;
+}

@@ -1,0 +1,26 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+CALL_TYPE      		position(1:2),    
+CITY_CODE       	position(3:7),    
+MSISDN          	position(8:22),   
+OTHER_PARTY     	position(23:46), 
+START_TIME      	position(47:60),  
+DURATION        	position(61:66),  
+MSC             	position(67:81),  
+SMSP            	position(82:96),  
+USER_TYPE       	position(97:97), 
+SP_ACC_NBR      	position(98:106),
+SP_SERVICE_CODE 	position(107:116),
+SP_CODE         	position(117:121),
+FEE1            	position(122:127),
+FEE2            	position(128:133),
+FEE3            	position(134:139),
+FEE4            	position(140:145),
+FEE5            	position(146:153),
+FEE6            	position(154:161),
+TICKET_TYPE_ID  	position(162:165)
+)
+
+

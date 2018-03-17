@@ -1,0 +1,48 @@
+{
+/*声明输出部分*/
+goto aa;
+	setfilefmt("txt");
+	initdate(300);
+	setfmt(t_call_type,	"00","%02d",posp("0:2"));
+	setfmt(t_imsi,		" ","%-15s",posp("2:15"));
+	setfmt(t_calling_nbr,	" ","%-15s",posp("17:15"));
+	setfmt(t_called_nbr,	" ","%-24s",posp("32:24"));
+	setfmt(t_start_date,	" ","%-8s",posp("56:8"));
+	setfmt(t_start_time,	" ","%-6s",posp("64:6"));
+	setfmt(t_duration,	" ","%06d",posp("70:6"));
+	setfmt(t_msc,		" ","%-10s",posp("76:10"));
+	setfmt(t_trunk_in,	" ","%-8s",posp("86:8"));
+	setfmt(t_trunk_out,	" ","%-8s",posp("94:8"));
+	setfmt(t_lac,		" ","%-4s",posp("102:4"));
+	setfmt(t_cell_id,	" ","%-4s",posp("106:4"));
+	setfmt(t_other_lac,	" ","%-4s",posp("110:4"));
+	setfmt(t_other_cell_id,	" ","%-4s",posp("114:4"));
+	setfmt(t_service_type,	" ","%-3s",posp("118:3"));
+	setfmt(t_service_code,	" ","%-4s",posp("121:4"));
+	setfmt(t_third_party,	" ","%-15s",posp("125:15"));
+	setfmt(t_msrn,		" ","%-15s",posp("140:15"));
+	setfmt(st_esn,		" ","%-15s",posp("155:15" ));
+aa:
+	ticketvalid=1;
+	if(trimcut(t_ori,0,1)=="#"){ticketvalid=-2;return;}
+	t_call_type=	atoi(IA5STRING(gettabpos(t_ori,tabp("0:1"))));
+	t_imsi=		"";
+	t_calling_nbr=	IA5STRING(gettabpos(t_ori,tabp("1:1")));
+	t_called_nbr=	IA5STRING(gettabpos(t_ori,tabp("2:1")));
+	t_start_date=	substr(IA5STRING(gettabpos(t_ori,tabp("3:1"))),0,8);
+	t_start_time=	substr(IA5STRING(gettabpos(t_ori,tabp("3:1"))),8,6);
+	t_duration=	atoi(IA5STRING(gettabpos(t_ori,tabp("4:1"))));
+	t_msc=		IA5STRING(gettabpos(t_ori,tabp("5:1")));
+	t_trunk_in=	IA5STRING(gettabpos(t_ori,tabp("6:1")));
+	t_trunk_out=	IA5STRING(gettabpos(t_ori,tabp("7:1")));
+	t_service_type="000";
+	t_service_code="0011";
+	if(t_call_type==03){
+		t_service_type="002";
+		t_service_code="0021";
+		t_third_party=IA5STRING(gettabpos(t_ori,tabp("8:1")));
+	}
+
+	if(maxdatadate(t_start_date)<0)	ticketvalid=-1;
+
+}

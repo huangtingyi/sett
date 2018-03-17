@@ -1,0 +1,209 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <wwdb.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <param_intf.h>
+#include <tll_dat_stat_supp.h>
+#include "toll_voip193_supp.h"
+
+/*批量数据动态从STT_SJ中用结构缓冲方式取数据*/
+int EGetSttSjToStruct(struct SttSjStruct *p,
+	struct SttSjStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(CALLING_NBR,' '),\n\
+				nvl(CALLING_AREA_CODE,' '),\n\
+				nvl(CALLING_USER_TYPE,' '),\n\
+				nvl(CALLED_NBR,' '),\n\
+				nvl(VISIT_AREA_CODE,' '),\n\
+				nvl(CALLED_USER_TYPE,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(DURATION,0),\n\
+				nvl(TOLL_FEE,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE STT_SJSCR FROM :statement;
+		CheckSqlError(" PREPARE STT_SJSCR STT_SJCR");
+
+		EXEC SQL DECLARE STT_SJCR CURSOR FOR STT_SJSCR;
+		CheckSqlError("Declare STT_SJCR");
+
+		EXEC SQL OPEN STT_SJCR;
+		CheckSqlError("Open STT_SJCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE STT_SJCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH STT_SJCR INTO
+			:pSource->asCallingNbr,
+			:pSource->asCallingAreaCode,
+			:pSource->asCallingUserType,
+			:pSource->asCalledNbr,
+			:pSource->asVisitAreaCode,
+			:pSource->asCalledUserType,
+			:pSource->asStartTime,
+			:pSource->aiDuration,
+			:pSource->aiTollFee;
+		CheckSqlError("Fetch STT_SJCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE STT_SJCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=STT_SJ_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sCallingAreaCode,	pSource->asCallingAreaCode[iCurPos]);
+		strcpy(p->sCallingUserType,	pSource->asCallingUserType[iCurPos]);
+		strcpy(p->sCalledNbr,		pSource->asCalledNbr[iCurPos]);
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+		strcpy(p->sCalledUserType,	pSource->asCalledUserType[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iTollFee=			pSource->aiTollFee[iCurPos];
+
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sCallingAreaCode);
+		AllTrim(p->sCallingUserType);
+		AllTrim(p->sCalledNbr);
+		AllTrim(p->sVisitAreaCode);
+		AllTrim(p->sCalledUserType);
+		AllTrim(p->sStartTime);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+
+/*批量数据结构缓冲写入MOB_CALLED_STAT*/
+int EInsertStructToMobCalledStat(struct MobCalledStatStruct *p,
+	int iInsertFlag,struct MobCalledStatStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asCallingAreaCode[iCurPos],	p->sCallingAreaCode);
+		strcpy(pTarget->asCalledAreaCode[iCurPos],	p->sCalledAreaCode);
+		strcpy(pTarget->asCallingType[iCurPos],		p->sCallingType);
+		strcpy(pTarget->asCalledType[iCurPos],		p->sCalledType);
+		strcpy(pTarget->asTollFee[iCurPos],		p->sTollFee);
+		strcpy(pTarget->asTollSec[iCurPos],		p->sTollSec);
+
+		pTarget->aiCnt[iCurPos]=			p->iCnt;
+
+		strcpy(pTarget->asSettMonth[iCurPos],		p->sSettMonth);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==MOB_CALLED_STAT_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				CALLING_AREA_CODE,\n\
+				CALLED_AREA_CODE,\n\
+				CALLING_TYPE,\n\
+				CALLED_TYPE,\n\
+				TOLL_FEE,\n\
+				TOLL_SEC,\n\
+				CNT,\n\
+				SETT_MONTH,\n\
+				DEAL_DATE)\n\
+			VALUES (\n\
+				:asCallingAreaCode,\n\
+				:asCalledAreaCode,\n\
+				:asCallingType,\n\
+				:asCalledType,\n\
+				to_number(:asTollFee),\n\
+				to_number(:asTollSec),\n\
+				:aiCnt,\n\
+				:asSettMonth,\n\
+				to_date(:asDealDate,'yyyymmddhh24miss')\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE MOB_CALLED_STATTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement MOB_CALLED_STAT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE MOB_CALLED_STATTRG USING
+				:pTarget->asCallingAreaCode,
+				:pTarget->asCalledAreaCode,
+				:pTarget->asCallingType,
+				:pTarget->asCalledType,
+				:pTarget->asTollFee,
+				:pTarget->asTollSec,
+				:pTarget->aiCnt,
+				:pTarget->asSettMonth,
+				:pTarget->asDealDate;
+		if(CheckSqlResult("Dyn insert into MOB_CALLED_STAT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}

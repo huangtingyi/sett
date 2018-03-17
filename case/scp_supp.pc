@@ -1,0 +1,134 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <wwfile.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdb.h>
+#include <wwcoding.h>
+#include <up_back.h>
+#include <stt_ticket.h>
+
+/*批量数据结构缓冲更新*/
+int EUpdateStructToSttTicketState(struct SttTicketStruct *p,
+	int iUpdateFlag,struct USttTicketStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+	
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asRowID[iCurPos],		p->sRowID);
+
+		iCurPos++;
+	}
+
+	if(iUpdateFlag==TRUE||iCurPos==STT_TICKET_BUFLEN_UP){
+
+/* INSERT */
+		char statement[4096];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE %s\n\
+			SET \n\
+				STATE=			:asState,\n\
+				UPDATE_DATE=		SYSDATE\n\
+			WHERE \n\
+				ROWID = chartorowid(:asRowID)\n\
+			",sTableName);
+
+		EXEC SQL PREPARE RSTT_TICKETUCR FROM :statement;
+		if(CheckSqlResult("Prepare update statement STT_TICKET")<0)
+			return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE RSTT_TICKETUCR USING
+				:pTarget->asState,
+				:pTarget->asRowID;
+		if(CheckSqlResult("Dyn update STT_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+int mvitem_SttTicketStruct(struct SttTicketStruct *pi,struct SttTicketStruct *po)
+{/*数据移动部分*/
+
+	bzero((void*)po,sizeof(struct SttTicketStruct));
+
+		po->iTicketTypeID=		pi->iTicketTypeID;
+
+		strncpy(po->sCallType,		pi->sCallType,2);
+		strncpy(po->sMsisdn,		pi->sMsisdn,15);
+		strncpy(po->sCalledCode,	pi->sCalledCode,5);
+		strncpy(po->sOtherParty,	pi->sOtherParty,24);
+		strncpy(po->sVisitAreaCode,	pi->sVisitAreaCode,5);
+
+		po->iRoamFee=			pi->iRoamFee;
+		po->iTollFee=			pi->iTollFee;
+		po->iAddFee=			pi->iAddFee;
+		po->iDuration=			pi->iDuration;
+
+		strncpy(po->sStartTime,		pi->sStartTime,14);
+		strncpy(po->sHomeAreaCode,	pi->sHomeAreaCode,5);
+		strncpy(po->sRoamType,		pi->sRoamType,1);
+		strncpy(po->sDistanceType,	pi->sDistanceType,1);
+		strncpy(po->sOppType,		pi->sOppType,1);
+		strncpy(po->sUserType,		pi->sUserType,1);
+		strncpy(po->sSplitRuleID,	pi->sSplitRuleID,4);
+		strncpy(po->sOppRoamType,	pi->sOppRoamType,1);
+		strncpy(po->sServiceType,	pi->sServiceType,3);
+		strncpy(po->sServiceCode,	pi->sServiceCode,4);
+		strncpy(po->sImsi,		pi->sImsi,15);
+		strncpy(po->sMsc,		pi->sMsc,15);
+		strncpy(po->sLac,		pi->sLac,5);
+		strncpy(po->sCellID,		pi->sCellID,5);
+		strncpy(po->sOtherLac,		pi->sOtherLac,5);
+		strncpy(po->sOtherCellID,	pi->sOtherCellID,5);
+		strncpy(po->sTrunkIn,		pi->sTrunkIn,7);
+		strncpy(po->sTrunkOut,		pi->sTrunkOut,7);
+		strncpy(po->sThirdParty,	pi->sThirdParty,15);
+		strncpy(po->sMsrn,		pi->sMsrn,12);
+
+		po->iTrunkInTypeID=		pi->iTrunkInTypeID;
+		po->iTrunkOutTypeID=		pi->iTrunkOutTypeID;
+		po->iTrunkInCarrierID=		pi->iTrunkInCarrierID;
+		po->iTrunkOutCarrierID=		pi->iTrunkOutCarrierID;
+
+		strncpy(po->sTrunkInType,	pi->sTrunkInType,1);
+		strncpy(po->sTrunkOutType,	pi->sTrunkOutType,1);
+
+		po->iCallingTypeID=		pi->iCallingTypeID;
+		po->iCalledTypeID=		pi->iCalledTypeID;
+		po->iCallingCarrierID=		pi->iCallingCarrierID;
+		po->iCalledCarrierID=		pi->iCalledCarrierID;
+		po->iCallingAreaID=		pi->iCallingAreaID;
+		po->iCalledAreaID=		pi->iCalledAreaID;
+
+		strncpy(po->sSplitType,		pi->sSplitType,1);
+		strncpy(po->sCal,		pi->sCal,1);
+		strncpy(po->sEsn,		pi->sEsn,15);
+		strncpy(po->sScpFlag,		pi->sScpFlag,1);
+		strncpy(po->sDeformFlag,	pi->sDeformFlag,1);
+		strncpy(po->sReserve,		pi->sReserve,8);
+		strncpy(po->sBillMode,		pi->sBillMode,3);
+		strncpy(po->sErrCode,		pi->sErrCode,4);
+		strncpy(po->sFileName,		pi->sFileName,19);
+		strncpy(po->sModule,		pi->sModule,3);
+		strncpy(po->sAreaCode,		pi->sAreaCode,5);
+		strncpy(po->sState,		pi->sState,1);
+		strncpy(po->sUpdateDate,	pi->sUpdateDate,14);
+		strncpy(po->sDealDate,		pi->sDealDate,14);
+		strncpy(po->sSourceID,		pi->sSourceID,30);
+		strncpy(po->sRowID,		pi->sRowID,19);
+		
+		return 0;
+}

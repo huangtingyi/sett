@@ -1,0 +1,142 @@
+{
+goto aa;
+	setfilefmt("txt");
+	initdate(300);
+
+ setfmt(it_ticket_type_id         ,"0",  "%04d" ,posp("0:4"));
+ setfmt(it_call_type              ," ",  "%02d" ,posp("4:2"));
+ setfmt(st_msisdn                 ," ",  "%-15s",posp("6:15"));
+ setfmt(st_called_code            ," ",  "%-5s" ,posp("21:5"));
+ setfmt(st_other_party            ," ",  "%-24s",posp("26:24"));
+ setfmt(st_visit_area_code        ," ",  "%-5s" ,posp("50:5"));
+ setfmt(it_roam_fee               ,"0",  "%05d" ,posp("55:5"));
+ setfmt(it_toll_fee               ,"0",  "%07d" ,posp("60:7"));
+ setfmt(it_add_fee                ,"0",  "%05d" ,posp("67:5"));
+ setfmt(it_duration               ,"0",  "%06d" ,posp("72:6"));
+ setfmt(st_start_time             ," ",  "%-14s",posp("78:14"));
+ setfmt(st_home_area_code         ," ",  "%-5s" ,posp("92:5"));
+ setfmt(st_roam_type              ," ",  "%-1s" ,posp("97:1"));
+ setfmt(st_distance_type          ," ",  "%-1s" ,posp("98:1"));
+ setfmt(st_opp_type               ," ",  "%-1s" ,posp("99:1"));
+ setfmt(st_user_type              ," ",  "%-1s" ,posp("100:1"));
+ setfmt(st_split_rule_id          ," ",  "%-4s" ,posp("101:4"));
+ setfmt(st_opp_roam_type          ," ",  "%-1s" ,posp("105:1"));
+ setfmt(st_service_type           ," ",  "%-3s" ,posp("106:3"));
+ setfmt(st_service_code           ," ",  "%-4s" ,posp("109:4"));
+ setfmt(st_imsi                   ," ",  "%-15s",posp("113:15"));
+ setfmt(st_msc                    ," ",  "%-15s",posp("128:15"));
+ setfmt(st_lac                    ," ",  "%-5s" ,posp("143:5"));
+ setfmt(st_cell_id                ," ",  "%-5s" ,posp("148:5"));
+ setfmt(st_other_lac              ," ",  "%-5s" ,posp("153:5"));
+ setfmt(st_other_cell_id          ," ",  "%-5s" ,posp("158:5"));
+ setfmt(st_trunk_in               ," ",  "%-7s" ,posp("163:7"));
+ setfmt(st_trunk_out              ," ",  "%-7s" ,posp("170:7"));
+ setfmt(st_third_party            ," ",  "%-12s",posp("177:12"));
+ setfmt(st_msrn                   ," ",  "%-15s",posp("189:15"));
+ setfmt(it_trunk_in_type_id       ,"0",  "%04d" ,posp("204:4"));
+ setfmt(it_trunk_out_type_id      ,"0",  "%04d" ,posp("208:4"));
+ setfmt(it_trunk_in_carrier_id    ,"0",  "%04d" ,posp("212:4"));
+ setfmt(it_trunk_out_carrier_id   ,"0",  "%04d" ,posp("216:4"));
+ setfmt(it_trunk_in_type          ,"0",  "%01d" ,posp("220:1"));
+ setfmt(it_trunk_out_type         ,"0",  "%01d" ,posp("221:1"));
+ setfmt(it_calling_carrier_id     ,"0",  "%04d" ,posp("222:4"));
+ setfmt(it_called_carrier_id      ,"0",  "%04d" ,posp("226:4"));
+ setfmt(it_calling_type_id        ,"0",  "%04d" ,posp("230:4"));
+ setfmt(it_called_type_id         ,"0",  "%04d" ,posp("234:4"));
+ setfmt(it_calling_area_id        ,"0",  "%04d" ,posp("238:4"));
+ setfmt(it_called_area_id         ,"0",  "%04d" ,posp("242:4"));
+ setfmt(st_SPLIT_TYPE             ,"0",  "%-1s" ,posp("246:1"));
+
+aa:  
+ticketvalid=1;
+
+it_ticket_type_id=0;
+it_call_type    =atoi(IA5STRING(getseppos(t_ori,sepp("1:,"))));
+st_msisdn       =IA5STRING(getseppos(t_ori,sepp("4:,")));
+st_called_code  ="C"+IA5STRING(getseppos(t_ori,sepp("24:,")));
+st_other_party  =IA5STRING(getseppos(t_ori,sepp("5:,")));
+st_visit_area_code="C"+IA5STRING(getseppos(t_ori,sepp("23:,")));
+temp		=IA5STRING(getseppos(t_ori,sepp("30:,")));
+a=rplx(temp,".","");
+b=substr(rplx(temp," ",""),-3,2);
+it_roam_fee   	=atoi(a)*100+atoi(b);
+temp		=IA5STRING(getseppos(t_ori,sepp("32:,")));
+a=rplx(temp,".","");
+b=substr(rplx(temp," ",""),-3,2);
+it_toll_fee 	=atoi(a)*100+atoi(b);
+it_add_fee    	=0;
+it_duration     =atoi(IA5STRING(getseppos(t_ori,sepp("8:,"))));
+st_start_time  	=IA5STRING(getseppos(t_ori,sepp("6:,")))+
+			IA5STRING(getseppos(t_ori,sepp("7:,")));
+st_home_area_code=substr(IA5STRING(getseppos(t_ori,sepp("22:,"))),1,5);
+if(substr(st_msisdn,0,3)!="130"&&substr(st_msisdn,0,3)!="131")
+	st_home_area_code="01";
+temp=IA5STRING(getseppos(t_ori,sepp("26:,")));
+if(temp=="3")	st_roam_type="6";
+else		st_roam_type="8";
+st_distance_type  ="0";
+st_opp_type       ="0";
+st_user_type      ="G";
+st_split_rule_id  ="0";
+st_opp_roam_type  ="0";
+if(it_call_type==3) st_service_type="002";
+else	st_service_type="000";
+if(it_call_type==3){
+//1:无条件呼叫前转 2:遇忙前转 3:无应答前转     4:不可及前转  
+	i=atoi(IA5STRING(getseppos(t_ori,sepp("46:,"))));
+	st_service_code=di2s(i,pi2s("1:'0021':2:'0029':3:'002A':4:'002B':'0020'"));
+}
+else st_service_code="0011";
+st_imsi=IA5STRING(getseppos(t_ori,sepp("3:,")));
+st_msc=	IA5STRING(getseppos(t_ori,sepp("12:,")));
+st_lac=		lpad(itoh(atoi(IA5STRING(getseppos(t_ori,sepp("13:,"))))),"0",4);
+st_cell_id=	lpad(itoa(atoi(IA5STRING(getseppos(t_ori,sepp("14:,"))))),"0",4);
+st_other_lac=	lpad(itoh(atoi(IA5STRING(getseppos(t_ori,sepp("15:,"))))),"0",4);
+st_other_cell_id=lpad(itoa(atoi(IA5STRING(getseppos(t_ori,sepp("16:,"))))),"0",4);
+st_trunk_in   	=IA5STRING(getseppos(t_ori,sepp("18:,")));
+st_trunk_out  	=IA5STRING(getseppos(t_ori,sepp("17:,")));
+st_third_party	=IA5STRING(getseppos(t_ori,sepp("45:,")));
+st_msrn        	=IA5STRING(getseppos(t_ori,sepp("11:,")));
+
+	usertype=	IA5STRING(getseppos(t_ori,sepp("27:,")));
+	if(usertype=="A7"||usertype=="B7"){ticketvalid=-1;return;}
+
+if(substr(st_msisdn,0,3)!="130"&&substr(st_msisdn,0,3)!="131"){
+	it_roam_fee=(it_roam_fee*40+23)/46;
+	it_toll_fee=(it_toll_fee*40+23)/46;
+}
+	
+	tempdate=substr(st_start_time,0,8);
+	if(maxdatadate(tempdate)<0){ticketvalid=-1;return;}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

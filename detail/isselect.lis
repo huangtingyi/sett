@@ -1,0 +1,17 @@
+
+Pro*C/C++: Release 11.2.0.3.0 - Production on Thu Jan 28 22:42:45 2016
+
+Copyright (c) 1982, 2011, Oracle and/or its affiliates.  All rights reserved.
+
+Error at line 16, column 2 in file isselect.pc
+    16          EXEC SQL SELECT CNT INTO :iStaffID 
+    16  .1
+    16  PLS-S-00201, identifier 'NUMBER_INFO' must be declared
+Error at line 16, column 2 in file isselect.pc
+    16          EXEC SQL SELECT CNT INTO :iStaffID 
+    16  .1
+    16  PLS-S-00000, SQL Statement ignored
+Error at line 16, column 2 in file isselect.pc
+    16          EXEC SQL SELECT CNT INTO :iStaffID 
+    16  .1
+    16  PCC-S-02346, PL/SQL found semantic errors

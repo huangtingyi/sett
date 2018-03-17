@@ -1,0 +1,47 @@
+{
+/*声明输出部分*/
+goto aa;
+	setfilefmt("txt");
+	initdate(300);
+setfmt(smsp.call_type	 ," ", "%-2s",posp(   "0:2"));
+setfmt(smsp.city_code	 ," ", "%-5s",posp(   "2:5"));
+setfmt(smsp.msisdn	 ," ","%-15s",posp(  "7:15"));
+setfmt(smsp.other_party	 ," ","%-24s",posp( "22:24"));
+setfmt(smsp.start_time	 ," ","%-14s",posp( "46:14"));
+setfmt(smsp.duration	 ," ", "%06d",posp(  "60:6"));
+setfmt(smsp.msc		 ," ","%-15s",posp( "66:15"));
+setfmt(smsp.smsp	," ","%-15s",posp( "81:15"));
+setfmt(smsp.user_type	 ," ", "%-1s",posp(  "96:1"));
+setfmt(smsp.sp_acc_nbr	 ," ", "%-9s",posp(  "97:9"));
+setfmt(smsp.sp_service_code," ","%-10s",posp("106:10"));
+setfmt(smsp.sp_code	 ," ", "%-5s",posp( "116:5"));
+setfmt(smsp.fee1	," ", "%06d",posp( "121:6"));
+setfmt(smsp.fee2	," ", "%06d",posp( "127:6"));
+setfmt(smsp.fee3	," ", "%06d",posp( "133:6"));
+setfmt(smsp.fee4	," ", "%06d",posp( "139:6"));
+aa:
+ticketvalid=1;
+tariffflag=1; /*设置为要批价*/ 
+smsp.call_type	    =trimcut(t_ori,  0,2 ); 
+smsp.city_code	    =trimcut(t_ori,  2,5 );
+smsp.msisdn	    =trimcut(t_ori, 7,15 );
+smsp.other_party    =trimcut(t_ori,22,24 );
+smsp.start_time	    =trimcut(t_ori,46,14 );
+smsp.duration	    =atoi(trimcut(t_ori, 60,6 ));
+smsp.msc	    =trimcut(t_ori,66,15 );
+smsp.smsp	    =trimcut(t_ori,81,15 );
+smsp.user_type	    =trimcut(t_ori, 96,1 );
+smsp.sp_acc_nbr	    =trimcut(t_ori, 97,9 );
+smsp.sp_service_code=trimcut(t_ori,106,10);
+smsp.sp_code	    =trimcut(t_ori,116,5 );
+smsp.fee1	    =atoi(trimcut(t_ori,121,6 ));
+smsp.fee2	    =atoi(trimcut(t_ori,127,6 ));
+smsp.fee3	    =atoi(trimcut(t_ori,133,6 ));
+smsp.fee4	    =atoi(trimcut(t_ori,139,6 ));
+smsp.ticket_type_id =0;
+
+smsp.fee1 = 1;
+bindratepos(smsp.start_time,smsp.duration,smsp.fee1,
+	smsp.ticket_type_id,smsp.fee1,smsp.fee2,smsp.fee3);
+}	  
+

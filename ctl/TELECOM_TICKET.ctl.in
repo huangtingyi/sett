@@ -1,0 +1,18 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+CALLING_AREA_CODE     position(1  :9  ),    
+CALLING_NBR           position(10 :33 ),    
+CALLED_AREA_CODE      position(34 :42 ),   
+CALLED_NBR            position(43 :66 ), 
+START_TIME            position(67 :80 ),  
+DURATION              position(81 :86 ),  
+CHARGE                position(87 :94 ),  
+TALK_TYPE_ID          position(95 :100),  
+O_CALLING_NBR         position(101:124), 
+O_CALLED_NBR          position(125:148),
+TRUNK_IN              position(149:155),
+TRUNK_OUT             position(156:162)
+)
+

@@ -1,0 +1,275 @@
+{
+	std_ticket_type_id	=trimcut(t_ori,0  , 4);
+	std_call_type		=trimcut(t_ori,4  , 2);
+	std_msisdn		=trimcut(t_ori,6  ,15);
+	std_called_code		=trimcut(t_ori,21 , 5);
+	std_other_party		=trimcut(t_ori,26 ,24);
+	std_visit_area_code	=trimcut(t_ori,50 , 5);
+	std_roam_fee		=trimcut(t_ori,55 , 5);
+	std_toll_fee		=trimcut(t_ori,60 , 7);
+	std_add_fee		=trimcut(t_ori,67 , 5);
+	std_duration		=trimcut(t_ori,72 , 6);
+	std_start_time		=trimcut(t_ori,78 ,14);
+	std_home_area_code	=trimcut(t_ori,92 , 5);
+	std_roam_type		=trimcut(t_ori,97 , 1);
+	std_distance_type	=trimcut(t_ori,98 , 1);
+	std_opp_type		=trimcut(t_ori,99 , 1);
+	std_user_type		=trimcut(t_ori,100, 1);
+//	std_split_rule_id	=trimcut(t_ori,101, 4);
+//	std_opp_roam_type	=trimcut(t_ori,105, 1);
+//	std_service_type	=trimcut(t_ori,106, 3);
+//	std_service_code	=trimcut(t_ori,109, 4);
+//	std_imsi		=trimcut(t_ori,113,15);
+//	std_msc			=trimcut(t_ori,128,15);
+//	std_lac			=trimcut(t_ori,143, 5);
+//	std_cell_id		=trimcut(t_ori,148, 5);
+//	std_other_lac		=trimcut(t_ori,153, 5);
+//	std_other_cell_id	=trimcut(t_ori,158, 5);
+//	std_trunk_in		=trimcut(t_ori,163, 7);
+//	std_trunk_out		=trimcut(t_ori,170, 7);
+//	std_third_party		=trimcut(t_ori,177,15);
+//	std_msrn		=trimcut(t_ori,192,12);
+//	std_trunk_in_type_id	=trimcut(t_ori,204, 4);
+//	std_trunk_out_type_id	=trimcut(t_ori,208, 4);
+//	std_trunk_in_carrier_id	=trimcut(t_ori,212, 4);
+//	std_trunk_out_carrier_id=trimcut(t_ori,216, 4);
+//	std_trunk_in_type	=trimcut(t_ori,220, 1);
+//	std_trunk_out_type	=trimcut(t_ori,221, 1);
+	std_calling_carrier_id	=atoi(trimcut(t_ori,222, 4));
+	std_called_carrier_id	=atoi(trimcut(t_ori,226, 4));
+//	std_calling_type_id	=trimcut(t_ori,230, 4);
+//	std_called_type_id	=trimcut(t_ori,234, 4);
+	std_calling_area_id	=atoi(trimcut(t_ori,238, 4));
+	std_called_area_id	=atoi(trimcut(t_ori,242, 4));
+//	std_split_type		=trimcut(t_ori,246, 1);
+//	std_cal			=trimcut(t_ori,247, 1);
+//	std_esn			=trimcut(t_ori,248,15);
+//      std_scp_flag            =trimcut(t_ori,263,1);
+//        std_deform_flag         =trimcut(t_ori,264,1);
+//        std_reserve             =trimcut(t_ori,265,8);
+        
+        
+        ticketvalid=1;//设置需要统计
+	//主被叫为外省的不统计
+	if(std_distance_type!="1"&&std_distance_type!="2"){ticketvalid=-1;return;}		
+//取值主叫
+	raw_msisdn=getrawnbr(std_msisdn,std_home_area_code,std_start_time);
+	if(raw_msisdn=="")msisdn=std_home_area_code;
+	else msisdn=raw_msisdn;
+	
+	home_area_code=std_home_area_code;
+	home_area_id=atoi(std_calling_area_id);
+	
+	st_callingtype=getheadtype(std_msisdn,raw_msisdn,home_area_code,std_start_time);
+	
+	if(std_calling_carrier_id==1)home_net_type="CT";
+	else if(std_calling_carrier_id==2)home_net_type="CM";
+	else if(std_calling_carrier_id==3){
+		if(std_user_type=="C")home_net_type="CUC";
+		else home_net_type="CUG";   
+	}
+	else if(std_calling_carrier_id==4)home_net_type="CNC";
+	else if(std_calling_carrier_id==5)home_net_type="CRC";
+	else if(std_calling_carrier_id==6)home_net_type="CS";
+	else home_net_type="CNC";
+
+//取值被叫
+	raw_other_party=getrawnbr(std_other_party,std_called_code,std_start_time);
+	if(raw_other_party=="")other_party=std_other_party;
+	else other_party=raw_other_party;
+	
+	other_area_code=std_called_code;
+	other_area_id=atoi(std_called_area_id);
+	//getheadarea(std_other_party,raw_other_party,other_area_code,std_start_time);
+	
+	st_calledtype=getheadtype(std_other_party,raw_other_party,other_area_code,std_start_time);
+		
+	if(std_called_carrier_id==1)other_net_type="CT";
+	else if(std_called_carrier_id==2)other_net_type="CM";
+	else if(std_called_carrier_id==3){
+		if(std_user_type=="C")other_net_type="CUC";
+		else other_net_type="CUG";   
+	}
+	else if(std_called_carrier_id==4)other_net_type="CNC";
+	else if(std_called_carrier_id==5)other_net_type="CRC";
+	else if(std_called_carrier_id==6)other_net_type="CS";
+	else other_net_type="CNC";
+	
+
+	
+	total_duration=atoi(std_duration);
+
+	it_ticket_type_id=atoi(std_ticket_type_id);
+	std_sec_per_cnt	=getbinstr("TICKET_TARIFF",it_ticket_type_id,"",std_start_time);
+	std_tariff_id	=getbinsv1("TICKET_TARIFF",it_ticket_type_id,"",std_start_time); 
+	itd_tariff_id=atoi(std_tariff_id);
+	itd_sec_per_cnt	=atoi(std_sec_per_cnt);
+	if(itd_sec_per_cnt<=0)itd_sec_per_cnt=60;
+	total_min=(atoi(std_duration)+itd_sec_per_cnt-1)/itd_sec_per_cnt*itd_sec_per_cnt;
+	total_cnt          =1;
+	total_fee1         =atoi(std_roam_fee	);
+	total_fee2         =atoi(std_toll_fee	);
+	total_fee3         =atoi(std_add_fee	);
+	
+	
+	
+str_cnt=1;//第一条全业务主叫用户
+
+	call_type="00";
+	service_type="000";
+
+	if(st_callingtype!="C")service_type="000";
+	else service_type="X";
+	if(llike(msisdn,"16")||llike(msisdn,"144"))service_type="X";
+	if(llike(home_area_code,"0"))service_type="X";
+	if(llike(msisdn,"00"))service_type="X";
+	
+	str_ori1=format_s("|",
+		msisdn,home_area_code,home_area_id,home_net_type,
+		call_type,service_type,total_duration,total_min,
+		total_cnt,total_fee1,total_fee2,total_fee3);
+	
+
+str_cnt=2;//第二条全业务被叫用户
+	call_type="00";
+	service_type       ="000";
+	if(st_calledtype=="C")service_type="000";
+	else {service_type="X";}
+	if(llike(other_party,"16")||llike(other_party,"144"))service_type="X";
+	if(llike(other_area_code,"0"))service_type="X";
+	if(llike(other_party,"00"))service_type="X";
+	
+	str_ori2=format_s("|",
+		other_party,other_area_code,other_area_id,other_net_type,
+		call_type,service_type,total_duration,total_min,
+		total_cnt,total_fee1,total_fee2,total_fee3);
+
+
+str_cnt=3;//第三条被叫号码有匹配SERVICE_TYPE的
+	it_carrier_id=gettrieint("SERVICE_TYPE",0,other_party,std_start_time);
+	service_type=gettriestr("SERVICE_TYPE",0,other_party,std_start_time);
+	if(it_carrier_id>0&&it_carrier_id<=10){
+		service_type=gettriestr("SERVICE_TYPE",0,other_party,std_start_time);
+	}
+	else{service_type="X";}
+	call_type="01";
+	
+	if(itd_tariff_id==43||itd_tariff_id==44||itd_tariff_id==42||
+		itd_tariff_id==33||itd_tariff_id==34||itd_tariff_id==32)
+		service_type="102";//传统长途通话
+	
+	if(st_callingtype!="C")service_type="X";
+	if(llike(home_area_code,"0"))service_type="X";
+		
+	str_ori3=format_s("|",msisdn,home_area_code,home_area_id,
+		home_net_type,call_type,service_type,total_duration,
+		total_min,total_cnt,total_fee1,total_fee2,total_fee3);
+
+str_cnt=4;//第四条主叫号码有匹配SERVICE_TYPE的
+	it_carrier_id=gettrieint("SERVICE_TYPE",0,msisdn,std_start_time);
+	if(it_carrier_id>0&&it_carrier_id<=10){ 
+		service_type=gettriestr("SERVICE_TYPE",0,msisdn,std_start_time);
+	}
+	else {service_type="X";}
+	call_type="02";
+	if(st_calledtype!="C")service_type="X";
+	if(llike(other_area_code,"0"))service_type="X";
+	
+	str_ori4=format_s("|",
+		other_party,other_area_code,other_area_id,other_net_type,
+		call_type,service_type,total_duration,total_min,
+		total_cnt,total_fee1,total_fee2,total_fee3);
+
+
+str_cnt=5;//第五条主叫过网用户
+
+	call_type="01";
+	service_type       ="001";
+	if(st_callingtype!="C"||st_calledtype!="C")service_type="X";
+
+	if(itd_tariff_id==43||itd_tariff_id==44||itd_tariff_id==42||
+		itd_tariff_id==33||itd_tariff_id==34||itd_tariff_id==32){
+		service_type="X";//传统长途通话
+	}
+	if(std_roam_type=="1"&&std_distance_type=="1"){
+		total_fee1=total_duration;
+		total_fee2=total_min;
+		total_fee3=total_cnt;
+	
+	}
+	else{
+		total_fee1=0;
+		total_fee2=0;
+		total_fee3=0;
+	}
+	if(itd_tariff_id==30||itd_tariff_id==40){
+		if(other_area_id==9901||
+			home_area_id==9901)county_flag="0";
+		else if(other_area_id>=1000&&
+			home_area_id<=10000){
+			if(other_area_id==home_area_id)
+				county_flag="0";
+			else 
+				county_flag="1";
+		}
+	}
+	else if(itd_tariff_id==31||itd_tariff_id==41){
+		county_flag="2";
+	}
+	else {county_flag="";}
+	if(llike(home_area_code,"0"))service_type="X";
+	
+	if(service_type!="X")service_type=service_type+","+county_flag;
+	str_ori5=format_s("|",
+		msisdn,home_area_code,home_area_id,other_net_type,
+		call_type,service_type,total_duration,total_min,
+		total_cnt,total_fee1,total_fee2,total_fee3);
+
+
+str_cnt=6;//第六条被叫过网用户
+	call_type="02";
+	service_type="001";
+	
+	if(st_callingtype!="C"||st_calledtype!="C")service_type="X";
+
+	if(itd_tariff_id==43||itd_tariff_id==44||itd_tariff_id==42||
+		itd_tariff_id==33||itd_tariff_id==34||itd_tariff_id==32){
+			service_type="X";//传统长途通话
+	}
+		
+	if(std_roam_type=="1"&&
+		std_distance_type=="1"){
+		total_fee1=total_duration;
+		total_fee2=total_min;
+		total_fee3=total_cnt;
+	}
+	else{
+		total_fee1=0;
+		total_fee2=0;
+		total_fee3=0;
+	}
+	
+	if(itd_tariff_id==30||itd_tariff_id==40){
+		if(other_area_id==9901||home_area_id==9901)county_flag="0";
+		else if(other_area_id>=1000&&home_area_id<=10000){
+			if(other_area_id==home_area_id)county_flag="0";
+			else county_flag="1";
+		}
+	}
+	else if(itd_tariff_id==31||itd_tariff_id==41){
+	//网话
+		county_flag="2";
+	}
+	else county_flag="";
+	if(llike(other_area_code,"0"))service_type="X";
+	
+	if(service_type!="X")service_type=service_type+","+county_flag;
+
+	str_ori6=format_s("|",
+		other_party,other_area_code,other_area_id,home_net_type,
+		call_type,service_type,total_duration,total_min,
+		total_cnt,total_fee1,total_fee2,total_fee3);
+//取值
+	str_ori=format_s(";",str_ori1,str_ori2,str_ori3,str_ori4,str_ori5,str_ori6);
+
+}

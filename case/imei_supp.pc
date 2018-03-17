@@ -1,0 +1,321 @@
+#include <wwdb.h>
+#include <imei_supp.h>
+
+/*批量数据动态从IMEI_UP中用结构缓冲方式取数据*/
+int EGetImeiUpToStruct(struct ImeiUpStruct *p,
+	struct ImeiUpStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(RS_SEQ,' '),\n\
+				MSISDN,\n\
+				IMEI,\n\
+				IMSI,\n\
+				nvl(CALLSTARTTIME,' '),\n\
+				nvl(MATCHITEM,' '),\n\
+				nvl(TYPE,' '),\n\
+				nvl(GROUP_ID,0),\n\
+				nvl(CREATETIME,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE IMEI_UPSCR FROM :statement;
+		CheckSqlError(" PREPARE IMEI_UPSCR IMEI_UPCR");
+
+		EXEC SQL DECLARE IMEI_UPCR CURSOR FOR IMEI_UPSCR;
+		CheckSqlError("Declare IMEI_UPCR");
+
+		EXEC SQL OPEN IMEI_UPCR;
+		CheckSqlError("Open IMEI_UPCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE IMEI_UPCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH IMEI_UPCR INTO
+			:pSource->asRsSeq,
+			:pSource->asMsisdn,
+			:pSource->asImei,
+			:pSource->asImsi,
+			:pSource->asCallstarttime,
+			:pSource->asMatchitem,
+			:pSource->asType,
+			:pSource->aiGroupID,
+			:pSource->asCreatetime;
+		CheckSqlError("Fetch IMEI_UPCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE IMEI_UPCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=IMEI_UP_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sRsSeq,		pSource->asRsSeq[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sImei,		pSource->asImei[iCurPos]);
+		strcpy(p->sImsi,		pSource->asImsi[iCurPos]);
+		strcpy(p->sCallstarttime,	pSource->asCallstarttime[iCurPos]);
+		strcpy(p->sMatchitem,		pSource->asMatchitem[iCurPos]);
+		strcpy(p->sType,		pSource->asType[iCurPos]);
+		p->iGroupID	=		pSource->aiGroupID[iCurPos];
+		strcpy(p->sCreatetime,		pSource->asCreatetime[iCurPos]);
+
+		AllTrim(p->sRsSeq);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sImei);
+		AllTrim(p->sImsi);
+		AllTrim(p->sCallstarttime);
+		AllTrim(p->sMatchitem);
+		AllTrim(p->sType);
+		AllTrim(p->sCreatetime);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/**对表IMEI_UP的链表释放函数**/
+void DestroyImeiUp(struct ImeiUpStruct *ptHead)
+{
+	struct ImeiUpStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+/*批量数据结构缓冲写入IMEI_UP*/
+int EInsertStructToImeiUp(struct ImeiUpStruct *p,
+	int iInsertFlag,struct ImeiUpStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRsSeq[iCurPos],		p->sRsSeq);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asImei[iCurPos],		p->sImei);
+		strcpy(pTarget->asImsi[iCurPos],		p->sImsi);
+		strcpy(pTarget->asCallstarttime[iCurPos],	p->sCallstarttime);
+		strcpy(pTarget->asMatchitem[iCurPos],		p->sMatchitem);
+		strcpy(pTarget->asType[iCurPos],		p->sType);
+		pTarget->aiGroupID[iCurPos]=			p->iGroupID;
+		strcpy(pTarget->asCreatetime[iCurPos],		p->sCreatetime);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==IMEI_UP_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RS_SEQ,\n\
+				MSISDN,\n\
+				IMEI,\n\
+				IMSI,\n\
+				CALLSTARTTIME,\n\
+				MATCHITEM,\n\
+				TYPE,\n\
+				GROUP_ID,\n\
+				CREATETIME)\n\
+			VALUES (\n\
+				:asRsSeq,\n\
+				:asMsisdn,\n\
+				:asImei,\n\
+				:asImsi,\n\
+				:asCallstarttime,\n\
+				:asMatchitem,\n\
+				:asType,\n\
+				:aiGroupID,\n\
+				:asCreatetime\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE IMEI_UPTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement IMEI_UP")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE IMEI_UPTRG USING
+				:pTarget->asRsSeq,
+				:pTarget->asMsisdn,
+				:pTarget->asImei,
+				:pTarget->asImsi,
+				:pTarget->asCallstarttime,
+				:pTarget->asMatchitem,
+				:pTarget->asType,
+				:pTarget->aiGroupID,
+				:pTarget->asCreatetime;
+		if(CheckSqlResult("Dyn insert into IMEI_UP")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+int GetRsSeq(char sValue[])
+{
+	char sResSeq[19];
+	
+	EXEC SQL SELECT to_char(RS_ID.nextval) INTO :sResSeq FROM DUAL ;
+	CheckSqlError("Get RS_SEQ ERROR");
+	
+	AllTrim(sResSeq);
+	strcpy(sValue,sResSeq);
+	return 0;
+	
+}
+
+/*批量数据动态从IMEI_UP中用结构缓冲方式取数据*/
+int EGetImeiUpToStructX(struct ImeiUpStructX *p,
+	struct ImeiUpStructXIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				MSISDN,\n\
+				IMEI,\n\
+				IMSI\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE IMEI_UPSCR FROM :statement;
+		CheckSqlError(" PREPARE IMEI_UPSCR IMEI_UPCR");
+
+		EXEC SQL DECLARE IMEI_UPCR CURSOR FOR IMEI_UPSCR;
+		CheckSqlError("Declare IMEI_UPCR");
+
+		EXEC SQL OPEN IMEI_UPCR;
+		CheckSqlError("Open IMEI_UPCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE IMEI_UPCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH IMEI_UPCR INTO
+			:pSource->asMsisdn,
+			:pSource->asImei,
+			:pSource->asImsi;
+		CheckSqlError("Fetch IMEI_UPCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE IMEI_UPCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=IMEI_UP_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sImei,		pSource->asImei[iCurPos]);
+		strcpy(p->sImsi,		pSource->asImsi[iCurPos]);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sImei);
+		AllTrim(p->sImsi);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+

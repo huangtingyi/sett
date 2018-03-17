@@ -1,0 +1,567 @@
+
+#include <hnixs.h>
+#include <trie.h>
+#include <wwdb.h>
+#include <wwtiny.h>
+#include <wwlog.h>
+#include <interface.h>
+
+#include "serv.h"
+#include "servacct.h"
+#include "servproduct.h"
+#include "acct.h"
+
+
+/*批量数据动态从ACCT中用结构缓冲方式取数据*/
+/*批量数据动态从ACCT中用结构缓冲方式取数据*/
+int EGetAcctToStruct(struct AcctStruct *p,struct AcctStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[2048];
+
+		sprintf(statement,"\
+			SELECT \
+				ACCT_ID,\
+				ACCT_SEQ_NBR,\
+				nvl(BRANCH_ID,-1),\
+				PAYMENT_METHOD,\
+				nvl(ACCT_NBR,'000000'),\
+				nvl(BANK_ACCT,'00'),\
+				nvl(QUOTA,0),\
+				nvl(CREDIT_GRADE,0),\
+				nvl(BALANCE,0),\
+				nvl(CHANGE,0),\
+				to_char(nvl(CREATED_DATE,SYSDATE-3000),'yyyymmddhh24miss'),\
+				STATE,\
+				to_char(nvl(STATE_DATE,SYSDATE+3000),'yyyymmddhh24miss')\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE ACCTSCR FROM :statement;
+		CheckSqlError(" PREPARE ACCTSCR ACCTCR");
+
+		EXEC SQL DECLARE ACCTCR CURSOR FOR ACCTSCR;
+		CheckSqlError("Declare ACCTCR");
+
+		EXEC SQL OPEN ACCTCR;
+		CheckSqlError("Open ACCTCR;");
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+	}
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE ACCTCR;
+
+		return FALSE;
+	}
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH ACCTCR INTO
+			:pSource->asAcctID,
+			:pSource->aiAcctSeqNbr,
+			:pSource->aiBranchID,
+			:pSource->asPaymentMethod,
+			:pSource->asAcctNbr,
+			:pSource->asBankAcct,
+			:pSource->aiQuota,
+			:pSource->aiCreditGrade,
+			:pSource->aiBalance,
+			:pSource->aiChange,
+			:pSource->asCreatedDate,
+			:pSource->asState,
+			:pSource->asStateDate;
+		CheckSqlError("Fetch ACCTCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE ACCTCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=ACCT_BUFLEN_IN)
+			pSource->iEndFlag=TRUE;
+		else
+			pSource->iEndFlag=FALSE;
+
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+	
+/* 从缓冲区取数据*/
+		strcpy(p->sAcctID,		pSource->asAcctID[iCurPos]);
+
+		p->iAcctSeqNbr=			pSource->aiAcctSeqNbr[iCurPos];
+		p->iBranchID=			pSource->aiBranchID[iCurPos];
+
+		strcpy(p->sPaymentMethod,	pSource->asPaymentMethod[iCurPos]);
+		strcpy(p->sAcctNbr,			pSource->asAcctNbr[iCurPos]);
+		strcpy(p->sBankAcct,		pSource->asBankAcct[iCurPos]);
+
+		p->iQuota=			pSource->aiQuota[iCurPos];
+
+		p->iCreditGrade=		pSource->aiCreditGrade[iCurPos];
+
+		p->iBalance=			pSource->aiBalance[iCurPos];
+		p->iChange=			pSource->aiChange[iCurPos];
+
+		strcpy(p->sCreatedDate,		pSource->asCreatedDate[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sStateDate,		pSource->asStateDate[iCurPos]);
+
+		AllTrim(p->sAcctID);
+		AllTrim(p->sPaymentMethod);
+		AllTrim(p->sAcctNbr);
+		AllTrim(p->sBankAcct);
+		AllTrim(p->sCreatedDate);
+		AllTrim(p->sState);
+		AllTrim(p->sStateDate);
+		
+		TrimDate(p->sCreatedDate);
+		TrimDate(p->sStateDate);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从SERV中用结构缓冲方式取数据*/
+int EGetServToStruct(struct ServStruct *p,struct ServStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[2048];
+
+		/* 2002/06/18 Modify 将SiteID字段修改为ApplySiteID */
+		sprintf(statement,"\
+			SELECT \
+				SERV_ID,\
+				SERV_SEQ_NBR,\
+				BILLING_TYPE_ID,\
+				SERV_TYPE_ID,\
+				nvl(AREA_ID,-1),\
+				ACC_NBR_STATE_ID,\
+				nvl(STOP_TYPE_ID,0),\
+				nvl(CYCLE_TYPE_ID,-1),\
+				nvl(CENTREX_ID,-1),\
+				IN_NET_TYPE,\
+				ACC_NBR,\
+				nvl(IMSI,'*'),\
+				DEFAULT_ACCT_ID,\
+				nvl(QUOTA,0),\
+				nvl(APPLY_SITE_ID,-1),\
+				to_char(trunc(COMPLETED_DATE),'yyyymmddhh24miss'),\
+				to_char(CREATED_DATE,'yyyymmddhh24miss'),\
+				nvl(CREDIT_GRADE,-1),\
+				STATE,\
+				to_char(nvl(STATE_DATE,SYSDATE-3000),'yyyymmddhh24miss'),\
+				nvl(VIP_FLAG,-1)\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SERVSCR FROM :statement;
+		
+		if(CheckSqlResult(" PREPARE SERVSCR SERVCR")<0) return -1;
+
+		EXEC SQL DECLARE SERVCR CURSOR FOR SERVSCR;
+		
+		if(CheckSqlResult("Declare SERVCR")<0) return -1;
+
+		EXEC SQL OPEN SERVCR;
+		if(CheckSqlResult("Open SERVCR;")<0) return -1;
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+	}
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SERVCR;
+
+		return FALSE;
+	}
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SERVCR INTO
+			:pSource->asServID,
+			:pSource->aiServSeqNbr,
+			:pSource->aiBillingTypeID,
+			:pSource->aiServTypeID,
+			:pSource->aiAreaID,
+			:pSource->asAccNbrStateID,
+			:pSource->aiStopTypeID,
+			:pSource->aiCycleTypeID,
+			:pSource->aiCentrexID,
+			:pSource->aiInNetType,
+			:pSource->asAccNbr,
+			:pSource->asImsi,
+			:pSource->asDefaultAcctID,
+			:pSource->aiQuota,
+			:pSource->aiSiteID,
+			:pSource->asCompletedDate,
+			:pSource->asCreatedDate,
+			:pSource->aiCreditGrade,
+			:pSource->asState,
+			:pSource->asStateDate,
+			:pSource->aiVipFlag;
+			
+		if(CheckSqlResult("Fetch SERVCR")<0) return -1;
+		
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SERVCR;
+
+			return FALSE;
+		}
+		if(pSource->iRecCnt!=SERV_BUFLEN_IN)
+			pSource->iEndFlag=TRUE;
+		else
+			pSource->iEndFlag=FALSE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+	
+/* 从缓冲区取数据*/
+		strcpy(p->sServID,		pSource->asServID[iCurPos]);
+
+		p->iServSeqNbr=			pSource->aiServSeqNbr[iCurPos];
+
+		p->iBillingTypeID=		pSource->aiBillingTypeID[iCurPos];
+		p->iServTypeID=			pSource->aiServTypeID[iCurPos];
+		p->iAreaID=			pSource->aiAreaID[iCurPos];
+
+		strcpy(p->sAccNbrStateID,	pSource->asAccNbrStateID[iCurPos]);
+
+		p->iStopTypeID=			pSource->aiStopTypeID[iCurPos];
+		p->iCycleTypeID=		pSource->aiCycleTypeID[iCurPos];
+		p->iCentrexID=			pSource->aiCentrexID[iCurPos];
+		p->iInNetType=			pSource->aiInNetType[iCurPos];
+
+		strcpy(p->sAccNbr,		pSource->asAccNbr[iCurPos]);
+		strcpy(p->sImsi,		pSource->asImsi[iCurPos]);
+		strcpy(p->sDefaultAcctID,	pSource->asDefaultAcctID[iCurPos]);
+
+		p->iQuota=			pSource->aiQuota[iCurPos];
+
+		p->iSiteID=			pSource->aiSiteID[iCurPos];
+
+		strcpy(p->sCompletedDate,	pSource->asCompletedDate[iCurPos]);
+		strcpy(p->sCreatedDate,		pSource->asCreatedDate[iCurPos]);
+
+		p->iCreditGrade=		pSource->aiCreditGrade[iCurPos];
+
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sStateDate,		pSource->asStateDate[iCurPos]);
+
+		p->iVipFlag			=pSource->aiVipFlag[iCurPos];
+		
+		AllTrim(p->sServID);
+		AllTrim(p->sAccNbrStateID);
+		AllTrim(p->sAccNbr);
+		AllTrim(p->sImsi);
+		AllTrim(p->sDefaultAcctID);
+		
+		AllTrim(p->sCompletedDate);
+		AllTrim(p->sCreatedDate);
+		
+		AllTrim(p->sState);
+		
+		AllTrim(p->sStateDate);
+
+
+		TrimDate(p->sCompletedDate);
+		TrimDate(p->sCreatedDate);
+		TrimDate(p->sStateDate);
+		
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从SERV_ACCT中用结构缓冲方式取数据*/
+int EGetServAcctToStruct(struct ServAcctStruct *p,struct ServAcctStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[2048];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				ACCT_ID,\n\
+				ACCT_SEQ_NBR,\n\
+				ACCT_ITEM_TYPE_ID,\n\
+				SERV_ID,\n\
+				SERV_SEQ_NBR,\n\
+				STATE,\n\
+				to_char(nvl(STATE_DATE,SYSDATE-3000),'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SERV_ACCTSCR FROM :statement;
+		CheckSqlError(" PREPARE SERV_ACCTSCR SERV_ACCTCR");
+
+		EXEC SQL DECLARE SERV_ACCTCR CURSOR FOR SERV_ACCTSCR;
+		CheckSqlError("Declare SERV_ACCTCR");
+
+		EXEC SQL OPEN SERV_ACCTCR;
+		CheckSqlError("Open SERV_ACCTCR;");
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+	}
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SERV_ACCTCR;
+		return FALSE;
+	}
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SERV_ACCTCR INTO
+			:pSource->asAcctID,
+			:pSource->aiAcctSeqNbr,
+			:pSource->aiAcctItemTypeID,
+			:pSource->asServID,
+			:pSource->aiServSeqNbr,
+			:pSource->asState,
+			:pSource->asStateDate;
+		CheckSqlError("Fetch SERV_ACCTCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SERV_ACCTCR;
+
+			return FALSE;
+		}
+		if(pSource->iRecCnt!=SERV_ACCT_BUFLEN_IN)
+			pSource->iEndFlag=TRUE;
+		else
+			pSource->iEndFlag=FALSE;
+
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sAcctID,	pSource->asAcctID[iCurPos]);
+
+		p->iAcctSeqNbr=		pSource->aiAcctSeqNbr[iCurPos];
+		p->iAcctItemTypeID=	pSource->aiAcctItemTypeID[iCurPos];
+
+		strcpy(p->sServID,	pSource->asServID[iCurPos]);
+
+		p->iServSeqNbr=		pSource->aiServSeqNbr[iCurPos];
+
+		strcpy(p->sState,	pSource->asState[iCurPos]);
+		strcpy(p->sStateDate,	pSource->asStateDate[iCurPos]);
+
+		AllTrim(p->sAcctID);
+		AllTrim(p->sServID);
+		AllTrim(p->sState);
+		AllTrim(p->sStateDate);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从SERVPRODUCT中用结构缓冲方式取数据*/
+int EGetServProductToStruct(struct ServProductStruct *p,
+		struct ServProductStructIn *pSource)
+{
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[2048];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				PRODUCT_ID,\n\
+				SERV_ID,\n\
+				SERV_SEQ_NBR,\n\
+				SEQ_NBR,\n\
+				PRODUCT_TYPE_ID,\n\
+				nvl(PRODUCT_QUANTITY,1),\n\
+				nvl(ATTACH_MSG,'-1'),\n\
+				STATE,\n\
+				to_char(nvl(STATE_DATE,SYSDATE-3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(EXP_DATE,SYSDATE+3000),'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SERV_PRODUCTSCR FROM :statement;
+		CheckSqlError(" PREPARE SERV_PRODUCTSCR SERV_PRODUCTCR");
+
+		EXEC SQL DECLARE SERV_PRODUCTCR CURSOR FOR SERV_PRODUCTSCR;
+		CheckSqlError("Declare SERV_PRODUCTCR");
+
+		EXEC SQL OPEN SERV_PRODUCTCR;
+		CheckSqlError("Open SERV_PRODUCTCR;");
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+	}
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SERV_PRODUCTCR;
+		return FALSE;
+	}
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SERV_PRODUCTCR INTO
+			:pSource->aiProductID,
+			:pSource->asServID,
+			:pSource->aiServSeqNbr,
+			:pSource->aiSeqNbr,
+			:pSource->aiProductTypeID,
+			:pSource->aiProductQuantity,
+			:pSource->asAttachMsg,
+			:pSource->asState,
+			:pSource->asStateDate,
+			:pSource->asExpDate;
+		CheckSqlError("Fetch SERV_PRODUCTCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SERV_PRODUCTCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SERV_PRODUCT_BUFLEN_IN){
+			pSource->iEndFlag=TRUE;
+		}
+		else
+			pSource->iEndFlag=FALSE;
+			
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+	
+/* 从缓冲区取数据*/
+		p->iProductID=		pSource->aiProductID[iCurPos];
+
+		strcpy(p->sServID,	pSource->asServID[iCurPos]);
+
+		p->iServSeqNbr=		pSource->aiServSeqNbr[iCurPos];
+		p->iSeqNbr=		pSource->aiSeqNbr[iCurPos];
+		p->iProductTypeID=	pSource->aiProductTypeID[iCurPos];
+		p->iProductQuantity=	pSource->aiProductQuantity[iCurPos];
+
+		strcpy(p->sState,	pSource->asState[iCurPos]);
+		strcpy(p->sStateDate,	pSource->asStateDate[iCurPos]);
+		strcpy(p->sExpDate,	pSource->asExpDate[iCurPos]);
+
+		AllTrim(p->sServID);
+		AllTrim(p->sState);
+		AllTrim(p->sStateDate);
+		AllTrim(p->sExpDate);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}

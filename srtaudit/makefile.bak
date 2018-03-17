@@ -1,0 +1,82 @@
+include ../makebss/Make.defines
+MAKEFILE = ./makefile
+
+TARGET1=../bin/srtaudit
+TARGET2=../bin/settcontrolall_new
+TARGET3=../bin/fixaudit
+TARGET4=../bin/mobaudit
+TARGET5=../bin/fmqaudit
+TARGET6=../bin/settaudit
+TARGET7=../bin/settbillstor
+TARGET8=../bin/splitfile
+TARGET9=../bin/disp
+
+all: $(TARGET1) $(TARGET2) $(TARGET3) $(TARGET4) $(TARGET5) $(TARGET6) \
+	$(TARGET7) $(TARGET8) $(TARGET9)
+test: $(TARGET7)
+CLEANFILES=*.a *.lis *.o 
+
+OBJ_STRAUDIT=srtaudit.o ausrt_info.o ../case/get_impl.o ../case/get_supp.o \
+../public/ticket_field.o ../public/extend_intf.o ../public/tab_ins_supp.o ../public/tab_xstr_impl.o \
+../billing/upd_supp.o ../simple/simple_intf.o
+
+OBJ_CONTROLALL=settcontrolall.o ausrt_info.o ../case/get_impl.o ../case/get_supp.o \
+../public/ticket_field.o ../public/extend_intf.o ../public/tab_ins_supp.o ../public/tab_xstr_impl.o \
+../billing/upd_supp.o ../simple/simple_intf.o
+
+OBJ_FIXAUDIT=fixaudit.o ausrt_info.o ../case/get_impl.o ../case/get_supp.o \
+../public/ticket_field.o ../public/extend_intf.o ../public/tab_ins_supp.o ../public/tab_xstr_impl.o \
+../billing/upd_supp.o ../simple/simple_intf.o
+
+OBJ_MOBAUDIT=mobaudit.o ausrt_info.o ../case/get_impl.o ../case/get_supp.o \
+../public/ticket_field.o ../public/extend_intf.o ../public/tab_ins_supp.o ../public/tab_xstr_impl.o \
+../billing/upd_supp.o ../simple/simple_intf.o
+
+OBJ_FMQAUDIT=fmqaudit.o ausrt_info.o ../case/get_impl.o ../case/get_supp.o \
+../public/ticket_field.o ../public/extend_intf.o ../public/tab_ins_supp.o ../public/tab_xstr_impl.o \
+../billing/upd_supp.o ../simple/simple_intf.o
+
+OBJ_SETTAUDIT=settaudit.o ausrt_info.o ../case/get_impl.o ../case/get_supp.o \
+../public/ticket_field.o ../public/extend_intf.o ../public/tab_ins_supp.o ../public/tab_xstr_impl.o \
+../billing/upd_supp.o ../simple/simple_intf.o ../settaudit/ausett_intf.o \
+../settaudit/ausett_supp.o
+
+OBJ_SETTBILLSTOR=settbillstor.o sett_supp.o ../case/get_impl.o ../case/get_supp.o \
+../public/ticket_field.o ../billing/upd_supp.o ../settaudit/ausett_intf.o \
+../settaudit/ausett_supp.o ../shed/appsupp.o
+
+OBJ_SPLITFILE=splitfile.o sett_supp.o ../case/get_impl.o ../case/get_supp.o \
+../public/ticket_field.o ../public/extend_intf.o ../public/tab_ins_supp.o ../public/tab_xstr_impl.o \
+../billing/upd_supp.o ../simple/simple_intf.o ../settaudit/ausett_intf.o \
+../settaudit/ausett_supp.o
+
+OBJ_DISP=disp_sh.o sett_supp.o ../case/get_impl.o ../case/get_supp.o \
+../public/ticket_field.o ../public/extend_intf.o ../public/tab_ins_supp.o ../public/tab_xstr_impl.o \
+../billing/upd_supp.o ../simple/simple_intf.o ../settaudit/ausett_intf.o \
+../settaudit/ausett_supp.o ../shed/appsupp.o
+
+$(TARGET1): $(OBJ_STRAUDIT)
+	$(MAKE) -f $(MAKEFILE) OBJS="$(OBJ_STRAUDIT)" EXE=$@ build_libpd
+$(TARGET2): $(OBJ_CONTROLALL)
+	$(MAKE) -f $(MAKEFILE) OBJS="$(OBJ_CONTROLALL)" EXE=$@ build_libpd
+$(TARGET3): $(OBJ_FIXAUDIT)
+	$(MAKE) -f $(MAKEFILE) OBJS="$(OBJ_FIXAUDIT)" EXE=$@ build_libpd
+$(TARGET4): $(OBJ_MOBAUDIT)
+	$(MAKE) -f $(MAKEFILE) OBJS="$(OBJ_MOBAUDIT)" EXE=$@ build_libpd
+$(TARGET5): $(OBJ_FMQAUDIT)
+	$(MAKE) -f $(MAKEFILE) OBJS="$(OBJ_FMQAUDIT)" EXE=$@ build_libpd
+$(TARGET6): $(OBJ_SETTAUDIT)
+	$(MAKE) -f $(MAKEFILE) OBJS="$(OBJ_SETTAUDIT)" EXE=$@ build_libpd
+$(TARGET7): $(OBJ_SETTBILLSTOR)
+	$(MAKE) -f $(MAKEFILE) OBJS="$(OBJ_SETTBILLSTOR)" EXE=$@ build_libpd
+$(TARGET8): $(OBJ_SPLITFILE)
+	$(MAKE) -f $(MAKEFILE) OBJS="$(OBJ_SPLITFILE)" EXE=$@ build_libpd
+$(TARGET9): $(OBJ_DISP)
+	$(MAKE) -f $(MAKEFILE) OBJS="$(OBJ_DISP)" EXE=$@ build_libpd
+	
+clean:
+	$(RM) -f $(CLEANFILES) $(TARGET1) $(TARGET2) $(TARGET3) $(TARGET4) \
+	$(TARGET5) $(TARGET6) $(TARGET7) $(TARGET8) ausrt_info.c sett_supp.c \
+	$(TARGET9)
+cleantest: 
+	$(RM) -f $(TARGET7) settbillstor.o

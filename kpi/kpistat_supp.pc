@@ -1,0 +1,1575 @@
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdir.h>
+#include <list.h>
+#include <wwfile.h>
+#include <wwdb.h>
+#include <dbsupp.h>
+#include <stdarg.h>
+#include "param_intf.h"
+#include "dbsupp.h"
+#include <ticket.h>
+#include <stt_ticket.h>
+#include <bintree.h>
+#include "kpistat_supp.h"
+
+int InsertKpiRecord(struct KpiLibStruct **pptKpiRecord)
+{
+	char statement[8192];
+	struct KpiLibStruct *pTemp;
+
+	pTemp=*pptKpiRecord;
+/*		printf("%s,%d,%d,%d,%s,%s,%s,%s\n",pTemp->sKpiID,
+			pTemp->iDimensionID1,pTemp->iDimensionID2,pTemp->iValue,
+			pTemp->sKpiDate,pTemp->sBeginTime,pTemp->sEndTime,pTemp->sCreatedDate);
+*/
+	while(pTemp!=NULL){
+		sprintf(statement,"\n\
+			INSERT INTO KPI_LIB(\n\
+				KPI_ID,\n\
+				DIMENSION_ID1,\n\
+				DIMENSION_ID2,\n\
+				VALUE,\n\
+				KPI_DATE,\n\
+				BEGIN_TIME,\n\
+				END_TIME,\n\
+				CREATED_DATE)\n\
+			VALUES (\n\
+				:sKpiID,\n\
+				:iDimensionID1,\n\
+				:iDimensionID2,\n\
+				:iValue,\n\
+				to_date(:sKpiDate,'yyyymmddhh24miss'),\n\
+				to_date(:sBeginTime,'yyyymmddhh24miss'),\n\
+				to_date(:sEndTime,'yyyymmddhh24miss'),\n\
+				to_date(:sCreatedDate,'yyyymmddhh24miss')\n\
+			)");
+
+		EXEC SQL PREPARE KPI_RECORDTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement KPI_RECORD")<0) return -1;
+
+		EXEC SQL EXECUTE KPI_RECORDTRG USING
+				:pTemp->sKpiID,
+				:pTemp->iDimensionID1,
+				:pTemp->iDimensionID2,
+				:pTemp->iValue,
+				:pTemp->sKpiDate,
+				:pTemp->sBeginTime,
+				:pTemp->sEndTime,
+				:pTemp->sCreatedDate;
+		if(CheckSqlResult("Dyn insert into KPI_RECORD")<0) return -1;
+		pTemp=pTemp->pLoadNext;
+	}
+	return 0;
+}
+/*批量数据动态从KPI_DIMENSION中用结构缓冲方式取数据*/
+int EGetKpiDimensionToStruct(struct KpiDimensionStruct *p,
+	struct KpiDimensionStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				DIMENSION_ID,\n\
+				nvl(PARENT_ID,-1),\n\
+				DIMENSION,\n\
+				DIMENSION_TYPE,\n\
+				REMARK,\n\
+				nvl(LAY,-1),\n\
+				nvl(LEAVE_FLAG,'-1')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE KPI_DIMENSIONSCR FROM :statement;
+		CheckSqlError(" PREPARE KPI_DIMENSIONSCR KPI_DIMENSIONCR");
+
+		EXEC SQL DECLARE KPI_DIMENSIONCR CURSOR FOR KPI_DIMENSIONSCR;
+		CheckSqlError("Declare KPI_DIMENSIONCR");
+
+		EXEC SQL OPEN KPI_DIMENSIONCR;
+		CheckSqlError("Open KPI_DIMENSIONCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE KPI_DIMENSIONCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH KPI_DIMENSIONCR INTO
+			:pSource->aiDimensionID,
+			:pSource->aiParentID,
+			:pSource->asDimension,
+			:pSource->asDimensionType,
+			:pSource->asRemark,
+			:pSource->aiLay,
+			:pSource->asLeaveFlag;
+		CheckSqlError("Fetch KPI_DIMENSIONCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE KPI_DIMENSIONCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=KPI_DIMENSION_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iDimensionID=		pSource->aiDimensionID[iCurPos];
+		p->iParentID=			pSource->aiParentID[iCurPos];
+
+		strcpy(p->sDimension,		pSource->asDimension[iCurPos]);
+		strcpy(p->sDimensionType,	pSource->asDimensionType[iCurPos]);
+		strcpy(p->sRemark,		pSource->asRemark[iCurPos]);
+
+		p->iLay=			pSource->aiLay[iCurPos];
+
+		strcpy(p->sLeaveFlag,		pSource->asLeaveFlag[iCurPos]);
+
+		AllTrim(p->sDimension);
+		AllTrim(p->sDimensionType);
+		AllTrim(p->sRemark);
+		AllTrim(p->sLeaveFlag);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/**对表KPI_DIMENSION的链表释放函数**/
+void DestroyKpiDimension(struct KpiDimensionStruct *ptHead)
+{
+	struct KpiDimensionStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+
+int InitKpiDimension(struct KpiDimensionStruct **pptHead)
+{
+	int iCnt=0;
+	static struct KpiDimensionStruct *pTemp,*ptHead=NULL;
+	struct KpiDimensionStruct Temp;
+	struct KpiDimensionStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyKpiDimension(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct KpiDimensionStructIn));
+	strcpy(TempIn.sTableName,"KPI_DIMENSION");
+	strcpy(TempIn.sCondition,"");
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetKpiDimensionToStruct(&Temp,&TempIn)){
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+		if((pTemp=(struct KpiDimensionStruct*)
+			malloc(sizeof(struct KpiDimensionStruct)))==NULL){
+
+			DestroyKpiDimension(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct KpiDimensionStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表KPI_DIMENSION记录数%d",iCnt);
+	}
+
+	/*WriteProcMsg("加载表KPI_DIMENSION毕总记录数%d",iCnt);
+	printf("加载表KPI_DIMENSION完毕总记录数%d\n",iCnt);*/
+	return iCnt;
+}
+
+int SearchDimensionID(struct KpiDimensionStruct **pptHead,char sDimension[])
+{
+	struct KpiDimensionStruct *pTemp=*pptHead;
+	
+/*	printf("input sDimension=%s.\n",sDimension);*/
+	AllTrim(sDimension);
+	while(pTemp!=NULL){
+		if(strcmp(pTemp->sDimension,sDimension)==0){
+/*			printf("right:pTemp->sDimension=%s\n",pTemp->sDimension);*/
+			return pTemp->iDimensionID;
+		}
+/*		printf("wrong:pTemp->sDimension=%s.\n",pTemp->sDimension);*/
+		pTemp=pTemp->pLoadNext;
+	}
+	/*找不到，默认为-1*/
+	return -1;
+}
+
+void cv_kpilib(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct *pTemp,char sKpiID[],char sSourceID[],int iValue,
+	char sKpiDate[],char sBeginTime[],char sEndTime[],char sCreatedDate[])
+{
+	int iDimensionID1;
+
+	/*查找iDimensionID1*/
+	iDimensionID1=SearchDimensionID(pptHead,sSourceID);
+
+	strcpy(pTemp->sKpiID,sKpiID);
+	pTemp->iDimensionID1=iDimensionID1;
+	pTemp->iDimensionID2=0;/*保留*/
+	pTemp->iValue=iValue;
+	strcpy(pTemp->sKpiDate,sKpiDate);
+	strcpy(pTemp->sBeginTime,sBeginTime);
+	strcpy(pTemp->sEndTime,sEndTime);
+	strcpy(pTemp->sCreatedDate,sCreatedDate);
+}
+
+/*每日一次，取前一天数据。*/
+int GenSettItem(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[],char sAcctType[])
+{
+	int iCharge,iDimensionID1,iDimensionID2,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192],sTicketTypeID[7];
+	struct KpiLibStruct *pTemp;
+
+	sprintf(sStatement,"SELECT sum(CHARGE) CHARGE,\n\
+		to_char(SETT_ITEM_DATE,'YYYYMMDD'),\n\
+		SOURCE_ID,\n\
+		substr(ACCT_ITEM_TYPE_ID,2,4) TICKET_TYPE_ID\n\
+		FROM SETT_ITEM\n\
+		WHERE SETT_ITEM_DATE>=to_date('%s','YYYYMMDD') AND\n\
+			SETT_ITEM_DATE<to_date('%s','YYYYMMDD') AND\n\
+			ACCT_ITEM_TYPE_ID LIKE '%%%s'\n\
+			GROUP BY SOURCE_ID,ACCT_ITEM_TYPE_ID,\n\
+			to_char(SETT_ITEM_DATE,'YYYYMMDD')",sBeginTime,sEndTime,sAcctType);
+	printf("sStatement=%s\n",sStatement);
+
+	EXEC SQL PREPARE GETSETTITEM_SCR FROM :sStatement;
+	EXEC SQL DECLARE GETSETTITEM_CR CURSOR FOR GETSETTITEM_SCR;
+	CheckSqlError("Declare GETSETTITEM_CR");
+
+	EXEC SQL OPEN GETSETTITEM_CR;
+	CheckSqlError("Open GETSETTITEM_CR");
+
+/*	strncpy(sKpiDate,sBeginTime,8);sKpiDate[8]=0;*/
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH GETSETTITEM_CR INTO
+			:iCharge,:sKpiDate,:sSourceID,:sTicketTypeID;
+		CheckSqlError("Fetch SETT_ITEM");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*查找iDimensionID*/
+		iDimensionID1=SearchDimensionID(pptHead,sSourceID);
+		iDimensionID2=SearchDimensionID(pptHead,sTicketTypeID);
+		/*形成kpi_lib链表*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		strcpy(pTemp->sKpiID,sKpiID);
+		pTemp->iDimensionID1=iDimensionID1;
+		pTemp->iDimensionID2=iDimensionID2;
+		pTemp->iValue=iCharge;
+		sKpiDate[8]=0;
+		strcpy(pTemp->sKpiDate,sKpiDate);
+		strcpy(pTemp->sBeginTime,sKpiDate);
+		strcpy(pTemp->sEndTime,sKpiDate);
+		AddDates(pTemp->sEndTime,1);
+		strcpy(pTemp->sCreatedDate,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+	}
+
+	EXEC SQL CLOSE GETSETTITEM_CR;
+	return iCnt;
+}
+
+/**********************************************采集*****************************/
+int GenPickFileCnt(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iSumCnt,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"SELECT SOURCE_ID,\n\
+		count(*),\n\
+		to_char(DEAL_END_DATE,'yyyymmddhh24')\n\
+		FROM PICK_LOG\n\
+		WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+			GROUP BY SOURCE_ID,\n\
+			to_char(DEAL_END_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE PICKFILECNT_SCR FROM :sStatement;
+	EXEC SQL DECLARE PICKFILECNT_CR CURSOR FOR PICKFILECNT_SCR;
+	CheckSqlError("Declare PICKFILECNT_CR");
+
+	EXEC SQL OPEN PICKFILECNT_CR;
+	CheckSqlError("Open PICKFILECNT_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH PICKFILECNT_CR INTO
+			:sSourceID,:iSumCnt,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iSumCnt,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iSumCnt,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE PICKFILECNT_CR;
+	return iCnt;
+}
+
+int GenPickLocalIntv(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iValue,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"\n\
+		SELECT\n\
+		A.SOURCE_ID,\n\
+		A.TIME_SPAN,\n\
+		max((A.DEAL_END_DATE-B.DEAL_END_DATE)*60*60*24) MAX_INTERVAL\n\
+		FROM\n\
+		(\n\
+		SELECT SOURCE_ID,TIME_SPAN,ROWNUM RN,DEAL_END_DATE FROM\n\
+			(\n\
+			SELECT SOURCE_ID,\n\
+			to_char(DEAL_END_DATE,'yyyymmddhh24') TIME_SPAN,\n\
+			DEAL_END_DATE\n\
+			FROM PICK_LOG\n\
+			WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+				DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+				ORDER BY SOURCE_ID,TIME_SPAN,DEAL_END_DATE\n\
+			)\n\
+		)A,\n\
+		(\n\
+		SELECT SOURCE_ID,TIME_SPAN,ROWNUM RN,DEAL_END_DATE FROM\n\
+			(\n\
+			SELECT SOURCE_ID,\n\
+			to_char(DEAL_END_DATE,'yyyymmddhh24') TIME_SPAN,\n\
+			DEAL_END_DATE\n\
+			FROM PICK_LOG\n\
+			WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+				DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+				ORDER BY SOURCE_ID,TIME_SPAN,DEAL_END_DATE\n\
+			)\n\
+		)B\n\
+		WHERE B.RN=A.RN-1\n\
+		AND A.SOURCE_ID=B.SOURCE_ID\n\
+		AND A.TIME_SPAN=B.TIME_SPAN\n\
+		GROUP BY A.SOURCE_ID,A.TIME_SPAN",
+		sBeginTime,sEndTime,sBeginTime,sEndTime);
+
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE PICKLOCALINTV_SCR FROM :sStatement;
+	EXEC SQL DECLARE PICKLOCALINTV_CR CURSOR FOR PICKLOCALINTV_SCR;
+	CheckSqlError("Declare PICKLOCALINTV_CR");
+
+	EXEC SQL OPEN PICKLOCALINTV_CR;
+	CheckSqlError("Open PICKLOCALINTV_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH PICKLOCALINTV_CR INTO
+			:sSourceID,:sDealBeginTime,:iValue;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iValue,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iValue,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE PICKLOCALINTV_CR;
+	return iCnt;
+}
+
+int GenPickByteCnt(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iSumCnt,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"SELECT SOURCE_ID,\n\
+		round(sum(BYTE)/1024),\n\
+		to_char(DEAL_END_DATE,'yyyymmddhh24')\n\
+		FROM PICK_LOG\n\
+		WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+			GROUP BY SOURCE_ID,\n\
+			to_char(DEAL_END_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE PICKBYTECNT_SCR FROM :sStatement;
+	EXEC SQL DECLARE PICKBYTECNT_CR CURSOR FOR PICKBYTECNT_SCR;
+	CheckSqlError("Declare PICKBYTECNT_CR");
+
+	EXEC SQL OPEN PICKBYTECNT_CR;
+	CheckSqlError("Open PICKBYTECNT_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH PICKBYTECNT_CR INTO
+			:sSourceID,:iSumCnt,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iSumCnt,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iSumCnt,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE PICKBYTECNT_CR;
+	return iCnt;
+}
+
+/*************************************预处理**************************************/
+int GenPrepRecCnt(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iSumCnt,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"SELECT SOURCE_ID,\n\
+		sum(CNT),\n\
+		to_char(DEAL_END_DATE,'yyyymmddhh24')\n\
+		FROM PREP_PROC_LOG\n\
+		WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+			GROUP BY SOURCE_ID,\n\
+			to_char(DEAL_END_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE PREPRECCNT_SCR FROM :sStatement;
+	EXEC SQL DECLARE PREPRECCNT_CR CURSOR FOR PREPRECCNT_SCR;
+	CheckSqlError("Declare PREPRECCNT_CR");
+
+	EXEC SQL OPEN PREPRECCNT_CR;
+	CheckSqlError("Open PREPRECCNT_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH PREPRECCNT_CR INTO
+			:sSourceID,:iSumCnt,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iSumCnt,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iSumCnt,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE PREPRECCNT_CR;
+	return iCnt;
+}
+
+int GenPrepErrCnt(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iSumCnt,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"SELECT substr(SOURCE_ID,1,6),\n\
+		count(*),\n\
+		to_char(UPDATE_DATE,'yyyymmddhh24')\n\
+		FROM ERR_TICKET\n\
+		WHERE UPDATE_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			UPDATE_DATE<to_date('%s','yyyymmddhh24miss')\n\
+			GROUP BY substr(SOURCE_ID,1,6),\n\
+			to_char(UPDATE_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE PREPERRCNT_SCR FROM :sStatement;
+	EXEC SQL DECLARE PREPERRCNT_CR CURSOR FOR PREPERRCNT_SCR;
+	CheckSqlError("Declare PREPERRCNT_CR");
+
+	EXEC SQL OPEN PREPERRCNT_CR;
+	CheckSqlError("Open PREPERRCNT_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH PREPERRCNT_CR INTO
+			:sSourceID,:iSumCnt,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iSumCnt,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iSumCnt,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE PREPERRCNT_CR;
+	return iCnt;
+}
+
+int GenPrepDelayTime(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iDelayTime,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"\n\
+		SELECT B.SOURCE_ID,\n\
+		sum(B.DEAL_END_DATE-A.DEAL_END_DATE)*60*60*24/count(*),\n\
+		to_char(B.DEAL_END_DATE,'yyyymmddhh24')\n\
+		FROM PICK_LOG A,PREP_PROC_LOG B\n\
+		WHERE B.DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			B.DEAL_END_DATE<to_date('%s','yyyymmddhh24miss') AND \n\
+			A.SOURCE_ID=B.SOURCE_ID  AND\n\
+			A.FILE_NAME=B.FILE_NAME  AND\n\
+			A.BYTE=B.BYTE  AND\n\
+			B.DEAL_END_DATE-A.DEAL_END_DATE>0\n\
+		GROUP BY B.SOURCE_ID,\n\
+			to_char(B.DEAL_END_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE PREPDELAYTIME_SCR FROM :sStatement;
+	EXEC SQL DECLARE PREPDELAYTIME_CR CURSOR FOR PREPDELAYTIME_SCR;
+	CheckSqlError("Declare PREPDELAYTIME_CR");
+
+	EXEC SQL OPEN PREPDELAYTIME_CR;
+	CheckSqlError("Open PREPDELAYTIME_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH PREPDELAYTIME_CR INTO
+			:sSourceID,:iDelayTime,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iDelayTime,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iDelayTime,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE PREPDELAYTIME_CR;
+	return iCnt;
+}
+
+int GenPrepProcRate(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iPrepProcRate,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"SELECT\n\
+		SOURCE_ID,\n\
+		round(sum(CNT)/60),\n\
+		to_char(DEAL_END_DATE,'yyyymmddhh24')\n\
+		FROM PREP_PROC_LOG\n\
+		WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss')\n\
+		AND DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+		GROUP BY SOURCE_ID,\n\
+			to_char(DEAL_END_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE PREPPROCRATE_SCR FROM :sStatement;
+	EXEC SQL DECLARE PREPPROCRATE_CR CURSOR FOR PREPPROCRATE_SCR;
+	CheckSqlError("Declare PREPPROCRATE_CR");
+
+	EXEC SQL OPEN PREPPROCRATE_CR;
+	CheckSqlError("Open PREPPROCRATE_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH PREPPROCRATE_CR INTO
+			:sSourceID,:iPrepProcRate,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_RATE");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iSumCnt,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iPrepProcRate,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE PREPPROCRATE_CR;
+	return iCnt;
+}
+
+int GenBillRecCnt(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iSumCnt,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"SELECT SOURCE_ID,\n\
+		sum(CNT),\n\
+		to_char(DEAL_END_DATE,'yyyymmddhh24')\n\
+		FROM BILLING_LOG\n\
+		WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+		GROUP BY SOURCE_ID,\n\
+		to_char(DEAL_END_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE BILLRECCNT_SCR FROM :sStatement;
+	EXEC SQL DECLARE BILLRECCNT_CR CURSOR FOR BILLRECCNT_SCR;
+	CheckSqlError("Declare BILLRECCNT_CR");
+
+	EXEC SQL OPEN BILLRECCNT_CR;
+	CheckSqlError("Open BILLRECCNT_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH BILLRECCNT_CR INTO
+			:sSourceID,:iSumCnt,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iSumCnt,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iSumCnt,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE BILLRECCNT_CR;
+	return iCnt;
+}
+
+int GenBillErrCnt(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iSumCnt,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"SELECT substr(SOURCE_ID,1,6),\n\
+		count(*),\n\
+		to_char(UPDATE_DATE,'yyyymmddhh24')\n\
+		FROM ERR_TICKET\n\
+		WHERE UPDATE_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			UPDATE_DATE<to_date('%s','yyyymmddhh24miss')\n\
+			GROUP BY substr(SOURCE_ID,1,6),\n\
+		to_char(UPDATE_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE BILLERRCNT_SCR FROM :sStatement;
+	EXEC SQL DECLARE BILLERRCNT_CR CURSOR FOR BILLERRCNT_SCR;
+	CheckSqlError("Declare BILLERRCNT_CR");
+
+	EXEC SQL OPEN BILLERRCNT_CR;
+	CheckSqlError("Open BILLERRCNT_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH BILLERRCNT_CR INTO
+			:sSourceID,:iSumCnt,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iSumCnt,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iSumCnt,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE BILLERRCNT_CR;
+	return iCnt;
+}
+
+int GenBillProcRate(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iBillProcRate,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"SELECT\n\
+		SOURCE_ID,\n\
+		round(sum(CNT)/60),\n\
+		to_char(DEAL_END_DATE,'yyyymmddhh24')\n\
+		FROM BILLING_LOG\n\
+		WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+			GROUP BY SOURCE_ID,\n\
+			to_char(DEAL_END_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE BILLPROCRATE_SCR FROM :sStatement;
+	EXEC SQL DECLARE BILLPROCRATE_CR CURSOR FOR BILLPROCRATE_SCR;
+	CheckSqlError("Declare BILLPROCRATE_CR");
+
+	EXEC SQL OPEN BILLPROCRATE_CR;
+	CheckSqlError("Open BILLPROCRATE_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH BILLPROCRATE_CR INTO
+			:sSourceID,:iBillProcRate,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_RATE");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iSumCnt,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iBillProcRate,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE BILLPROCRATE_CR;
+	return iCnt;
+}
+
+/************************************************入库*******************************/
+int GenInstProcRate(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iInstProcRate,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"SELECT\n\
+		SOURCE_ID,\n\
+		round(sum(CNT)/60),\n\
+		to_char(DEAL_END_DATE,'yyyymmddhh24')\n\
+		FROM INSERT_LOG\n\
+		WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+			GROUP BY SOURCE_ID,\n\
+			to_char(DEAL_END_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE INSTPROCRATE_SCR FROM :sStatement;
+	EXEC SQL DECLARE INSTPROCRATE_CR CURSOR FOR INSTPROCRATE_SCR;
+	CheckSqlError("Declare INSTPROCRATE_CR");
+
+	EXEC SQL OPEN INSTPROCRATE_CR;
+	CheckSqlError("Open INSTPROCRATE_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH INSTPROCRATE_CR INTO
+			:sSourceID,:iInstProcRate,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_RATE");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iSumCnt,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iInstProcRate,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE BILLPROCRATE_CR;
+	return iCnt;
+}
+
+int GenInstFileCnt(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iSumCnt,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"SELECT SOURCE_ID,\n\
+		count(*),\n\
+		to_char(DEAL_END_DATE,'yyyymmddhh24')\n\
+		FROM INSERT_LOG\n\
+		WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+			GROUP BY SOURCE_ID,\n\
+			to_char(DEAL_END_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE INSTFILECNT_SCR FROM :sStatement;
+	EXEC SQL DECLARE INSTFILECNT_CR CURSOR FOR INSTFILECNT_SCR;
+	CheckSqlError("Declare INSTFILECNT_CR");
+
+	EXEC SQL OPEN INSTFILECNT_CR;
+	CheckSqlError("Open INSTFILECNT_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH INSTFILECNT_CR INTO
+			:sSourceID,:iSumCnt,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iSumCnt,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iSumCnt,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE INSTFILECNT_CR;
+	return iCnt;
+}
+
+int GenInstRecCnt(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+{
+	int iSumCnt,iCnt=0;
+	char sSourceID[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+/*
+	printf("sBeginTime=%s\n",sBeginTime);
+	printf("sEndTime=%s\n",sEndTime);
+*/
+
+	sprintf(sStatement,"SELECT SOURCE_ID,\n\
+		sum(CNT),\n\
+		to_char(DEAL_END_DATE,'yyyymmddhh24')\n\
+		FROM INSERT_LOG\n\
+		WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+			GROUP BY SOURCE_ID,\n\
+			to_char(DEAL_END_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+
+/*	printf("sStatement=%s\n",sStatement);*/
+
+	EXEC SQL PREPARE INSTRECCNT_SCR FROM :sStatement;
+	EXEC SQL DECLARE INSTRECCNT_CR CURSOR FOR INSTRECCNT_SCR;
+	CheckSqlError("Declare INSTRECCNT_CR");
+
+	EXEC SQL OPEN INSTRECCNT_CR;
+	CheckSqlError("Open INSTRECCNT_CR");
+
+	GetHostTime(sCreatedDate);
+
+	while(1){
+
+		EXEC SQL FETCH INSTRECCNT_CR INTO
+			:sSourceID,:iSumCnt,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sSourceID);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iSumCnt,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sSourceID,iSumCnt,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE INSTRECCNT_CR;
+	return iCnt;
+}
+
+int GenUpErrCnt(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[],char sFileFlag[])
+	
+{
+	int iCnt=0,iSumCnt;
+	char sFileType[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15],sTableName[15],sDealBeginTemp[15];
+	struct KpiLibStruct *pTemp;
+	
+	if(strcmp(sFileFlag,"CRIERR")==0)
+		strcpy(sTableName,"CRI_ERROR");
+	else if(strcmp(sFileFlag,"CIIERR")==0)
+		strcpy(sTableName,"CII_ERROR");
+	else if(strcmp(sFileFlag,"JIIERR")==0)
+		strcpy(sTableName,"JII_ERROR");
+	else 
+		strcpy(sTableName,"JRI_ERROR");	
+	if(strncmp(sFileFlag,"C",1)==0){
+		sprintf(sStatement,"SELECT '%s',COUNT(*),\n\
+			START_DATE||substr(START_TIME,1,2) START_TIME\n\
+			FROM %s\n\
+			WHERE START_DATE>to_char(sysdate-30,'yyyymmdd')\n\
+			GROUP BY START_DATE||substr(START_TIME,1,2)\n",sFileFlag,sTableName);
+	}
+	else
+	{
+		sprintf(sStatement,"SELECT '%s',COUNT(*),\n\
+			START_DATE||substr(ROAM_START_TIME,1,2) START_TIME\n\
+			FROM %s\n\
+			WHERE START_DATE>to_char(sysdate-30,'yymmdd')\n\
+			GROUP BY START_DATE||substr(ROAM_START_TIME,1,2)\n",sFileFlag,sTableName);
+	}
+		
+	
+	EXEC SQL PREPARE UPERRCNT_SCR FROM :sStatement;
+	EXEC SQL DECLARE UPERRCNT_CR CURSOR FOR UPERRCNT_SCR;
+	CheckSqlError("Declare UPERRCNT_CR");
+
+	EXEC SQL OPEN UPERRCNT_CR;
+	CheckSqlError("Open UPERRCNT_CR");
+
+	GetHostTime(sCreatedDate);
+	
+	while(1){
+
+		EXEC SQL FETCH UPERRCNT_CR INTO
+			:sFileType,:iSumCnt,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sFileType);
+		if(strncmp(sDealBeginTime,"20",2)!=0)
+			sprintf(sDealBeginTemp,"20%s",sDealBeginTime);
+/*		printf("sDealBeginTemp=%s\n",sDealBeginTemp);*/
+		strcpy(sDealEndTime,sDealBeginTemp);sDealBeginTemp[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTemp,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iValue,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+		strcpy(sDealBeginTemp,"2006030110");
+		strcpy(sDealEndTime,"2006030110");
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+/*		printf("%s,%s,%d,%s,%s,%s,%s\n",sKpiID,sFileType,iSumCnt,
+			sKpiDate,sDealBeginTemp,sDealEndTime,sCreatedDate);
+*/			
+		cv_kpilib(pptHead,pTemp,sKpiID,sFileType,iSumCnt,
+			sKpiDate,sDealBeginTemp,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE UPERRCNT_CR;
+	return iCnt;
+}
+
+int GenUpDownFileCnt(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+	
+{
+	int iCnt=0,iSumCnt;
+	char sFileType[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+	
+	sprintf(sStatement,"SELECT FILE_TYPE,count(*),\n\
+		to_char(DEAL_END_DATE,'yyyymmddhh24')\n\
+		FROM UPDATA_LOG\n\
+		WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+			GROUP BY FILE_TYPE,\n\
+			to_char(DEAL_END_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+	
+	printf("sStatement=%s\n",sStatement);
+	
+	EXEC SQL PREPARE UPFILECNT_SCR FROM :sStatement;
+	EXEC SQL DECLARE UPFILECNT_CR CURSOR FOR UPFILECNT_SCR;
+	CheckSqlError("Declare UPFILECNT_CR");
+
+	EXEC SQL OPEN UPFILECNT_CR;
+	CheckSqlError("Open UPFILECNT_CR");
+
+	GetHostTime(sCreatedDate);
+	
+	while(1){
+
+		EXEC SQL FETCH UPFILECNT_CR INTO
+			:sFileType,:iSumCnt,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sFileType);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iValue,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sFileType,iSumCnt,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+/*		InsertList((LIST**)pptKpiRecord,(LIST*)pTemp);	*/
+	}
+
+	EXEC SQL CLOSE UPFILECNT_CR;
+	return iCnt;
+}
+
+int GenUpDownRecCnt(struct KpiDimensionStruct **pptHead,
+	struct KpiLibStruct **pptKpiRecord,char sKpiID[],
+	char sBeginTime[],char sEndTime[])
+	
+{
+	int iCnt=0,iSumCnt;
+	char sFileType[7],sKpiDate[15],sCreatedDate[15],sStatement[8192];
+	char sDealBeginTime[15],sDealEndTime[15];
+	struct KpiLibStruct *pTemp;
+	
+	sprintf(sStatement,"SELECT FILE_TYPE,\n\
+		sum(TOTAL_CHARGE),\n\
+		to_char(DEAL_END_DATE,'yyyymmddhh24')\n\
+		FROM UPDATA_LOG\n\
+		WHERE DEAL_END_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+			DEAL_END_DATE<to_date('%s','yyyymmddhh24miss')\n\
+			GROUP BY FILE_TYPE,\n\
+			to_char(DEAL_END_DATE,'yyyymmddhh24')",sBeginTime,sEndTime);
+	
+	EXEC SQL PREPARE UPRECORDCNT_SCR FROM :sStatement;
+	EXEC SQL DECLARE UPRECORDCNT_CR CURSOR FOR UPRECORDCNT_SCR;
+	CheckSqlError("Declare UPRECORDCNT_CR");
+
+	EXEC SQL OPEN UPRECORDCNT_CR;
+	CheckSqlError("Open UPRECORDCNT_CR");
+
+	GetHostTime(sCreatedDate);
+	
+	while(1){
+
+		EXEC SQL FETCH UPRECORDCNT_CR INTO
+			:sFileType,:iSumCnt,:sDealBeginTime;
+		CheckSqlError("Fetch PREP_REC_CNT");
+
+		if(NoDataFetched) break;
+
+		AllTrim(sFileType);
+		strcpy(sDealEndTime,sDealBeginTime);sDealBeginTime[10]=0;
+		AddTimes(sDealEndTime,3600);sDealEndTime[10]=0;
+		strncpy(sKpiDate,sDealBeginTime,8);sKpiDate[8]=0;
+
+/*
+		printf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			sKpiID,sSourceID,iDimensionID1,iValue,
+			sKpiDate,sBeginTime,sEndTime,sCreatedDate);
+*/
+		pTemp=(struct KpiLibStruct *)
+			malloc(sizeof(struct KpiLibStruct));
+		ERROR_EXIT(pTemp==NULL,"分配KpiLibStruct结构错误");
+
+		/*形成kpi_lib链表*/
+		cv_kpilib(pptHead,pTemp,sKpiID,sFileType,iSumCnt,
+			sKpiDate,sDealBeginTime,sDealEndTime,sCreatedDate);
+
+		pTemp->pLoadNext=*pptKpiRecord;
+		*pptKpiRecord=pTemp;
+		iCnt++;
+
+	}
+
+	EXEC SQL CLOSE UPRECORDCNT_CR;
+	return iCnt;
+}
+
+void PrintBillingData(char sTimeStamp[],char sCondition[],FILE *fp)
+{
+	char sDealBeginDate[15],sDealEndDate[15],
+		sOriFileName[81],sFileName[41],statement[8*1024];		
+	int iHandleCnt,iCnt,iErrCnt;			
+
+	sprintf(statement,"\n\
+		SELECT to_char(DEAL_BEGIN_DATE,'YYYYMMDD'),\n\
+		TO_CHAR(DEAL_END_DATE,'YYYYMMDD'),\n\
+		ORI_FILE_NAME,		\n\
+		FILE_NAME,		\n\
+		(SELECT CNT FROM BILLING_PROC_LOG WHERE FILE_NAME=A.FILE_NAME)+(SELECT CNT FROM BILLING_PROC_LOG WHERE FILE_TYPE='abn' AND substr(FILE_NAME,1,(INSTR(A.FILE_NAME,'.',1,2)))=substr(A.FILE_NAME,1,(INSTR(A.FILE_NAME,'.',1,2)))),\n\
+		(SELECT CNT FROM BILLING_PROC_LOG WHERE FILE_NAME=A.FILE_NAME),\n\
+		(SELECT CNT FROM BILLING_PROC_LOG WHERE FILE_TYPE='abn' AND substr(FILE_NAME,1,(instr(A.FILE_NAME,'.',1,2)))=substr(A.FILE_NAME,1,(instr(A.FILE_NAME,'.',1,2))))\n\
+		FROM BILLING_LOG A	\n\
+		%s\n",sCondition);
+	
+	EXEC SQL PREPARE GETBILLINGDATA_SCR FROM :statement;
+	EXEC SQL DECLARE GETBILLINGDATA_CR CURSOR FOR GETBILLINGDATA_SCR;
+	CheckSqlError("Declare GETBILLINGDATA_CR");
+	
+	EXEC SQL OPEN GETBILLINGDATA_CR;
+	CheckSqlError("Open GETBILLINGDATA_CR");
+	
+	while(1){			
+		EXEC SQL FETCH GETBILLINGDATA_CR INTO :sDealBeginDate,sDealEndDate,
+			:sOriFileName,:sFileName,:iHandleCnt,:iCnt,:iErrCnt;	
+		CheckSqlError("Fetch GETBILLINGDATA_CR");
+		if(NoDataFetched) break;
+		
+		AllTrim(sDealBeginDate);		
+		AllTrim(sDealEndDate);		
+		AllTrim(sOriFileName);		
+		AllTrim(sFileName);		
+    			
+		fprintf(fp,"%s%s%s%50s%50s%010d%010d%010d%04d%04d%010d\n",
+			sTimeStamp,		/*一次批价时间戳*/
+			sDealBeginDate,		/*文件一次批价起始时间*/
+			sDealEndDate,		/*文件一次批价结束时间*/
+			sOriFileName,		/*原话单文件名*/
+			sFileName,		/*批价后文件名*/
+			iHandleCnt,		/*文件中话单总数*/
+			iCnt,			/*文件中正确话单数*/
+			iErrCnt,		/*文件中错误话单数*/
+			0,			/*剔除循环计数*/
+			0,			/*剔除原因编码*/
+			0			/*剔除话单数*/
+		);
+	}
+	
+	EXEC SQL CLOSE GETBILLINGDATA_CR;
+}

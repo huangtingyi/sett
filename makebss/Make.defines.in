@@ -1,0 +1,98 @@
+
+include $(ORACLE_HOME)/@ENV_PRECOMP_MK@
+
+.SUFFIXES: .pc .c .o
+
+COMPILER=@COMPILER@
+CFLAGS=@CFLAGS@
+LFLAGS=@LFLAGS@
+ARFLAGS=@ARFLAGS@
+USERID=@USERID@
+
+BSSSRC_HOME=..
+BIN_PATH=$(BSSSRC_HOME)/bin
+INC_PATH=$(BSSSRC_HOME)/include
+LIB_PATH=$(BSSSRC_HOME)/lib
+COMM_PATH=$(BSSSRC_HOME)/common
+PUBLIC_PATH=$(BSSSRC_HOME)/public
+ARCH_PATH=$(BSSSRC_HOME)/arch
+XMLHOME=$(BILLHOME)/libxml2-2.5.9
+
+## C 宏支持
+OS_DEF=_LONG_LONG
+DEFINE=-D$(OS_DEF)
+I_SYM=-I
+INCLUDE=$(I_SYM)$(XMLHOME)/include $(I_SYM). $(I_SYM)$(PRECOMPHOME)public \
+	$(I_SYM)$(RDBMSHOME)public $(I_SYM)$(PLSQLHOME)public \
+	$(I_SYM)$(NETWORKHOME)public $(CC_INCLUDE) $(I_SYM)$(INC_PATH)
+
+### PROC 宏支持
+PROCFLAGS= include=$(ORACLE_HOME)/precomp/public include=$(INC_PATH) \
+	include=/usr/include sqlcheck=full userid=$(USERID)
+NETWORKHOME=$(ORACLE_HOME)/network/
+PLSQLHOME=$(ORACLE_HOME)/plsql/
+
+STATICPROLDLIBS=$(LLIBCLIENT) $(LLIBSQL) $(STATICTTLIBS)
+PROLDLIBS=$(LLIBCLNTSH) $(STATICPROLDLIBS)
+LDSTRING= -L$(ORACLE_HOME)/lib -L$(LIB_PATH)
+
+CCDV=../ccdv
+CC=@$(CCDV) $(COMPILER) $(CFLAGS) $(DEFINE) $(INCLUDE)
+PROC=@$(CCDV) $(BINHOME)proc $(PROCFLAGS)
+AR=@$(CCDV) ar $(ARFLAGS)
+RM=@rm
+CP=@cp
+MAKE=@make
+
+# Following is the main library, built from all the object files
+# in the lib/ directories.
+
+OS_LIBS=$(LIB_PATH)/libos.a
+DB_LIBS=$(LIB_PATH)/libdb.a
+PA_LIBS=$(LIB_PATH)/libpa.a
+PB_LIBS=$(LIB_PATH)/libpb.a
+XML_LIBS=$(XMLHOME)/.libs/libxml2.so.2
+
+# Rule to compile any program (specify EXE= and OBJS= on command line)
+
+.pc.c:
+	$(PROC) iname=$*.pc
+
+.pc.o:
+	$(PROC) iname=$*.pc
+	$(CC) -c $*.c -o $*.o 
+
+.c.o:
+	$(CC) -c $*.c -o $*.o 
+
+build:
+	$(CC) -o $(EXE) $(LDSTRING) $(OBJS)
+build_libos: $(OS_LIBS)
+	$(CC) $(LFLAGS) -o $(EXE) $(OBJS) -L$(LIBHOME) $(LDSTRING) \
+	$(OS_LIBS) $(LIBS)  $(PROLDLIBS)
+build_libox: $(OS_LIBS)
+	$(CC) $(LFLAGS) -o $(EXE) $(OBJS) -L$(LIBHOME) $(LDSTRING) \
+	 $(OS_LIBS) $(XML_LIBS) $(LIBS)  $(PROLDLIBS)
+build_libdb: $(DB_LIBS) $(OS_LIBS)
+	$(CC) $(LFLAGS) -o $(EXE) $(OBJS) -L$(LIBHOME) $(LDSTRING) \
+	$(DB_LIBS) $(OS_LIBS) $(LIBS)  $(PROLDLIBS) 
+build_libpa: $(PA_LIBS) $(OS_LIBS)
+	$(CC) $(LFLAGS) -o $(EXE) $(OBJS) -L$(LIBHOME) $(LDSTRING) \
+	$(PA_LIBS) $(OS_LIBS) $(LIBS)  $(PROLDLIBS)
+build_libpb: $(PB_LIBS) $(OS_LIBS)
+	$(CC) $(LFLAGS) -o $(EXE) $(OBJS) -L$(LIBHOME) $(LDSTRING) \
+	$(PB_LIBS) $(PA_LIBS)  $(OS_LIBS) $(LIBS)  $(PROLDLIBS)
+build_libpd: $(PA_LIBS) $(DB_LIBS) $(OS_LIBS)
+	$(CC) $(LFLAGS) -o $(EXE) $(OBJS) -L$(LIBHOME) $(LDSTRING) \
+	$(PA_LIBS) $(DB_LIBS) $(OS_LIBS) $(LIBS)  $(PROLDLIBS) 
+$(OS_LIBS):
+	(cd $(COMM_PATH); make -e libos.a)
+$(DB_LIBS):
+	(cd $(COMM_PATH); make -e libdb.a)
+$(PA_LIBS):
+	(cd $(PUBLIC_PATH); make -e libpa.a)
+$(PB_LIBS):
+	(cd $(ARCH_PATH); make -e libpa.a)
+
+CLEANFILES = core core.* *.core *.o temp.* *.out typescript* \
+		*.lc *.lh *.bsdi *.sparc *.uw *.lis

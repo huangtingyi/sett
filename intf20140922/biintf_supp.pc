@@ -1,0 +1,956 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <wwdb.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <bintree.h>
+#include <list.h>
+#include <wwfile.h>
+#include <stt_ticket.h>
+#include "param_intf.h"
+#include "wwshm.h"
+#include "biintf_supp.h"
+
+/*批量数据动态从BIINTF_STT中用结构缓冲方式取数据*/
+int EGetBiintfSttToStruct4fj(struct BiintfSttStruct *p,
+	struct BiintfSttStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(COUNTS,-1),\n\
+				nvl(FEE_IN,-1),\n\
+				nvl(FEE_OUT,-1),\n\
+				nvl(FEE_DURATION,-1),\n\
+				nvl(DURATION,-1),\n\
+				nvl(VISIT_AREA_CODE,'-1'),\n\
+				nvl(CALLING_NBR,'-1'),\n\
+				nvl(DISTANCE_TYPE,'-1'),\n\
+				nvl(ROAM_TYPE,'-1'),\n\
+				nvl(CALLED_CARRIER_ID,-1),\n\
+				nvl(CALL_DIRECTION,'-1'),\n\
+				nvl(TICKET_TYPE_ID,-1)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE BIINTF_STT_SCR FROM :statement;
+		CheckSqlError(" PREPARE BIINTF_STT_SCR BIINTF_STT_CR");
+
+		EXEC SQL DECLARE BIINTF_STT_CR CURSOR FOR BIINTF_STT_SCR;
+		CheckSqlError("Declare BIINTF_STT_CR");
+
+		EXEC SQL OPEN BIINTF_STT_CR;
+		CheckSqlError("Open BIINTF_STT_CR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE BIINTF_STT_CR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH BIINTF_STT_CR INTO
+			:pSource->aiCounts,
+			:pSource->aiFeeIn,
+			:pSource->aiFeeOut,
+			:pSource->aiFeeDuration,
+			:pSource->aiDuration,
+			:pSource->asVisitAreaCode,
+			:pSource->asCallingNbr,
+			:pSource->asDistanceType,
+			:pSource->asRoamType,
+			:pSource->aiCalledCarrierID,
+			:pSource->asCallDirection,
+			:pSource->aiTicketTypeID;
+		CheckSqlError("Fetch BIINTF_STT_CR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE BIINTF_STT_CR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=BIINTF_STT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iCounts=			pSource->aiCounts[iCurPos];
+		p->iFeeIn=			pSource->aiFeeIn[iCurPos];
+		p->iFeeOut=			pSource->aiFeeOut[iCurPos];
+		p->iFeeDuration=		pSource->aiFeeDuration[iCurPos];
+		p->iDuration=			pSource->aiDuration[iCurPos];
+
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sDistanceType,	pSource->asDistanceType[iCurPos]);
+		strcpy(p->sRoamType,		pSource->asRoamType[iCurPos]);
+
+		p->iCalledCarrierID=		pSource->aiCalledCarrierID[iCurPos];
+
+		strcpy(p->sCallDirection,	pSource->asCallDirection[iCurPos]);
+
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		AllTrim(p->sVisitAreaCode);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sDistanceType);
+		AllTrim(p->sRoamType);
+		AllTrim(p->sCallDirection);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+
+/*批量数据动态从BIINTF_STT中用结构缓冲方式取数据*/
+int EGetBiintfSttToStruct(struct BiintfSttStruct *p,
+	struct BiintfSttStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(COUNTS,-1),\n\
+				nvl(FEE_IN,-1),\n\
+				nvl(FEE_OUT,-1),\n\
+				nvl(FEE_DURATION,-1),\n\
+				nvl(DURATION,-1),\n\
+				nvl(NBR_AREA_CODE,'-1'),\n\
+				nvl(VISIT_AREA_CODE,'-1'),\n\
+				nvl(CALLING_NBR,'-1'),\n\
+				nvl(DISTANCE_TYPE,'-1'),\n\
+				nvl(ROAM_TYPE,'-1'),\n\
+				nvl(CALLED_CARRIER_ID,-1),\n\
+				nvl(CALL_DIRECTION,'-1'),\n\
+				nvl(TICKET_TYPE_ID,-1)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE BIINTF_STT_SCR FROM :statement;
+		CheckSqlError(" PREPARE BIINTF_STT_SCR BIINTF_STT_CR");
+
+		EXEC SQL DECLARE BIINTF_STT_CR CURSOR FOR BIINTF_STT_SCR;
+		CheckSqlError("Declare BIINTF_STT_CR");
+
+		EXEC SQL OPEN BIINTF_STT_CR;
+		CheckSqlError("Open BIINTF_STT_CR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE BIINTF_STT_CR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH BIINTF_STT_CR INTO
+			:pSource->aiCounts,
+			:pSource->aiFeeIn,
+			:pSource->aiFeeOut,
+			:pSource->aiFeeDuration,
+			:pSource->aiDuration,
+			:pSource->asNbrAreaCode,
+			:pSource->asVisitAreaCode,
+			:pSource->asCallingNbr,
+			:pSource->asDistanceType,
+			:pSource->asRoamType,
+			:pSource->aiCalledCarrierID,
+			:pSource->asCallDirection,
+			:pSource->aiTicketTypeID;
+		CheckSqlError("Fetch BIINTF_STT_CR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE BIINTF_STT_CR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=BIINTF_STT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iCounts=			pSource->aiCounts[iCurPos];
+		p->iFeeIn=			pSource->aiFeeIn[iCurPos];
+		p->iFeeOut=			pSource->aiFeeOut[iCurPos];
+		p->iFeeDuration=		pSource->aiFeeDuration[iCurPos];
+		p->iDuration=			pSource->aiDuration[iCurPos];
+
+		strcpy(p->sNbrAreaCode,		pSource->asNbrAreaCode[iCurPos]);
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sDistanceType,	pSource->asDistanceType[iCurPos]);
+		strcpy(p->sRoamType,		pSource->asRoamType[iCurPos]);
+
+		p->iCalledCarrierID=		pSource->aiCalledCarrierID[iCurPos];
+
+		strcpy(p->sCallDirection,	pSource->asCallDirection[iCurPos]);
+
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		AllTrim(p->sNbrAreaCode);
+		AllTrim(p->sVisitAreaCode);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sDistanceType);
+		AllTrim(p->sRoamType);
+		AllTrim(p->sCallDirection);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从BIINTF_TLL中用结构缓冲方式取数据*/
+int EGetBiintfTllToStruct4fj(struct BiintfTllStruct *p,
+	struct BiintfTllStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(COUNTS,-1),\n\
+				nvl(FEE_IN,-1),\n\
+				nvl(FEE_OUT,-1),\n\
+				nvl(FEE_DURATION,-1),\n\
+				nvl(DURATION,-1),\n\
+				nvl(ROAM_FEE,-1),\n\
+				nvl(TOLL_FEE,-1),\n\
+				nvl(VISIT_AREA_CODE,'-1'),\n\
+				nvl(CALLING_NBR,'-1'),\n\
+				nvl(DISTANCE_TYPE,'-1'),\n\
+				nvl(ROAM_TYPE,'-1'),\n\
+				nvl(OPP_CARRIER_ID,-1),\n\
+				nvl(CALL_DIRECTION,'-1'),\n\
+				nvl(TICKET_TYPE_ID,-1)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE BIINTF_TLL_SCR FROM :statement;
+		CheckSqlError(" PREPARE BIINTF_TLL_SCR BIINTF_TLL_CR");
+
+		EXEC SQL DECLARE BIINTF_TLL_CR CURSOR FOR BIINTF_TLL_SCR;
+		CheckSqlError("Declare BIINTF_TLL_CR");
+
+		EXEC SQL OPEN BIINTF_TLL_CR;
+		CheckSqlError("Open BIINTF_TLL_CR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE BIINTF_TLL_CR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH BIINTF_TLL_CR INTO
+			:pSource->aiCounts,
+			:pSource->aiFeeIn,
+			:pSource->aiFeeOut,
+			:pSource->aiFeeDuration,
+			:pSource->aiDuration,
+			:pSource->aiRoamFee,
+			:pSource->aiTollFee,
+			:pSource->asVisitAreaCode,
+			:pSource->asCallingNbr,
+			:pSource->asDistanceType,
+			:pSource->asRoamType,
+			:pSource->aiOppCarrierID,
+			:pSource->asCallDirection,
+			:pSource->aiTicketTypeID;
+		CheckSqlError("Fetch BIINTF_TLL_CR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE BIINTF_TLL_CR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=BIINTF_TLL_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iCounts=			pSource->aiCounts[iCurPos];
+		p->iFeeIn=			pSource->aiFeeIn[iCurPos];
+		p->iFeeOut=			pSource->aiFeeOut[iCurPos];
+		p->iFeeDuration=		pSource->aiFeeDuration[iCurPos];
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iRoamFee=			pSource->aiRoamFee[iCurPos];
+		p->iTollFee=			pSource->aiTollFee[iCurPos];
+
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sDistanceType,	pSource->asDistanceType[iCurPos]);
+		strcpy(p->sRoamType,		pSource->asRoamType[iCurPos]);
+
+		p->iOppCarrierID=		pSource->aiOppCarrierID[iCurPos];
+
+		strcpy(p->sCallDirection,	pSource->asCallDirection[iCurPos]);
+
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		AllTrim(p->sVisitAreaCode);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sDistanceType);
+		AllTrim(p->sRoamType);
+		AllTrim(p->sCallDirection);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+
+/*批量数据动态从BIINTF_TLL中用结构缓冲方式取数据*/
+int EGetBiintfTllToStruct(struct BiintfTllStruct *p,
+	struct BiintfTllStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(COUNTS,-1),\n\
+				nvl(FEE_IN,-1),\n\
+				nvl(FEE_OUT,-1),\n\
+				nvl(FEE_DURATION,-1),\n\
+				nvl(DURATION,-1),\n\
+				nvl(ROAM_FEE,-1),\n\
+				nvl(TOLL_FEE,-1),\n\
+				nvl(NBR_AREA_CODE,'-1'),\n\
+				nvl(VISIT_AREA_CODE,'-1'),\n\
+				nvl(CALLING_NBR,'-1'),\n\
+				nvl(DISTANCE_TYPE,'-1'),\n\
+				nvl(ROAM_TYPE,'-1'),\n\
+				nvl(OPP_CARRIER_ID,-1),\n\
+				nvl(CALL_DIRECTION,'-1'),\n\
+				nvl(TICKET_TYPE_ID,-1)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE BIINTF_TLL_SCR FROM :statement;
+		CheckSqlError(" PREPARE BIINTF_TLL_SCR BIINTF_TLL_CR");
+
+		EXEC SQL DECLARE BIINTF_TLL_CR CURSOR FOR BIINTF_TLL_SCR;
+		CheckSqlError("Declare BIINTF_TLL_CR");
+
+		EXEC SQL OPEN BIINTF_TLL_CR;
+		CheckSqlError("Open BIINTF_TLL_CR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE BIINTF_TLL_CR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH BIINTF_TLL_CR INTO
+			:pSource->aiCounts,
+			:pSource->aiFeeIn,
+			:pSource->aiFeeOut,
+			:pSource->aiFeeDuration,
+			:pSource->aiDuration,
+			:pSource->aiRoamFee,
+			:pSource->aiTollFee,
+			:pSource->asNbrAreaCode,
+			:pSource->asVisitAreaCode,
+			:pSource->asCallingNbr,
+			:pSource->asDistanceType,
+			:pSource->asRoamType,
+			:pSource->aiOppCarrierID,
+			:pSource->asCallDirection,
+			:pSource->aiTicketTypeID;
+		CheckSqlError("Fetch BIINTF_TLL_CR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE BIINTF_TLL_CR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=BIINTF_TLL_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iCounts=			pSource->aiCounts[iCurPos];
+		p->iFeeIn=			pSource->aiFeeIn[iCurPos];
+		p->iFeeOut=			pSource->aiFeeOut[iCurPos];
+		p->iFeeDuration=		pSource->aiFeeDuration[iCurPos];
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iRoamFee=			pSource->aiRoamFee[iCurPos];
+		p->iTollFee=			pSource->aiTollFee[iCurPos];
+
+		strcpy(p->sNbrAreaCode,		pSource->asNbrAreaCode[iCurPos]);
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sDistanceType,	pSource->asDistanceType[iCurPos]);
+		strcpy(p->sRoamType,		pSource->asRoamType[iCurPos]);
+
+		p->iOppCarrierID=		pSource->aiOppCarrierID[iCurPos];
+
+		strcpy(p->sCallDirection,	pSource->asCallDirection[iCurPos]);
+
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		AllTrim(p->sNbrAreaCode);
+		AllTrim(p->sVisitAreaCode);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sDistanceType);
+		AllTrim(p->sRoamType);
+		AllTrim(p->sCallDirection);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+
+/*批量数据动态从BIINTF_SRT中用结构缓冲方式取数据*/
+int EGetBiintfSrtToStruct(struct BiintfSrtStruct *p,
+	struct BiintfSrtStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(COUNTS,-1),\n\
+				nvl(FEE_IN,-1),\n\
+				nvl(FEE_OUT,-1),\n\
+				nvl(FEE_DURATION,-1),\n\
+				nvl(DURATION,-1),\n\
+				nvl(ROAM_FEE,-1),\n\
+				nvl(TOLL_FEE,-1),\n\
+				nvl(VISIT_AREA_CODE,'-1'),\n\
+				nvl(CALLING_NBR,'-1'),\n\
+				nvl(DISTANCE_TYPE,'-1'),\n\
+				nvl(ROAM_TYPE,'-1'),\n\
+				nvl(SETT_CARRIER_ID,-1),\n\
+				nvl(CALL_DIRECTION,'-1'),\n\
+				TICKET_TYPE_ID\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE BIINTF_SRT_SCR FROM :statement;
+		CheckSqlError(" PREPARE BIINTF_SRT_SCR BIINTF_SRT_CR");
+
+		EXEC SQL DECLARE BIINTF_SRT_CR CURSOR FOR BIINTF_SRT_SCR;
+		CheckSqlError("Declare BIINTF_SRT_CR");
+
+		EXEC SQL OPEN BIINTF_SRT_CR;
+		CheckSqlError("Open BIINTF_SRT_CR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE BIINTF_SRT_CR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH BIINTF_SRT_CR INTO
+			:pSource->aiCounts,
+			:pSource->aiFeeIn,
+			:pSource->aiFeeOut,
+			:pSource->aiFeeDuration,
+			:pSource->aiDuration,
+			:pSource->aiRoamFee,
+			:pSource->aiTollFee,
+			:pSource->asVisitAreaCode,
+			:pSource->asCallingNbr,
+			:pSource->asDistanceType,
+			:pSource->asRoamType,
+			:pSource->aiSettCarrierID,
+			:pSource->asCallDirection,
+			:pSource->aiTicketTypeID;
+		CheckSqlError("Fetch BIINTF_SRT_CR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE BIINTF_SRT_CR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=BIINTF_SRT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iCounts=			pSource->aiCounts[iCurPos];
+		p->iFeeIn=			pSource->aiFeeIn[iCurPos];
+		p->iFeeOut=			pSource->aiFeeOut[iCurPos];
+		p->iFeeDuration=		pSource->aiFeeDuration[iCurPos];
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iRoamFee=			pSource->aiRoamFee[iCurPos];
+		p->iTollFee=			pSource->aiTollFee[iCurPos];
+
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sDistanceType,	pSource->asDistanceType[iCurPos]);
+		strcpy(p->sRoamType,		pSource->asRoamType[iCurPos]);
+
+		p->iSettCarrierID=		pSource->aiSettCarrierID[iCurPos];
+
+		strcpy(p->sCallDirection,	pSource->asCallDirection[iCurPos]);
+
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		AllTrim(p->sVisitAreaCode);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sDistanceType);
+		AllTrim(p->sRoamType);
+		AllTrim(p->sCallDirection);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+
+/*批量数据动态从BIINTF_VIT中用结构缓冲方式取数据*/
+int EGetBiintfVitToStruct(struct BiintfVitStruct *p,
+	struct BiintfVitStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(CALL_TIMES,-1),\n\
+				nvl(COUNTS,-1),\n\
+				nvl(DURATION,-1),\n\
+				nvl(TOLL_DURATION,-1),\n\
+				nvl(ROAM_DURATION,-1),\n\
+				nvl(VISIT_AREA_CODE,'-1'),\n\
+				nvl(CELL_ID,'-1'),\n\
+				nvl(CALL_TYPE,'-1'),\n\
+				nvl(DISTANCE_TYPE,'-1'),\n\
+				nvl(ROAM_TYPE,'-1'),\n\
+				nvl(START_DATE,'-1'),\n\
+				nvl(TIME_PERIOD,'-1'),\n\
+				nvl(OPP_CARRIER_ID,-1)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE BIINTF_VIT_SCR FROM :statement;
+		CheckSqlError(" PREPARE BIINTF_VIT_SCR BIINTF_VIT_CR");
+
+		EXEC SQL DECLARE BIINTF_VIT_CR CURSOR FOR BIINTF_VIT_SCR;
+		CheckSqlError("Declare BIINTF_VIT_CR");
+
+		EXEC SQL OPEN BIINTF_VIT_CR;
+		CheckSqlError("Open BIINTF_VIT_CR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE BIINTF_VIT_CR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH BIINTF_VIT_CR INTO
+			:pSource->aiCallTimes,
+			:pSource->aiCounts,
+			:pSource->aiDuration,
+			:pSource->aiTollDuration,
+			:pSource->aiRoamDuration,
+			:pSource->asVisitAreaCode,
+			:pSource->asCellID,
+			:pSource->asCallType,
+			:pSource->asDistanceType,
+			:pSource->asRoamType,
+			:pSource->asStartDate,
+			:pSource->asTimePeriod,
+			:pSource->aiOppCarrierID;
+		CheckSqlError("Fetch BIINTF_VIT_CR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE BIINTF_VIT_CR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=BIINTF_VIT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iCallTimes=			pSource->aiCallTimes[iCurPos];
+		p->iCounts=			pSource->aiCounts[iCurPos];
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iTollDuration=		pSource->aiTollDuration[iCurPos];
+		p->iRoamDuration=		pSource->aiRoamDuration[iCurPos];
+
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+		strcpy(p->sCellID,		pSource->asCellID[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sDistanceType,	pSource->asDistanceType[iCurPos]);
+		strcpy(p->sRoamType,		pSource->asRoamType[iCurPos]);
+		strcpy(p->sStartDate,		pSource->asStartDate[iCurPos]);
+		strcpy(p->sTimePeriod,		pSource->asTimePeriod[iCurPos]);
+
+		p->iOppCarrierID=		pSource->aiOppCarrierID[iCurPos];
+
+		AllTrim(p->sVisitAreaCode);
+		AllTrim(p->sCellID);
+		AllTrim(p->sCallType);
+		AllTrim(p->sDistanceType);
+		AllTrim(p->sRoamType);
+		AllTrim(p->sStartDate);
+		AllTrim(p->sTimePeriod);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从BIINTF_SP中用结构缓冲方式取数据*/
+int EGetBiintfSpToStruct(struct BiintfSpStruct *p,
+	struct BiintfSpStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(COUNTS,-1),\n\
+				nvl(FEE,-1),\n\
+				nvl(CITY_CODE,'-1'),\n\
+				nvl(MSISDN,'-1'),\n\
+				nvl(USER_TYPE,'-1'),\n\
+				nvl(SP_ACC_NBR,'-1'),\n\
+				nvl(SP_CODE,'-1'),\n\
+				nvl(TICKET_TYPE_ID,-1)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE BIINTF_SPSCR FROM :statement;
+		CheckSqlError(" PREPARE BIINTF_SPSCR BIINTF_SPCR");
+
+		EXEC SQL DECLARE BIINTF_SPCR CURSOR FOR BIINTF_SPSCR;
+		CheckSqlError("Declare BIINTF_SPCR");
+
+		EXEC SQL OPEN BIINTF_SPCR;
+		CheckSqlError("Open BIINTF_SPCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE BIINTF_SPCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH BIINTF_SPCR INTO
+			:pSource->aiCounts,
+			:pSource->aiFee,
+			:pSource->asCityCode,
+			:pSource->asMsisdn,
+			:pSource->asUserType,
+			:pSource->asSpAccNbr,
+			:pSource->asSpCode,
+			:pSource->aiTicketTypeID;
+		CheckSqlError("Fetch BIINTF_SPCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE BIINTF_SPCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=BIINTF_SP_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iCounts=		pSource->aiCounts[iCurPos];
+		p->iFee=		pSource->aiFee[iCurPos];
+
+		strcpy(p->sCityCode,	pSource->asCityCode[iCurPos]);
+		strcpy(p->sMsisdn,	pSource->asMsisdn[iCurPos]);
+		strcpy(p->sUserType,	pSource->asUserType[iCurPos]);
+		strcpy(p->sSpAccNbr,	pSource->asSpAccNbr[iCurPos]);
+		strcpy(p->sSpCode,	pSource->asSpCode[iCurPos]);
+
+		p->iTicketTypeID=	pSource->aiTicketTypeID[iCurPos];
+
+		AllTrim(p->sCityCode);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sUserType);
+		AllTrim(p->sSpAccNbr);
+		AllTrim(p->sSpCode);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+

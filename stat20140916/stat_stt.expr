@@ -1,0 +1,17 @@
+{
+	msisdn             =trimcut(t_ori,6  ,15);
+	area_code          =trimcut(t_ori,92 , 5);
+	area_id            =atoi(trimcut(t_ori,92 , 5))-300;
+	net_type           =trimcut(t_ori,222, 4);
+	call_type          =trimcut(t_ori,4  , 2);
+	service_type       ="000";
+	total_duration     =atoi(trimcut(t_ori,72,6));
+	total_min          =(atoi(trimcut(t_ori,72,6))+59)/60;
+	total_cnt          =1;
+	total_fee1         =atoi(trimcut(t_ori,55 , 5));
+	total_fee2         =atoi(trimcut(t_ori,60 , 7));
+	total_fee3         =atoi(trimcut(t_ori,67 , 5));
+	service_type       ="000";
+	service_type       =service_type+";001";
+
+}

@@ -1,0 +1,358 @@
+06000000,1060,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60244,1521,972,06,035E,4000,0000
+SELECT DIST@INCT FLT.FLT_ID FROM     (select     a.*,(a.flt_airlcode||a.flt_@number||trim(a.flt_suffix))     as fltcode from ta_flight a     @ union      select     a.*,b.shr_fltcode as fltcode from ta_flig@ht a     ,ta_shareflt b where a.flt_id=b.shr_hostfltid) FLT WHER@E     FLT.fltcode = :1 ))        AND     ( FLT.FLT_DATE=TO_DATE(>:2,'YYYYMMDD'))        AND     ( FLT.FLT_AIRPORT=:3 )         !!!570
+OPER=SEL
+SEL=	SELECT
+KEY=	DISTINCT
+CPX=	FLT.FLT_ID	----------------
+KEY=	FROM
+SEP=	(
+SEL=	SELECT
+CPX=	A.*	----------------
+SEP=	,
+SEP=	(
+CPX=	A.FLT_AIRLCODE	----------------
+CPX=	A.FLT_NUMBER	----------------
+FUN=	TRIM
+SEP=	(
+CPX=	A.FLT_SUFFIX	----------------
+SEP=	)
+SEP=	)
+KEY=	AS
+SPL=	FLTCODE	----------------
+KEY=	FROM
+SPL=	TA_FLIGHT	----------------
+SPL=	A	----------------
+KEY=	UNION
+SEL=	SELECT
+CPX=	A.*	----------------
+SEP=	,
+CPX=	B.SHR_FLTCODE	----------------
+KEY=	AS
+SPL=	FLTCODE	----------------
+KEY=	FROM
+SPL=	TA_FLIGHT	----------------
+SPL=	A	----------------
+SEP=	,
+SPL=	TA_SHAREFLT	----------------
+SPL=	B	----------------
+KEY=	WHERE
+CPX=	A.FLT_ID	----------------
+CPX=	B.SHR_HOSTFLTID	----------------
+SEP=	)
+SPL=	FLT	----------------
+KEY=	WHERE
+CPX=	FLT.FLTCODE	----------------
+PAR=	:1
+SEP=	)
+SEP=	)
+KEY=	AND
+SEP=	(
+CPX=	FLT.FLT_DATE	----------------
+FUN=	TO_DATE
+SEP=	(
+PAR=	:2
+SEP=	,
+SEP=	)
+SEP=	)
+KEY=	AND
+SEP=	(
+CPX=	FLT.FLT_AIRPORT	----------------
+PAR=	:3
+SEP=	)
+OPER=SEL(OPER=SEL(TAB=TA_FLIGHT(A.*,A.FLT_AIRLCODE,A.FLT_NUMBER,A.FLT_SUFFIX,FLTCODE))OPER=SEL(TAB=TA_FLIGHT(A.*,FLTCODE),TAB=TA_SHAREFLT(B.SHR_FLTCODE))
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60244,1521,21,06,1169,4000,0000
+!!!-1|||108
+06000000,172,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60244,1521,83,06,035E,4000,0000
+!!!-1|||172
+06000000,1548,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,2048,06,035E,4000,0000
+!!!-1|||1548
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60244,1521,21,06,1169,4000,0000
+!!!-1|||108
+06000000,172,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60244,1521,83,06,035E,4000,0000
+!!!-1|||172
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60244,1521,21,06,1169,4000,0000
+!!!-1|||108
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,21,06,1169,4000,0000
+!!!-1|||108
+06000000,1060,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,972,06,035E,4000,0000
+SELECT DIST@INCT FLT.FLT_ID FROM     (select     a.*,(a.flt_airlcode||a.flt_@number||trim(a.flt_suffix))     as fltcode from ta_flight a     @ union      select     a.*,b.shr_fltcode as fltcode from ta_flig@ht a     ,ta_shareflt b where a.flt_id=b.shr_hostfltid) FLT WHER@E     FLT.fltcode = :1 ))        AND     ( FLT.FLT_DATE=TO_DATE(>:2,'YYYYMMDD'))        AND     ( FLT.FLT_AIRPORT=:3 )         !!!570
+OPER=SEL
+SEL=	SELECT
+KEY=	DISTINCT
+CPX=	FLT.FLT_ID	----------------
+KEY=	FROM
+SEP=	(
+SEL=	SELECT
+CPX=	A.*	----------------
+SEP=	,
+SEP=	(
+CPX=	A.FLT_AIRLCODE	----------------
+CPX=	A.FLT_NUMBER	----------------
+FUN=	TRIM
+SEP=	(
+CPX=	A.FLT_SUFFIX	----------------
+SEP=	)
+SEP=	)
+KEY=	AS
+SPL=	FLTCODE	----------------
+KEY=	FROM
+SPL=	TA_FLIGHT	----------------
+SPL=	A	----------------
+KEY=	UNION
+SEL=	SELECT
+CPX=	A.*	----------------
+SEP=	,
+CPX=	B.SHR_FLTCODE	----------------
+KEY=	AS
+SPL=	FLTCODE	----------------
+KEY=	FROM
+SPL=	TA_FLIGHT	----------------
+SPL=	A	----------------
+SEP=	,
+SPL=	TA_SHAREFLT	----------------
+SPL=	B	----------------
+KEY=	WHERE
+CPX=	A.FLT_ID	----------------
+CPX=	B.SHR_HOSTFLTID	----------------
+SEP=	)
+SPL=	FLT	----------------
+KEY=	WHERE
+CPX=	FLT.FLTCODE	----------------
+PAR=	:1
+SEP=	)
+SEP=	)
+KEY=	AND
+SEP=	(
+CPX=	FLT.FLT_DATE	----------------
+FUN=	TO_DATE
+SEP=	(
+PAR=	:2
+SEP=	,
+SEP=	)
+SEP=	)
+KEY=	AND
+SEP=	(
+CPX=	FLT.FLT_AIRPORT	----------------
+PAR=	:3
+SEP=	)
+OPER=SEL(OPER=SEL(TAB=TA_FLIGHT(A.*,A.FLT_AIRLCODE,A.FLT_NUMBER,A.FLT_SUFFIX,FLTCODE))OPER=SEL(TAB=TA_FLIGHT(A.*,FLTCODE),TAB=TA_SHAREFLT(B.SHR_FLTCODE))
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,21,06,1169,4000,0000
+!!!-1|||108
+06000000,1060,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,972,06,035E,4000,0000
+SELECT DIST@INCT FLT.FLT_ID FROM     (select     a.*,(a.flt_airlcode||a.flt_@number||trim(a.flt_suffix))     as fltcode from ta_flight a     @ union      select     a.*,b.shr_fltcode as fltcode from ta_flig@ht a     ,ta_shareflt b where a.flt_id=b.shr_hostfltid) FLT WHER@E     FLT.fltcode = :1 ))        AND     ( FLT.FLT_DATE=TO_DATE(>:2,'YYYYMMDD'))        AND     ( FLT.FLT_AIRPORT=:3 )         !!!570
+OPER=SEL
+SEL=	SELECT
+KEY=	DISTINCT
+CPX=	FLT.FLT_ID	----------------
+KEY=	FROM
+SEP=	(
+SEL=	SELECT
+CPX=	A.*	----------------
+SEP=	,
+SEP=	(
+CPX=	A.FLT_AIRLCODE	----------------
+CPX=	A.FLT_NUMBER	----------------
+FUN=	TRIM
+SEP=	(
+CPX=	A.FLT_SUFFIX	----------------
+SEP=	)
+SEP=	)
+KEY=	AS
+SPL=	FLTCODE	----------------
+KEY=	FROM
+SPL=	TA_FLIGHT	----------------
+SPL=	A	----------------
+KEY=	UNION
+SEL=	SELECT
+CPX=	A.*	----------------
+SEP=	,
+CPX=	B.SHR_FLTCODE	----------------
+KEY=	AS
+SPL=	FLTCODE	----------------
+KEY=	FROM
+SPL=	TA_FLIGHT	----------------
+SPL=	A	----------------
+SEP=	,
+SPL=	TA_SHAREFLT	----------------
+SPL=	B	----------------
+KEY=	WHERE
+CPX=	A.FLT_ID	----------------
+CPX=	B.SHR_HOSTFLTID	----------------
+SEP=	)
+SPL=	FLT	----------------
+KEY=	WHERE
+CPX=	FLT.FLTCODE	----------------
+PAR=	:1
+SEP=	)
+SEP=	)
+KEY=	AND
+SEP=	(
+CPX=	FLT.FLT_DATE	----------------
+FUN=	TO_DATE
+SEP=	(
+PAR=	:2
+SEP=	,
+SEP=	)
+SEP=	)
+KEY=	AND
+SEP=	(
+CPX=	FLT.FLT_AIRPORT	----------------
+PAR=	:3
+SEP=	)
+OPER=SEL(OPER=SEL(TAB=TA_FLIGHT(A.*,A.FLT_AIRLCODE,A.FLT_NUMBER,A.FLT_SUFFIX,FLTCODE))OPER=SEL(TAB=TA_FLIGHT(A.*,FLTCODE),TAB=TA_SHAREFLT(B.SHR_FLTCODE))
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,21,06,1169,4000,0000
+!!!-1|||108
+06000000,1060,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,972,06,035E,4000,0000
+SELECT DIST@INCT FLT.FLT_ID FROM     (select     a.*,(a.flt_airlcode||a.flt_@number||trim(a.flt_suffix))     as fltcode from ta_flight a     @ union      select     a.*,b.shr_fltcode as fltcode from ta_flig@ht a     ,ta_shareflt b where a.flt_id=b.shr_hostfltid) FLT WHER@E     FLT.fltcode = :1 ))        AND     ( FLT.FLT_DATE=TO_DATE(>:2,'YYYYMMDD'))        AND     ( FLT.FLT_AIRPORT=:3 )         !!!570
+OPER=SEL
+SEL=	SELECT
+KEY=	DISTINCT
+CPX=	FLT.FLT_ID	----------------
+KEY=	FROM
+SEP=	(
+SEL=	SELECT
+CPX=	A.*	----------------
+SEP=	,
+SEP=	(
+CPX=	A.FLT_AIRLCODE	----------------
+CPX=	A.FLT_NUMBER	----------------
+FUN=	TRIM
+SEP=	(
+CPX=	A.FLT_SUFFIX	----------------
+SEP=	)
+SEP=	)
+KEY=	AS
+SPL=	FLTCODE	----------------
+KEY=	FROM
+SPL=	TA_FLIGHT	----------------
+SPL=	A	----------------
+KEY=	UNION
+SEL=	SELECT
+CPX=	A.*	----------------
+SEP=	,
+CPX=	B.SHR_FLTCODE	----------------
+KEY=	AS
+SPL=	FLTCODE	----------------
+KEY=	FROM
+SPL=	TA_FLIGHT	----------------
+SPL=	A	----------------
+SEP=	,
+SPL=	TA_SHAREFLT	----------------
+SPL=	B	----------------
+KEY=	WHERE
+CPX=	A.FLT_ID	----------------
+CPX=	B.SHR_HOSTFLTID	----------------
+SEP=	)
+SPL=	FLT	----------------
+KEY=	WHERE
+CPX=	FLT.FLTCODE	----------------
+PAR=	:1
+SEP=	)
+SEP=	)
+KEY=	AND
+SEP=	(
+CPX=	FLT.FLT_DATE	----------------
+FUN=	TO_DATE
+SEP=	(
+PAR=	:2
+SEP=	,
+SEP=	)
+SEP=	)
+KEY=	AND
+SEP=	(
+CPX=	FLT.FLT_AIRPORT	----------------
+PAR=	:3
+SEP=	)
+OPER=SEL(OPER=SEL(TAB=TA_FLIGHT(A.*,A.FLT_AIRLCODE,A.FLT_NUMBER,A.FLT_SUFFIX,FLTCODE))OPER=SEL(TAB=TA_FLIGHT(A.*,FLTCODE),TAB=TA_SHAREFLT(B.SHR_FLTCODE))
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,21,06,1169,4000,0000
+!!!-1|||108
+06000000,100,00:50:56:AA:22:EE,00:50:56:AA:31:F7,0800,172.22.14.40,172.22.14.25,24299,1521,516,01,0402,4000,0000
+!!!100
+06000000,100,00:50:56:AA:31:F7,00:50:56:AA:22:EE,0800,172.22.14.25,172.22.14.40,1521,24299,516,01,0402,4000,0000
+!!!100
+06000000,192,00:50:56:AA:22:EE,00:50:56:AA:31:F7,0800,172.22.14.40,172.22.14.25,24299,1521,104,01,012C,4000,0000
+(CONNECT_DATA=(COMMAND=service_register_NSGR))!!!192
+06000000,1548,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,1766,06,035E,4000,0000
+!!!-1|||1548
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,21,06,1169,4000,0000
+!!!-1|||108
+06000000,1548,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,1689,06,035E,4000,0000
+!!!-1|||1548
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,21,06,1169,4000,0000
+!!!-1|||108
+06000000,1060,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,972,06,035E,4000,0000
+SELECT DIST@INCT FLT.FLT_ID FROM     (select     a.*,(a.flt_airlcode||a.flt_@number||trim(a.flt_suffix))     as fltcode from ta_flight a     @ union      select     a.*,b.shr_fltcode as fltcode from ta_flig@ht a     ,ta_shareflt b where a.flt_id=b.shr_hostfltid) FLT WHER@E     FLT.fltcode = :1 ))        AND     ( FLT.FLT_DATE=TO_DATE(>:2,'YYYYMMDD'))        AND     ( FLT.FLT_AIRPORT=:3 )         !!!570
+OPER=SEL
+SEL=	SELECT
+KEY=	DISTINCT
+CPX=	FLT.FLT_ID	----------------
+KEY=	FROM
+SEP=	(
+SEL=	SELECT
+CPX=	A.*	----------------
+SEP=	,
+SEP=	(
+CPX=	A.FLT_AIRLCODE	----------------
+CPX=	A.FLT_NUMBER	----------------
+FUN=	TRIM
+SEP=	(
+CPX=	A.FLT_SUFFIX	----------------
+SEP=	)
+SEP=	)
+KEY=	AS
+SPL=	FLTCODE	----------------
+KEY=	FROM
+SPL=	TA_FLIGHT	----------------
+SPL=	A	----------------
+KEY=	UNION
+SEL=	SELECT
+CPX=	A.*	----------------
+SEP=	,
+CPX=	B.SHR_FLTCODE	----------------
+KEY=	AS
+SPL=	FLTCODE	----------------
+KEY=	FROM
+SPL=	TA_FLIGHT	----------------
+SPL=	A	----------------
+SEP=	,
+SPL=	TA_SHAREFLT	----------------
+SPL=	B	----------------
+KEY=	WHERE
+CPX=	A.FLT_ID	----------------
+CPX=	B.SHR_HOSTFLTID	----------------
+SEP=	)
+SPL=	FLT	----------------
+KEY=	WHERE
+CPX=	FLT.FLTCODE	----------------
+PAR=	:1
+SEP=	)
+SEP=	)
+KEY=	AND
+SEP=	(
+CPX=	FLT.FLT_DATE	----------------
+FUN=	TO_DATE
+SEP=	(
+PAR=	:2
+SEP=	,
+SEP=	)
+SEP=	)
+KEY=	AND
+SEP=	(
+CPX=	FLT.FLT_AIRPORT	----------------
+PAR=	:3
+SEP=	)
+OPER=SEL(OPER=SEL(TAB=TA_FLIGHT(A.*,A.FLT_AIRLCODE,A.FLT_NUMBER,A.FLT_SUFFIX,FLTCODE))OPER=SEL(TAB=TA_FLIGHT(A.*,FLTCODE),TAB=TA_SHAREFLT(B.SHR_FLTCODE))
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,21,06,1169,4000,0000
+!!!-1|||108
+06000000,1548,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,2048,06,035E,4000,0000
+!!!-1|||1548
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,21,06,1169,4000,0000
+!!!-1|||108
+06000000,1548,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,1766,06,035E,4000,0000
+!!!-1|||1548
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,21,06,1169,4000,0000
+!!!-1|||108
+06000000,1548,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,1689,06,035E,4000,0000
+!!!-1|||1548
+06000000,108,00:50:56:AA:22:EE,00:50:56:AA:33:BA,0800,172.22.14.19,172.22.14.25,60265,1521,21,06,1169,4000,0000
+!!!-1|||108

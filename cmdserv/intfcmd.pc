@@ -1,0 +1,546 @@
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdb.h>
+#include <intfcmd.h>
+
+void mvitem_intf2i(struct IntfCmdStruct *pi,struct IIntfCmdStruct *po)
+{/*数据移动部分*/
+
+	bzero((void*)po,sizeof(struct IIntfCmdStruct));
+
+		strncpy(po->sSerialNbr,		pi->sSerialNbr,40);
+
+		po->iStaffID=			pi->iStaffID;
+
+		strncpy(po->sImsi,		pi->sImsi,15);
+		strncpy(po->sMsisdn,		pi->sMsisdn,15);
+		strncpy(po->sEsn,		pi->sEsn,15);
+		strncpy(po->sServiceType,	pi->sServiceType,6);
+		strncpy(po->sCmdType,		pi->sCmdType,20);
+
+		po->iFailTimes=			pi->iFailTimes;
+		po->iSwitchID=			pi->iSwitchID;
+		po->iPriority=			pi->iPriority;
+
+		strncpy(po->sOrderLine,		pi->sOrderLine,256);
+		strncpy(po->sStdInfoLine,	pi->sStdInfoLine,256);
+		strncpy(po->sCmdLine,	pi->sCmdLine,256);
+		strncpy(po->sBackLine,		pi->sBackLine,256);
+		strncpy(po->sOriBackLine,	pi->sOriBackLine,512);
+		strncpy(po->sDealBeginTime,	pi->sDealBeginTime,14);
+		strncpy(po->sDealEndTime,	pi->sDealEndTime,14);
+		strncpy(po->sState,		pi->sState,3);
+		po->iRetCode=			pi->iRetCode;
+}
+void mvitem_intf2m(struct IIntfCmdStruct *pi,struct IntfCmdStruct *po)
+{/*数据移动部分*/
+
+	bzero((void*)po,sizeof(struct IntfCmdStruct));
+
+		strncpy(po->sSerialNbr,		pi->sSerialNbr,40);
+
+		po->iStaffID=			pi->iStaffID;
+
+		strncpy(po->sImsi,		pi->sImsi,15);
+		strncpy(po->sMsisdn,		pi->sMsisdn,15);
+		strncpy(po->sEsn,		pi->sEsn,15);
+		strncpy(po->sServiceType,	pi->sServiceType,6);
+		strncpy(po->sCmdType,		pi->sCmdType,20);
+
+		po->iFailTimes=			pi->iFailTimes;
+		po->iSwitchID=			pi->iSwitchID;
+		po->iPriority=			pi->iPriority;
+
+		strncpy(po->sOrderLine,		pi->sOrderLine,256);
+		strncpy(po->sStdInfoLine,	pi->sStdInfoLine,256);
+		strncpy(po->sCmdLine,	pi->sCmdLine,256);
+		strncpy(po->sBackLine,		pi->sBackLine,256);
+		strncpy(po->sOriBackLine,	pi->sOriBackLine,512);
+		strncpy(po->sDealBeginTime,	pi->sDealBeginTime,14);
+		strncpy(po->sDealEndTime,	pi->sDealEndTime,14);
+		strncpy(po->sState,		pi->sState,3);
+		po->iRetCode=			pi->iRetCode;
+}
+int EUpdateStructToUIntfCmd(struct IntfCmdStruct *p,
+	int iUpdateFlag,struct IntfCmdStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+	
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asSerialNbr[iCurPos],		p->sSerialNbr);
+
+		pTarget->aiFailTimes[iCurPos]=			p->iFailTimes;
+		pTarget->aiSwitchID[iCurPos]=			p->iSwitchID;
+
+		strcpy(pTarget->asCmdLine[iCurPos],		p->sCmdLine);
+		strcpy(pTarget->asBackLine[iCurPos],		p->sBackLine);
+		strcpy(pTarget->asOriBackLine[iCurPos],		p->sOriBackLine);
+		strcpy(pTarget->asDealBeginTime[iCurPos],	p->sDealBeginTime);
+		strcpy(pTarget->asDealEndTime[iCurPos],		p->sDealEndTime);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		
+		iCurPos++;
+	}
+
+	if(iUpdateFlag==TRUE||iCurPos==INTF_CMD_BUFLEN_UP){
+
+/* INSERT */
+		char statement[4096];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE %s\n\
+			SET \n\
+				FAIL_TIMES=		:aiFailTimes,\n\
+				SWITCH_ID=              :aiSwitchID,\n\
+				COMMAND_LINE=         	:asCmdLine,\n\
+				BACK_LINE=        	:asBackLine,\n\
+				ORI_BACK_LINE=		:asOriBackLine,\n\
+				DEAL_BEGIN_TIME=        to_date(:asDealBeginTime,'yyyymmddhh24miss'),\n\
+				DEAL_END_TIME=          to_date(:asDealEndTime,'yyyymmddhh24miss'),\n\
+				STATE=          	:asState\n\
+			WHERE \n\
+				SERIAL_NBR= :asSerialNbr\n\
+			",sTableName);
+
+		EXEC SQL PREPARE RINTF_CMDUCR FROM :statement;
+		if(CheckSqlResult("Prepare update statement INTF_CMD")<0)
+			return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE RINTF_CMDUCR USING
+				:pTarget->aiFailTimes,
+				:pTarget->aiSwitchID,
+				:pTarget->asCmdLine,
+				:pTarget->asBackLine,
+				:pTarget->asOriBackLine,
+				:pTarget->asDealBeginTime,
+				:pTarget->asDealEndTime,
+				:pTarget->asState,
+				:pTarget->asSerialNbr;
+		if(CheckSqlResult("Dyn update INTF_CMD")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据动态从INTF_CMD中用结构缓冲方式取数据*/
+int EGetIntfCmdToStruct(struct IntfCmdStruct *p,
+	struct IntfCmdStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				SERIAL_NBR,\n\
+				STAFF_ID,\n\
+				nvl(IMSI,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(ESN,' '),\n\
+				SERVICE_TYPE,\n\
+				CMD_TYPE,\n\
+				FAIL_TIMES,\n\
+				nvl(SWITCH_ID,-1),\n\
+				nvl(PRIORITY,-1),\n\
+				nvl(ORDER_LINE,' '),\n\
+				nvl(STD_INFO_LINE,' '),\n\
+				nvl(COMMAND_LINE,' '),\n\
+				nvl(BACK_LINE,' '),\n\
+				nvl(ORI_BACK_LINE,' '),\n\
+				to_char(DEAL_BEGIN_TIME,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_END_TIME,'yyyymmddhh24miss'),\n\
+				STATE\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE INTF_CMDSCR FROM :statement;
+		CheckSqlError(" PREPARE INTF_CMDSCR INTF_CMDCR");
+
+		EXEC SQL DECLARE INTF_CMDCR CURSOR FOR INTF_CMDSCR;
+		CheckSqlError("Declare INTF_CMDCR");
+
+		EXEC SQL OPEN INTF_CMDCR;
+		CheckSqlError("Open INTF_CMDCR;");
+
+
+		pSource->iFirstFlag= pSource->iEndFlag= FALSE;
+		pSource->iFetchRecNum= pSource->iCurPos= 0;
+		pSource->iBufEmpty= TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE INTF_CMDCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH INTF_CMDCR INTO
+			:pSource->asSerialNbr,
+			:pSource->aiStaffID,
+			:pSource->asImsi,
+			:pSource->asMsisdn,
+			:pSource->asEsn,
+			:pSource->asServiceType,
+			:pSource->asCmdType,
+			:pSource->aiFailTimes,
+			:pSource->aiSwitchID,
+			:pSource->aiPriority,
+			:pSource->asOrderLine,
+			:pSource->asStdInfoLine,
+			:pSource->asCmdLine,
+			:pSource->asBackLine,
+			:pSource->asOriBackLine,
+			:pSource->asDealBeginTime,
+			:pSource->asDealEndTime,
+			:pSource->asState;
+		CheckSqlError("Fetch INTF_CMDCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE INTF_CMDCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=INTF_CMD_BUFLEN_IN)
+			pSource->iEndFlag= TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sSerialNbr,		pSource->asSerialNbr[iCurPos]);
+
+		p->iStaffID=			pSource->aiStaffID[iCurPos];
+
+		strcpy(p->sImsi,		pSource->asImsi[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sEsn,			pSource->asEsn[iCurPos]);
+		strcpy(p->sServiceType,		pSource->asServiceType[iCurPos]);
+		strcpy(p->sCmdType,		pSource->asCmdType[iCurPos]);
+
+		p->iFailTimes=			pSource->aiFailTimes[iCurPos];
+		p->iSwitchID=			pSource->aiSwitchID[iCurPos];
+		p->iPriority=			pSource->aiPriority[iCurPos];
+
+		strcpy(p->sOrderLine,		pSource->asOrderLine[iCurPos]);
+		strcpy(p->sStdInfoLine,		pSource->asStdInfoLine[iCurPos]);
+		strcpy(p->sCmdLine,		pSource->asCmdLine[iCurPos]);
+		strcpy(p->sBackLine,		pSource->asBackLine[iCurPos]);
+		strcpy(p->sOriBackLine,		pSource->asOriBackLine[iCurPos]);
+		strcpy(p->sDealBeginTime,	pSource->asDealBeginTime[iCurPos]);
+		strcpy(p->sDealEndTime,		pSource->asDealEndTime[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+
+		AllTrim(p->sSerialNbr);
+		AllTrim(p->sImsi);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sEsn);
+		AllTrim(p->sServiceType);
+		AllTrim(p->sCmdType);
+		AllTrim(p->sOrderLine);
+		AllTrim(p->sStdInfoLine);
+		AllTrim(p->sCmdLine);
+		AllTrim(p->sBackLine);
+		AllTrim(p->sOriBackLine);
+		AllTrim(p->sDealBeginTime);
+		AllTrim(p->sDealEndTime);
+		AllTrim(p->sState);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据结构缓冲写入INTF_CMD*/
+int EInsertStructToIntfCmd(struct IntfCmdStruct *p,
+	int iInsertFlag,struct IntfCmdStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asSerialNbr[iCurPos],		p->sSerialNbr);
+
+		pTarget->aiStaffID[iCurPos]=			p->iStaffID;
+
+		strcpy(pTarget->asImsi[iCurPos],		p->sImsi);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asEsn[iCurPos],			p->sEsn);
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+		strcpy(pTarget->asCmdType[iCurPos],		p->sCmdType);
+
+		pTarget->aiFailTimes[iCurPos]=			p->iFailTimes;
+		pTarget->aiSwitchID[iCurPos]=			p->iSwitchID;
+		pTarget->aiPriority[iCurPos]=			p->iPriority;
+
+		strcpy(pTarget->asOrderLine[iCurPos],		p->sOrderLine);
+		strcpy(pTarget->asStdInfoLine[iCurPos],		p->sStdInfoLine);
+		strcpy(pTarget->asCmdLine[iCurPos],		p->sCmdLine);
+		strcpy(pTarget->asBackLine[iCurPos],		p->sBackLine);
+		strcpy(pTarget->asOriBackLine[iCurPos],		p->sOriBackLine);
+		strcpy(pTarget->asDealBeginTime[iCurPos],	p->sDealBeginTime);
+		strcpy(pTarget->asDealEndTime[iCurPos],		p->sDealEndTime);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==INTF_CMD_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				SERIAL_NBR,\n\
+				STAFF_ID,\n\
+				IMSI,\n\
+				MSISDN,\n\
+				ESN,\n\
+				SERVICE_TYPE,\n\
+				CMD_TYPE,\n\
+				FAIL_TIMES,\n\
+				SWITCH_ID,\n\
+				PRIORITY,\n\
+				ORDER_LINE,\n\
+				STD_INFO_LINE,\n\
+				COMMAND_LINE,\n\
+				BACK_LINE,\n\
+				ORI_BACK_LINE,\n\
+				DEAL_BEGIN_TIME,\n\
+				DEAL_END_TIME,\n\
+				STATE)\n\
+			VALUES(\n\
+				:asSerialNbr,\n\
+				:aiStaffID,\n\
+				:asImsi,\n\
+				:asMsisdn,\n\
+				:asEsn,\n\
+				:asServiceType,\n\
+				:asCmdType,\n\
+				:aiFailTimes,\n\
+				:aiSwitchID,\n\
+				:aiPriority,\n\
+				:asOrderLine,\n\
+				:asStdInfoLine,\n\
+				:asCmdLine,\n\
+				:asBackLine,\n\
+				:asOriBackLine,\n\
+				to_date(:asDealBeginTime,'yyyymmddhh24miss'),\n\
+				to_date(:asDealEndTime,'yyyymmddhh24miss'),\n\
+				:asState\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE INTF_CMDTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement INTF_CMD")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE INTF_CMDTRG USING
+				:pTarget->asSerialNbr,
+				:pTarget->aiStaffID,
+				:pTarget->asImsi,
+				:pTarget->asMsisdn,
+				:pTarget->asEsn,
+				:pTarget->asServiceType,
+				:pTarget->asCmdType,
+				:pTarget->aiFailTimes,
+				:pTarget->aiSwitchID,
+				:pTarget->aiPriority,
+				:pTarget->asOrderLine,
+				:pTarget->asStdInfoLine,
+				:pTarget->asCmdLine,
+				:pTarget->asBackLine,
+				:pTarget->asOriBackLine,
+				:pTarget->asDealBeginTime,
+				:pTarget->asDealEndTime,
+				:pTarget->asState;
+		if(CheckSqlResult("Dyn insert into INTF_CMD")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*单条数据动态SQL向INTF_CMD写数据*/
+int SDInsertStructToIntfCmd(struct IntfCmdStruct *p,char sTableName[])
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				SERIAL_NBR,\n\
+				STAFF_ID,\n\
+				IMSI,\n\
+				MSISDN,\n\
+				ESN,\n\
+				SERVICE_TYPE,\n\
+				CMD_TYPE,\n\
+				FAIL_TIMES,\n\
+				SWITCH_ID,\n\
+				PRIORITY,\n\
+				ORDER_LINE,\n\
+				STD_INFO_LINE,\n\
+				COMMAND_LINE,\n\
+				BACK_LINE,\n\
+				ORI_BACK_LINE,\n\
+				DEAL_BEGIN_TIME,\n\
+				DEAL_END_TIME,\n\
+				STATE)\n\
+			VALUES(\n\
+				:sSerialNbr,\n\
+				:iStaffID,\n\
+				:sImsi,\n\
+				:sMsisdn,\n\
+				:sEsn,\n\
+				:sServiceType,\n\
+				:sCmdType,\n\
+				:iFailTimes,\n\
+				:iSwitchID,\n\
+				:iPriority,\n\
+				:sOrderLine,\n\
+				:sStdInfoLine,\n\
+				:sCmdLine,\n\
+				:sBackLine,\n\
+				:sOriBackLine,\n\
+				to_date(:sDealBeginTime,'yyyymmddhh24miss'),\n\
+				to_date(:sDealEndTime,'yyyymmddhh24miss'),\n\
+				:sState\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE INTF_CMDTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement INTF_CMD")<0) return -1;
+
+		EXEC SQL EXECUTE INTF_CMDTRG USING
+				:p->sSerialNbr,
+				:p->iStaffID,
+				:p->sImsi,
+				:p->sMsisdn,
+				:p->sEsn,
+				:p->sServiceType,
+				:p->sCmdType,
+				:p->iFailTimes,
+				:p->iSwitchID,
+				:p->iPriority,
+				:p->sOrderLine,
+				:p->sStdInfoLine,
+				:p->sCmdLine,
+				:p->sBackLine,
+				:p->sOriBackLine,
+				:p->sDealBeginTime,
+				:p->sDealEndTime,
+				:p->sState;
+		if(CheckSqlResult("Dyn insert into INTF_CMD")<0) return -1;
+
+	return 0;
+}
+
+void DestroyIntfCmd(struct IntfCmdStruct *ptHead)
+{
+	struct IntfCmdStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+int InitIntfCmd(struct IntfCmdStruct **pptHead,
+	char sCondition[256])
+{
+	int iCnt=0;
+	static struct IntfCmdStruct *pTemp,*ptHead=NULL;
+	struct IntfCmdStruct Temp;
+	struct IntfCmdStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyIntfCmd(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct IntfCmdStructIn));
+	sprintf(TempIn.sTableName,"INTF_CMD");
+	sprintf(TempIn.sCondition,sCondition);
+	TempIn.iFirstFlag=TRUE;
+	TempIn.iBufEmpty=TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetIntfCmdToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct IntfCmdStruct*)
+			malloc(sizeof(struct IntfCmdStruct)))==NULL){
+
+			DestroyIntfCmd(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct IntfCmdStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+/*
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表INTF_CMD记录数%d",iCnt);
+*/
+	}
+
+/*	WriteProcMsg("加载表INTF_CMD完毕总记录数%d",iCnt);*/
+
+	return iCnt;
+}

@@ -1,0 +1,13 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+CALL_TYPE     position(1 :2 ),    
+MSISDN        position(3 :14),    
+OTHER_PARTY   position(15:34),   
+HOUR          position(35:36), 
+MISS          position(37:40),  
+DURATION      position(41:46),  
+SOURCE_ID     position(47:65)
+)
+

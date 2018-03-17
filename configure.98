@@ -1,0 +1,552 @@
+#!/bin/sh
+
+if [ $# != 1 -a $# != 2 ]; then
+	echo "Usage $0 userid [mode(32|64)]"
+	exit 1
+fi
+
+mode=
+userid="$1"
+[ $# -eq 1 ] && mode=64
+[ $# -eq 2 ] && mode="$2"
+[ $mode != 32 ] && mode=64
+
+mypid=$$
+
+CONFLIST="makebss/Make.defines makeall.sh"
+sourcename=
+targetname=
+
+##初始化一些工作文件名
+AOUT=a.out
+CONFTESTC=conftest.c
+CONFTESTO=conftest.o
+CONFTEST=conftest
+LIBTESTC=libtest.c
+LIBTESTO=libtest.o
+LIBTESTA=libtest.a
+CALLTESTC=calltest.c
+CALLTESTO=calltest.o
+CALLTEST=calltest
+
+CONFTMP=conftest.tmp
+CONFLOG=conftest.log
+CONFSED=conftest.sed
+
+#定义临时变量区
+prg=
+temp=
+
+###获取当前操作系统的信息，以便确定编译选项
+echoEXIT()
+{
+	echo $@
+	exit 1;
+}
+
+OSNAME=`uname -s`	##系统名		-s
+HWNAME=`uname -m`       ##硬件类型	-m        
+RLNAME=`uname -r`       ##系统发行号	-r        
+VSNAME=`uname -v`       ##系统版本号	-v
+UNIXNAME=
+case $OSNAME  in
+Linux)
+	UNIXNAME="LINUX"
+##默认情况下linux是32位的
+	[ $# -eq 1 ] && mode=32
+	;;
+AIX)
+	UNIXNAME="AIX"
+	;;
+HP-UX)
+	UNIXNAME="HP"
+	;;
+OSF1)
+	UNIXNAME="COMPAQ"
+	;;
+SunOS)
+	UNIXNAME="SUN"
+	;;
+*)
+	echoEXIT "Unkown System $OSNAME"
+esac
+
+###定义待确定的变量
+CC=
+CFLAGS=
+LFLAGS=
+ARFLAGS=
+ENV_PRECOMP_MK=
+USERID="$userid"
+
+##检查基本的环境变量是否OK
+[ -z "$ORACLE_HOME" ] && echoEXIT "环境变量 \$ORACLE_HOME 未定义"
+[ -z "$BILLHOME" ] && echoEXIT "环境变量 \$BILLHOME 未定义"
+[ -x "$ORACLE_HOME"/bin/proc ] || echoEXIT "proc 未安装正确,检查 $ORACLE_HOME/bin/proc 文件"
+[ -d "$ORACLE_HOME"/precomp/demo/proc ] || echoEXIT "proc 未安装正确,检查 $ORACLE_HOME/precomp/demo/proc 目录"
+
+###确定ENV_PRECOMP_MK变量
+if [ "$mode" -eq 64 ]; then
+	if [ -f $ORACLE_HOME/precomp/lib64/env_precomp.mk ];then
+		ENV_PRECOMP_MK="precomp/lib64/env_precomp.mk"
+	else
+		ENV_PRECOMP_MK="precomp/lib/env_precomp.mk"
+	fi
+else
+	if [ -f $ORACLE_HOME/precomp/lib32/env_precomp.mk ];then
+		ENV_PRECOMP_MK="precomp/lib32/env_precomp.mk"
+	else
+		ENV_PRECOMP_MK="precomp/lib/env_precomp.mk"
+	fi
+###HP的主机ORACLE的特殊处理,env文件是 precomp/demo/proc/demo_proc32.mk
+	if [ -d $ORACLE_HOME/precomp/lib32 -a "$UNIXNAME" = "HP" ] ; then
+		if [ -f $ORACLE_HOME/precomp/demo/proc/demo_proc32.mk ]; then
+			ENV_PRECOMP_MK="precomp/demo/proc/demo_proc32.mk"
+		fi
+	fi
+fi
+[ -f $ORACLE_HOME/$ENV_PRECOMP_MK ] || echoEXIT "proc 未安装正确,检查 $ORACLE_HOME/$ENV_PRECOMP_MK 文件"
+
+###定义一些 生成和检测的小测试程序的函数，用于检测编译选项
+printCONFLOG()
+{
+	echo 时间:`date +"%Y%m%d %H:%M:%S"` 消息:$@ >>$CONFLOG
+	echo 时间:`date +"%Y%m%d %H:%M:%S"` 消息:$@
+}
+###生成测试库的文件
+genlibtest()
+{
+	cat > $LIBTESTC << 'EOF'
+#include <stdio.h>
+#include <stdlib.h>
+
+int ansi_lib_test(size_t x)
+{
+	return (int)x;
+}
+EOF
+}
+
+###生成调用库函数的执行程序文件
+gencalltest()
+{
+	cat > $CALLTESTC << 'EOF'
+#include <stdio.h>
+#include <stdlib.h>
+
+int ansi_lib_test(size_t x);
+
+int main()
+{
+	if(ansi_lib_test((size_t)0)==0)
+		printf("%d",sizeof(void*));
+	else
+		printf("%d",sizeof(void*));
+	return 0;
+}
+EOF
+}
+
+##生成一个小程序，32和64位检测
+genconftest()
+{
+	cat > $CONFTESTC << 'EOF'
+#include <stdio.h>
+#include <stdlib.h>
+
+int ansi_function_test(size_t x)
+{
+	return (int)x;
+}
+int main()
+{
+	printf("%d",sizeof(void*));
+	return ansi_function_test((size_t)0);
+}
+EOF
+}
+chkcpl()
+{
+	rm -f $AOUT
+
+	$CC $CONFTESTC 2> $CONFTMP
+	if [ $? -ne 0 ]; then
+		echo "false"
+		return;
+	fi
+	if [ `ls -l $CONFTMP | awk '{printf $5}'` -ne 0 ]; then
+		if [ "$UNIXNAME" != "HP" ];then
+			echo "false"
+			return;
+		fi
+	fi
+
+##输出结果OK表明没问题
+	if [ ! -x $AOUT ]; then
+		echo "false"
+		return;
+	fi
+	echo "true"
+}
+chkcflagopt()
+{
+	rm -f $CONFTESTO
+	rm -f $CONFTMP
+
+	$CC $CFLAGS -c $CONFTESTC -o $CONFTESTO 2> $CONFTMP
+##如果编译错误则说明CC编译选项不对
+	if [ $? -ne 0 ]; then
+		echo "false"
+		return;
+	fi
+##如果有输出错误信息表示选项有问题
+	if [ `ls -l $CONFTMP | awk '{printf $5}'` -ne 0 ]; then
+		echo "false"
+		return
+	fi
+##输出结果OK表明没问题
+	if [ ! -f $CONFTESTO ]; then
+		echo "false"
+		return;
+	fi
+	echo "true"
+}
+chklflagopt()
+{
+	rm -f $CONFTEST
+	rm -f $CONFTMP
+
+	$CC $CFLAGS $LFLAGS -o $CONFTEST $CONFTESTO 2> $CONFTMP
+
+##如果连接错误则说明CC连接选项不对
+	if [ $? -ne 0 ]; then
+		echo "false"
+		return;
+	fi
+
+##如果有输出错误信息表示选项有问题
+	if [ `ls -l $CONFTMP | awk '{printf $5}'` -ne 0 ]; then
+		echo "false"
+		return
+	fi
+
+##输出结果OK表明没问题
+	if [ ! -x $CONFTEST ]; then
+		echo "false"
+		return;
+	fi
+	echo "true"
+}
+chkarflagsopt()
+{
+	rm -f $LIBTESTO
+	rm -f $LIBTESTA
+	rm -f $CALLTESTO
+	rm -f $CALLTEST
+
+##CC编译选项之前已经OK了，这里不检测了
+	$CC $CFLAGS -c $LIBTESTC -o $LIBTESTO
+	$CC $CFLAGS -c $CALLTESTC -o $CALLTESTO
+
+###执行失败和未输出库文件均表示选项有问题
+	ar $ARFLAGS $LIBTESTA $LIBTESTO
+	if [ $? -ne 0 ]; then
+		echo "false"
+		return;
+	fi
+	if [ ! -f "$LIBTESTA" ]; then
+		echo "false"
+		return;
+	fi
+##调用CC将库文件和指定文件连接
+	$CC $CFLAGS $LFLAGS -o $CALLTEST $CALLTESTO $LIBTESTA
+	if [ $? -ne 0 ]; then
+		echo "false"
+		return;
+	fi
+	if [ ! -x "$CALLTEST" ]; then
+		echo "false"
+		return;
+	fi
+	echo "true"		
+}
+chk32and64()
+{
+	if [ "$mode" -eq 64 ];then
+		if [ "$temp" -ne 8 ];then
+			printCONFLOG " 64位模式未启动正确 "
+			printCONFLOG "检查 $prg 的输出为何为 $temp 应该为 8"
+			exit 1;
+		fi
+	else
+		if [ "$temp" -ne 4 ];then
+			printCONFLOG " 32位模式未启动正确 "
+			printCONFLOG "检查 $prg 的输出为何为 $temp 应该为 4"
+			exit 1;
+		fi	
+	fi
+}
+gensedcmd()
+{
+	rm -f $CONFSED
+	echo "s,@ENV_PRECOMP_MK@,$ENV_PRECOMP_MK,;">>$CONFSED
+	echo "s,@COMPILER@,$CC,;">>$CONFSED
+	echo "s,@CFLAGS@,$CFLAGS,;">>$CONFSED
+	echo "s,@LFLAGS@,$LFLAGS,;">>$CONFSED
+	echo "s,@ARFLAGS@,$ARFLAGS,;">>$CONFSED
+	echo "s,@USERID@,$USERID,;"	>>$CONFSED
+}
+delete_conf_test()
+{
+	rm -f $AOUT
+	rm -f $CONFTESTC
+	rm -f $CONFTESTO
+	rm -f $CONFTEST
+	rm -f $LIBTESTC
+	rm -f $LIBTESTO
+	rm -f $LIBTESTA
+	rm -f $CALLTESTC
+	rm -f $CALLTESTO
+	rm -f $CALLTEST
+	rm -f $CONFTMP
+	rm -f $CONFLOG
+	rm -f $CONFSED
+}
+gen_conf_list()
+{
+	for f in $CONFLIST
+	do		
+		sourcename="$f".in
+		targetname="$f"
+		
+		echo "$sourcename $targetname"
+
+	##如果不存在则源文件就不转换了
+		[ ! -f $sourcename ] && continue;
+
+		rm -f $targetname
+		sed -f $CONFSED $sourcename > $targetname
+	
+		case $targetname in
+		*.sh)
+		chmod +x $targetname
+		;;
+		*)
+		;;
+		esac
+	done
+}
+main()
+{
+	echo "系统名 $UNIXNAME - $OSNAME 硬件类型 $HWNAME 软件版本 $VSNAME.$RLNAME"
+	
+##生成待测试的文件源文件
+	genconftest
+	if [ ! -f $CONFTESTC ]; then
+		printCONFLOG "无法在当前目录下生成 $CONFTESTC 文件，检查权限"
+		exit 1
+	fi
+##调用 chkcpl 确定系统安装的cc还是GCC编译器
+	CC="cc"
+	if [ "`chkcpl`" = "false" ]; then
+		CC="gcc"
+##CC安装有问题就不检查GCC了,gcc安装的时候如果没有编译选项可能会有问题
+		if [ "`chkcpl`" = "false" -a "1" = "0" ];then
+			printCONFLOG " 系统 cc 且 gcc 安装有问题 "
+			cat $CONFTESTC >> $CONFLOG
+			cat "cc 编译错误信息:" >> $CONFLOG
+			cc $CONFTESTC 2>> $CONFLOG
+			cat "gcc 编译错误信息:" >> $CONFLOG
+			gcc $CONFTESTC 2>> $CONFLOG
+			exit 1;
+		fi
+	fi
+
+##对不同系统确定CFLAGS、LFLAGS、ARFLAGS
+	if [ $CC = "cc" ]; then
+		if [ $mode -eq 64 ]; then
+			case $UNIXNAME in
+			LINUX)
+				CFLAGS="-Wall -ggdb"
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			AIX)
+				CFLAGS="-q64 -g"
+				LFLAGS=""
+				ARFLAGS="-X64 -r"
+				;;
+			HP)
+				CFLAGS="-g -Ae  +DA2.0W +u1"
+				LFLAGS="+DD64"
+				ARFLAGS="r"
+				;;
+			COMPAQ)
+				CFLAGS="-g -misalign"
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			SUN)
+		##SUN主机的64位模式还有疑问
+				CFLAGS=""
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			*)
+				echoEXIT "脚本逻辑错误"
+			esac
+		else
+	##这里是CC的32位模式
+			case $UNIXNAME in
+			LINUX)
+				CFLAGS="-Wall -ggdb"
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			AIX)
+				CFLAGS="-g"
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			HP)
+				CFLAGS="-g"
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			COMPAQ)
+				echoEXIT "COMPAQ 主机默认为 64位"
+				;;
+			SUN)
+				CFLAGS=""
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			*)
+				echoEXIT "脚本逻辑错误"
+			esac
+		fi
+	else
+###这里是GCC的支持
+		if [ $mode -eq 64 ]; then
+			case $UNIXNAME in
+			LINUX)
+				CFLAGS="-Wall -ggdb"
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			AIX)
+				CFLAGS="-maix64 -g"
+				LFLAGS=""
+				ARFLAGS="-X64 -r"
+				;;
+			HP)
+				CFLAGS=""
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			COMPAQ)
+				CFLAGS="-ggdb"
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			SUN)
+		##SUN主机的64位模式还有疑问
+				CFLAGS=""
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			*)
+				echoEXIT "脚本逻辑错误"
+			esac
+		else
+			case $UNIXNAME in
+			LINUX)
+				CFLAGS="-Wall -ggdb"
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			AIX)
+				CFLAGS="-g"
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			HP)
+				CFLAGS="-g"
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			COMPAQ)
+				echoEXIT "COMPAQ 主机默认为 64位"
+				;;
+			SUN)
+				CFLAGS=""
+				LFLAGS=""
+				ARFLAGS="-r"
+				;;
+			*)
+				echoEXIT "脚本逻辑错误"
+			esac
+		fi
+	fi
+	
+##对确定的CFLAGS、LFLAGS选项用小的测试程序测试
+	if [ "`chkcflagopt`" = "false" ]; then
+		printCONFLOG " 系统 $CC 安装有问题 "
+		cat "$CC 编译错误信息:" >> $CONFLOG
+		cat $CONFTESTC >> $CONFLOG
+		echo "$CC $CFLAGS -c $CONFTESTC -o $CONFTESTO" >>$CONFLOG
+		$CC $CFLAGS -c $CONFTESTC -o $CONFTESTO 2>>$CONFLOG
+		exit 1
+	fi
+	if [ "`chklflagopt`" = "false" ]; then
+		printCONFLOG " 系统 $CC 安装有问题 "
+		cat "$CC 编译错误信息:" >> $CONFLOG
+		cat $CONFTESTC >> $CONFLOG
+		echo "$CC $CFLAGS -c $CONFTESTC -o $CONFTESTO" >>$CONFLOG
+		echo "$CC $CFLAGS $LFLAGS -o $CONFTEST $CONFTESTO" >>$CONFLOG
+		$CC $CFLAGS -o $CONFTEST $CONFTESTO 2>>$CONFLOG
+		exit 1
+	fi
+###检查32和64位选项目是否OK
+	prg="$CONFTEST"
+	temp="`$CONFTEST`"
+	chk32and64
+##生成库定义和库调用小程序
+	genlibtest
+	if [ ! -f $LIBTESTC ]; then
+		printCONFLOG "无法在当前目录下生成 $LIBTESTC 文件，检查权限"
+		exit 1
+	fi
+	gencalltest
+	if [ ! -f $CALLTESTC ]; then
+		printCONFLOG "无法在当前目录下生成 $CALLTESTC 文件，检查权限"
+		exit 1
+	fi
+	if [ "`chkarflagsopt`" = "false" ];then
+		printCONFLOG " ARFLAGS选项有问题 "
+		echo "$CC $CFLAGS -c $LIBTESTC -o $LIBTESTO"	>>$CONFLOG
+		echo "$CC $CFLAGS -c $CALLTESTC -o $CALLTESTO"	>>$CONFLOG
+		echo "ar $ARFLAGS $LIBTESTA $LIBTESTO"	>>$CONFLOG
+		echo "$CC $CFLAGS $LFLAGS -o $CALLTEST $CALLTESTO $LIBTESTA"	>>$CONFLOG
+		exit 1;
+	fi
+###检查32和64位选项目是否OK
+	prg="$CALLTEST"
+	temp="`$CALLTEST`"
+	chk32and64
+###所有检查完毕调用函数生成sed 命令文件
+	gensedcmd
+	if [ ! -f $CONFSED ]; then
+		printCONFLOG "生成sed 命令文件失败"
+		exit 1;
+	fi
+###将要做替换的文件统统的替换掉
+	gen_conf_list
+	
+###删除所有中间文件
+	delete_conf_test
+	echo "CC=\"$CC\" . CFLAGS=$CFLAGS . LFLAGS=$LFLAGS . ARFLAGS=$ARFLAGS ."
+	
+}
+main
+exit 0

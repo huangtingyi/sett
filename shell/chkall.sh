@@ -1,0 +1,16 @@
+cd $BILLHOME/srv
+shell/unixascii.sh arch/*
+shell/unixascii.sh billing/*
+shell/unixascii.sh case/*
+shell/unixascii.sh chk/*
+shell/unixascii.sh cmd/*
+shell/unixascii.sh cmdserv/*
+shell/unixascii.sh common/*
+shell/unixascii.sh db/*
+shell/unixascii.sh err/*
+shell/unixascii.sh expr/*
+shell/unixascii.sh expr_t/*
+shell/unixascii.sh history/*
+shell/unixascii.sh include/*
+shell/unixascii.sh intf/*
+shell/unixascii.sh kpi/*

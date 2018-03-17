@@ -1,0 +1,23 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+RECORD_TYPE       position(1  :2  ),    
+CALL_TYPE         position(3  :3  ),    
+MSISDN            position(4  :16 ),   
+USER_TYPE         position(17 :17 ), 
+HOME_AREA_CODE    position(18 :21 ),  
+CALLING_NBR       position(22 :34 ),  
+CALLED_NBR        position(35 :47 ),  
+BUSI_CODE         position(48 :57 ),  
+FEE_TYPE          position(58 :58 ), 
+MSG_LEN           position(59 :62 ),
+MSG_CNT           position(63 :66 ),
+START_TIME        position(67 :80 ),
+BASE_FEE          position(81 :86 ),
+INFO_FEE          position(87 :92 ),
+INFO_FEE_TYPE     position(93 :94 ),
+ORI_FILE_NAME     position(95 :114),
+RESERVE           position(115:134)
+)
+

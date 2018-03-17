@@ -1,0 +1,300 @@
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdir.h>
+#include <list.h>
+#include <wwfile.h>
+#include <wwdb.h>
+#include <bintree.h>
+
+
+#include "ausett_supp.h"
+#include "ausett_intf.h"
+
+/*-----------------------------------------------------------------------------*/
+int TruncateTableData(char sTableName[])
+{
+	char sBuff[1024];
+	
+	sprintf(sBuff,"TRUNCATE TABLE %s ",sTableName);
+	if(ExecSql(sBuff)<0){
+		RollbackWork();
+		return -1;
+	}
+	CommitWork();
+	
+	return 0;
+}
+
+int DeleteTableDataByDate(char sTableName[],char sDate[])
+{
+	char sBuff[1024];
+	
+	sprintf(sBuff,"DELETE FROM %s WHERE data_date=to_date('%s','yyyymmdd') ",sTableName,sDate);
+	if(ExecSql(sBuff)<0){
+		RollbackWork();
+		return -1;
+	}
+	CommitWork();
+	
+	return 0;
+}
+
+int OutputProcessInfo2LogTable(struct AuSettLogStruct *ptHead,char sTableOut[])
+{
+	int iInsertCnt=0;
+	struct AuSettLogStruct *pTemp;
+	
+	struct AuSettLogStructOut TempOut;
+	
+	bzero(&TempOut,sizeof(struct AuSettLogStructOut));
+	strcpy(TempOut.sTableName,sTableOut);
+	
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		if((++iInsertCnt)%50000==0){
+			if(EInsertStructToAuSettLog(NULL,true,&TempOut)<0){
+				WriteAlertMsg("写表%s错误.",sTableOut);
+				WriteErrStackAlert();
+				RollbackWorkRelease();
+				return -1;
+			}
+			CommitWork();
+			WriteProcMsg("当前输出数据到表 %s 记录数 %d 条.",
+				sTableOut,iInsertCnt);
+		}
+
+		if(EInsertStructToAuSettLog(pTemp,false,&TempOut)<0){
+			WriteAlertMsg("写表%s错误.",sTableOut);
+			WriteErrStackAlert();
+			RollbackWorkRelease();
+			
+			return -1;
+		}
+		
+		free(pTemp);
+	}
+	
+	if(EInsertStructToAuSettLog(NULL,true,&TempOut)<0){
+		WriteAlertMsg("写表%s错误.",sTableOut);
+		WriteErrStackAlert();
+		RollbackWorkRelease();
+		return -1;
+	}
+	CommitWork();
+	WriteProcMsg("输出数据到表 %s 总记录数 %d 条.",
+		sTableOut,iInsertCnt);
+		
+	return 0;
+}
+
+int WriteState2LogTable(struct StatCtrlStruct *pCtrl,char sDealState[])
+{
+	char sLogTable[32];
+	static struct AuSettLogStruct aslTemp;
+	
+	aslTemp.pNext=NULL;
+	aslTemp.pLoadNext=NULL;
+	strcpy(aslTemp.sDealTable,pCtrl->sTableNameIn);
+	strcpy(aslTemp.sOutTableIn,pCtrl->sTableNameOut1);
+	strcpy(aslTemp.sOutTableOut,pCtrl->sTableNameOut0);
+	strcpy(aslTemp.sDataDate,pCtrl->sBillingDate);
+	GetHostTime(aslTemp.sDealDate);
+	strcpy(aslTemp.sDealState,sDealState);
+	
+	strcpy(sLogTable,"AU_SETT_LOG");
+	DeleteTableDataByDate(sLogTable,aslTemp.sDataDate);
+	if(OutputProcessInfo2LogTable(&aslTemp,sLogTable)<0) return -1;
+	
+	return 0;
+}
+
+/*-----------------------------我方报表项相关函数---------------------------------*/
+int GetSepStrBySepChar(char sOriStr[],char cSep,struct ReportItemParamExtStruct *po)
+{
+	int iLen,iCnt=0;
+	char *pStart,*pFound;
+	char sBuff[128];
+	
+	if(sOriStr==NULL || strlen(sOriStr)==0){
+		po->iTtidCnt=0;
+		return 0;
+	}
+	
+	pStart=sOriStr;
+	while((pFound=strchr(pStart,cSep))!=NULL){
+		
+		iLen=pFound-pStart;
+		strncpy(sBuff,pStart,iLen);
+		sBuff[iLen]=0;
+		po->aiTicketTypeID[iCnt++]=atoi(sBuff);
+		
+		pStart=pFound+1;
+	}
+	
+	strcpy(sBuff,pStart);
+	po->aiTicketTypeID[iCnt++]=atoi(sBuff);
+	po->iTtidCnt=iCnt;
+	
+	return 0;
+}
+void mvitem_reportitemparam2ext(struct ReportItemParamStruct *pi,
+	struct ReportItemParamExtStruct *po)
+{
+	po->iReportItemID=pi->iReportItemID;
+	strcpy(po->sFeeType,pi->sFeeType);
+	strcpy(po->sSettType,pi->sSettType);
+	GetSepStrBySepChar(pi->sTicketTypeID,',',po);
+	
+	strcpy(po->sCal,pi->sCal);
+	strcpy(po->sCalCtrl,pi->sCalCtrl);
+	strcpy(po->sState,pi->sState);
+	
+	if(pi->sTypeID[0] == 0)
+		po->iTypeID=-2;
+	else
+		po->iTypeID=atoi(pi->sTypeID);
+}
+
+int LoadTableReportItemParam(char sTableName[],char sCondi[],
+	struct ReportItemParamExtStruct **pptHead)
+{
+	int iCnt=0;
+	struct ReportItemParamExtStruct *pTemp;
+	struct ReportItemParamStruct Temp;
+	struct ReportItemParamStructIn TempIn;
+
+	*pptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct ReportItemParamStructIn));
+	strcpy(TempIn.sTableName,sTableName);
+	strcpy(TempIn.sCondition,sCondi);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetReportItemParamToStruct(&Temp,&TempIn)){
+		
+		if(Temp.sFeeType[0]=='*') continue;
+		
+		if((pTemp=(struct ReportItemParamExtStruct*)
+			malloc(sizeof(struct ReportItemParamExtStruct)))==NULL){
+
+			DestroyList((LIST*)*pptHead);
+			*pptHead=NULL;
+			return -1;
+		}
+		mvitem_reportitemparam2ext(&Temp,pTemp);
+		pTemp->pNext=NULL;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表REPORT_ITEM_PARAM记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表 %s 完毕总记录数%d",sTableName,iCnt);
+
+	return iCnt;
+}
+
+int CompareTicketTypeID(struct SttTicketStruct *pValue,struct ReportItemParamExtStruct *pData)
+{
+	int i;
+	
+	if(pData->iTtidCnt == 0) return FOUND;
+		
+	for(i=0; i<pData->iTtidCnt; ++i){
+		if(pData->aiTicketTypeID[i]==pValue->iTicketTypeID)
+			return FOUND;
+	}
+	
+	return NOTFOUND;
+}
+
+int CompareCal(struct SttTicketStruct *pValue,struct ReportItemParamExtStruct *pData)
+{
+	char *pch=pData->sCal;
+	
+	if(pData->sCal[0] == 0) return FOUND;
+		
+	if(strcmp(pData->sCalCtrl,"IN")==0){
+		while(*pch != 0){
+			if(*pch==',') continue;
+			
+			if(pValue->sCal[0]==*pch) return FOUND;
+			
+			++pch;
+		}
+		
+	}
+	else if(strcmp(pData->sCalCtrl,"NOTIN")==0){
+		while(*pch != 0){
+			if(*pch==',') continue;
+			
+			if(pValue->sCal[0]==*pch) return NOTFOUND;
+			
+			++pch;
+		}
+		return FOUND;
+	}
+	
+	return NOTFOUND;
+}
+
+int CompareState(struct SttTicketStruct *pValue,struct ReportItemParamExtStruct *pData)
+{
+	char *pch=pData->sState;
+	
+	if(pData->sState[0] == 0) return FOUND;
+		
+	while(*pch != 0){
+		if(*pch==',') continue;
+		
+		if(pValue->sState[0]==*pch) return FOUND;
+		
+		++pch;
+	}
+	
+	return NOTFOUND;
+}
+
+int CompareTypeID(struct SttTicketStruct *pValue,struct ReportItemParamExtStruct *pData)
+{
+	if(pData->iTypeID == -2) return FOUND;
+		
+	if(pValue->iCallingTypeID==pData->iTypeID || pValue->iCalledTypeID==pData->iTypeID)
+		return NOTFOUND;
+	
+	return FOUND;
+}
+
+int SearchReportItemParam(struct ReportItemParamExtStruct *ptHead,struct SttTicketStruct *pValue,
+	struct ReportItemParamExtStruct **pptCur)
+{
+	struct ReportItemParamExtStruct *pTemp;
+	
+	*pptCur=NULL;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		if(CompareTicketTypeID(pValue,pTemp)==NOTFOUND) continue;
+		if(CompareCal(pValue,pTemp)==NOTFOUND) continue;
+		if(CompareState(pValue,pTemp)==NOTFOUND) continue;
+			
+		if(CompareTypeID(pValue,pTemp)==FOUND){
+			*pptCur=pTemp;
+			return FOUND;
+		}
+	}
+	
+	return NOTFOUND;
+}
+

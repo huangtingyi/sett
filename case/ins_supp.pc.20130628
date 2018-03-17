@@ -1,0 +1,6031 @@
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdb.h>
+
+#include <stt_ticket.h>
+#include <up_back.h>
+
+/*批量数据结构缓冲写入PREP_TICKET*/
+int EInsertStructToPrepTicket(struct PrepTicketStruct *p,
+	int iInsertFlag,struct PrepTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asCallType[iCurPos],	p->sCallType);
+		strcpy(pTarget->asImsi[iCurPos],	p->sImsi);
+		strcpy(pTarget->asMsisdn[iCurPos],	p->sMsisdn);
+		strcpy(pTarget->asOtherParty[iCurPos],	p->sOtherParty);
+		strcpy(pTarget->asStartTime[iCurPos],	p->sStartTime);
+		strcpy(pTarget->asDuration[iCurPos],	p->sDuration);
+		strcpy(pTarget->asMsc[iCurPos],		p->sMsc);
+		strcpy(pTarget->asTrunkIn[iCurPos],	p->sTrunkIn);
+		strcpy(pTarget->asTrunkOut[iCurPos],	p->sTrunkOut);
+		strcpy(pTarget->asLac[iCurPos],		p->sLac);
+		strcpy(pTarget->asCellID[iCurPos],	p->sCellID);
+		strcpy(pTarget->asOtherLac[iCurPos],	p->sOtherLac);
+		strcpy(pTarget->asOtherCellID[iCurPos],	p->sOtherCellID);
+		strcpy(pTarget->asServiceType[iCurPos],	p->sServiceType);
+		strcpy(pTarget->asServiceCode[iCurPos],	p->sServiceCode);
+		strcpy(pTarget->asThirdParty[iCurPos],	p->sThirdParty);
+		strcpy(pTarget->asMsrn[iCurPos],	p->sMsrn);
+		
+		strcpy(pTarget->asUserType[iCurPos],	p->sUserType);
+		strcpy(pTarget->asReserve1[iCurPos],	p->sReserve1);
+
+		strcpy(pTarget->asEsn[iCurPos],		p->sEsn);
+
+		strcpy(pTarget->asScpFlag[iCurPos],	p->sScpFlag);
+		strcpy(pTarget->asDeformFlag[iCurPos],	p->sDeformFlag);
+		strcpy(pTarget->asReserve[iCurPos],	p->sReserve);
+
+		strcpy(pTarget->asErrCode[iCurPos],	p->sErrCode);
+		strcpy(pTarget->asFileName[iCurPos],	p->sFileName);
+		strcpy(pTarget->asModule[iCurPos],	p->sModule);
+		strcpy(pTarget->asAreaCode[iCurPos],	p->sAreaCode);
+		strcpy(pTarget->asState[iCurPos],	p->sState);
+
+		strcpy(pTarget->asUpdateDate[iCurPos],	p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],	p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],	p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==PREP_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				CALL_TYPE,\n\
+				IMSI,\n\
+				MSISDN,\n\
+				OTHER_PARTY,\n\
+				START_TIME,\n\
+				DURATION,\n\
+				MSC,\n\
+				TRUNK_IN,\n\
+				TRUNK_OUT,\n\
+				LAC,\n\
+				CELL_ID,\n\
+				OTHER_LAC,\n\
+				OTHER_CELL_ID,\n\
+				SERVICE_TYPE,\n\
+				SERVICE_CODE,\n\
+				THIRD_PARTY,\n\
+				MSRN,\n\
+				USER_TYPE,\n\
+				RESERVE1,\n\
+				ESN,\n\
+				SCP_FLAG,\n\
+				DEFORM_FLAG,\n\
+				RESERVE,\n\
+				ERR_CODE,\n\
+				FILE_NAME,\n\
+				MODULE,\n\
+				AREA_CODE,\n\
+				STATE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asCallType,\n\
+				:asImsi,\n\
+				:asMsisdn,\n\
+				:asOtherParty,\n\
+				:asStartTime,\n\
+				:asDuration,\n\
+				:asMsc,\n\
+				:asTrunkIn,\n\
+				:asTrunkOut,\n\
+				:asLac,\n\
+				:asCellID,\n\
+				:asOtherLac,\n\
+				:asOtherCellID,\n\
+				:asServiceType,\n\
+				:asServiceCode,\n\
+				:asThirdParty,\n\
+				:asMsrn,\n\
+				:asUserType,\n\
+				:asReserve1,\n\
+				:asEsn,\n\
+				:asScpFlag,\n\
+				:asDeformFlag,\n\
+				:asReserve,\n\
+				:asErrCode,\n\
+				:asFileName,\n\
+				:asModule,\n\
+				:asAreaCode,\n\
+				:asState,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE PREP_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement PREP_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE PREP_TICKETTRG USING
+				:pTarget->asCallType,
+				:pTarget->asImsi,
+				:pTarget->asMsisdn,
+				:pTarget->asOtherParty,
+				:pTarget->asStartTime,
+				:pTarget->asDuration,
+				:pTarget->asMsc,
+				:pTarget->asTrunkIn,
+				:pTarget->asTrunkOut,
+				:pTarget->asLac,
+				:pTarget->asCellID,
+				:pTarget->asOtherLac,
+				:pTarget->asOtherCellID,
+				:pTarget->asServiceType,
+				:pTarget->asServiceCode,
+				:pTarget->asThirdParty,
+				:pTarget->asMsrn,
+				:pTarget->asUserType,
+				:pTarget->asReserve1,
+				:pTarget->asEsn,
+				:pTarget->asScpFlag,
+				:pTarget->asDeformFlag,
+				:pTarget->asReserve,
+				:pTarget->asErrCode,
+				:pTarget->asFileName,
+				:pTarget->asModule,
+				:pTarget->asAreaCode,
+				:pTarget->asState,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into PREP_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入STT_TICKET*/
+int EInsertStructToSttTicket(struct SttTicketStruct *p,
+	int iInsertFlag,struct SttTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asCalledCode[iCurPos],		p->sCalledCode);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asVisitAreaCode[iCurPos],	p->sVisitAreaCode);
+
+		pTarget->aiRoamFee[iCurPos]=			p->iRoamFee;
+		pTarget->aiTollFee[iCurPos]=			p->iTollFee;
+		pTarget->aiAddFee[iCurPos]=			p->iAddFee;
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asRoamType[iCurPos],		p->sRoamType);
+		strcpy(pTarget->asDistanceType[iCurPos],	p->sDistanceType);
+		strcpy(pTarget->asOppType[iCurPos],		p->sOppType);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asSplitRuleID[iCurPos],		p->sSplitRuleID);
+		strcpy(pTarget->asOppRoamType[iCurPos],		p->sOppRoamType);
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+		strcpy(pTarget->asServiceCode[iCurPos],		p->sServiceCode);
+		strcpy(pTarget->asImsi[iCurPos],		p->sImsi);
+		strcpy(pTarget->asMsc[iCurPos],			p->sMsc);
+		strcpy(pTarget->asLac[iCurPos],			p->sLac);
+		strcpy(pTarget->asCellID[iCurPos],		p->sCellID);
+
+		strcpy(pTarget->asOtherLac[iCurPos],		p->sOtherLac);
+		strcpy(pTarget->asOtherCellID[iCurPos],		p->sOtherCellID);
+
+		strcpy(pTarget->asTrunkIn[iCurPos],		p->sTrunkIn);
+		strcpy(pTarget->asTrunkOut[iCurPos],		p->sTrunkOut);
+		strcpy(pTarget->asThirdParty[iCurPos],		p->sThirdParty);
+		strcpy(pTarget->asMsrn[iCurPos],		p->sMsrn);
+
+		pTarget->aiTrunkInTypeID[iCurPos]=		p->iTrunkInTypeID;
+		pTarget->aiTrunkOutTypeID[iCurPos]=		p->iTrunkOutTypeID;
+		pTarget->aiTrunkInCarrierID[iCurPos]=		p->iTrunkInCarrierID;
+		pTarget->aiTrunkOutCarrierID[iCurPos]=		p->iTrunkOutCarrierID;
+
+		strcpy(pTarget->asTrunkInType[iCurPos],		p->sTrunkInType);
+		strcpy(pTarget->asTrunkOutType[iCurPos],	p->sTrunkOutType);
+
+		pTarget->aiCallingCarrierID[iCurPos]=		p->iCallingCarrierID;
+		pTarget->aiCalledCarrierID[iCurPos]=		p->iCalledCarrierID;
+		pTarget->aiCallingTypeID[iCurPos]=		p->iCallingTypeID;
+		pTarget->aiCalledTypeID[iCurPos]=		p->iCalledTypeID;
+
+		pTarget->aiCallingAreaID[iCurPos]=		p->iCallingAreaID;
+		pTarget->aiCalledAreaID[iCurPos]=		p->iCalledAreaID;
+
+		strcpy(pTarget->asSplitType[iCurPos],		p->sSplitType);
+		strcpy(pTarget->asCal[iCurPos],			p->sCal);
+		strcpy(pTarget->asEsn[iCurPos],			p->sEsn);
+
+		strcpy(pTarget->asScpFlag[iCurPos],		p->sScpFlag);
+		strcpy(pTarget->asDeformFlag[iCurPos],		p->sDeformFlag);
+
+		strcpy(pTarget->asReserve[iCurPos],		p->sReserve);
+		strcpy(pTarget->asBillMode[iCurPos],		p->sBillMode);
+		
+		strcpy(pTarget->asReserve1[iCurPos],		p->sReserve1);
+		strcpy(pTarget->asRoamTariffType[iCurPos],	p->sRoamTariffType);
+		strcpy(pTarget->asTollTariffType[iCurPos],	p->sTollTariffType);
+		strcpy(pTarget->asAddTariffType[iCurPos],	p->sAddTariffType);
+	
+		strcpy(pTarget->asErrCode[iCurPos],		p->sErrCode);
+		strcpy(pTarget->asFileName[iCurPos],		p->sFileName);
+		strcpy(pTarget->asModule[iCurPos],		p->sModule);
+		strcpy(pTarget->asAreaCode[iCurPos],		p->sAreaCode);
+
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==STT_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				TICKET_TYPE_ID,\n\
+				CALL_TYPE,\n\
+				MSISDN,\n\
+				CALLED_CODE,\n\
+				OTHER_PARTY,\n\
+				VISIT_AREA_CODE,\n\
+				ROAM_FEE,\n\
+				TOLL_FEE,\n\
+				ADD_FEE,\n\
+				DURATION,\n\
+				START_TIME,\n\
+				HOME_AREA_CODE,\n\
+				ROAM_TYPE,\n\
+				DISTANCE_TYPE,\n\
+				OPP_TYPE,\n\
+				USER_TYPE,\n\
+				SPLIT_RULE_ID,\n\
+				OPP_ROAM_TYPE,\n\
+				SERVICE_TYPE,\n\
+				SERVICE_CODE,\n\
+				IMSI,\n\
+				MSC,\n\
+				LAC,\n\
+				CELL_ID,\n\
+				OTHER_LAC,\n\
+				OTHER_CELL_ID,\n\
+				TRUNK_IN,\n\
+				TRUNK_OUT,\n\
+				THIRD_PARTY,\n\
+				MSRN,\n\
+				TRUNK_IN_TYPE_ID,\n\
+				TRUNK_OUT_TYPE_ID,\n\
+				TRUNK_IN_CARRIER_ID,\n\
+				TRUNK_OUT_CARRIER_ID,\n\
+				TRUNK_IN_TYPE,\n\
+				TRUNK_OUT_TYPE,\n\
+				CALLING_CARRIER_ID,\n\
+				CALLED_CARRIER_ID,\n\
+				CALLING_TYPE_ID,\n\
+				CALLED_TYPE_ID,\n\
+				CALLING_AREA_ID,\n\
+				CALLED_AREA_ID,\n\
+				SPLIT_TYPE,\n\
+				CAL,\n\
+				ESN,\n\
+				SCP_FLAG,\n\
+				DEFORM_FLAG,\n\
+				RESERVE,\n\
+				BILL_MODE,\n\
+				RESERVE1,\n\
+				ROAM_TARIFF_TYPE,\n\
+				TOLL_TARIFF_TYPE,\n\
+				ADD_TARIFF_TYPE,\n\
+				ERR_CODE,\n\
+				FILE_NAME,\n\
+				MODULE,\n\
+				AREA_CODE,\n\
+				STATE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:aiTicketTypeID,\n\
+				:asCallType,\n\
+				:asMsisdn,\n\
+				:asCalledCode,\n\
+				:asOtherParty,\n\
+				:asVisitAreaCode,\n\
+				:aiRoamFee,\n\
+				:aiTollFee,\n\
+				:aiAddFee,\n\
+				:aiDuration,\n\
+				:asStartTime,\n\
+				:asHomeAreaCode,\n\
+				:asRoamType,\n\
+				:asDistanceType,\n\
+				:asOppType,\n\
+				:asUserType,\n\
+				:asSplitRuleID,\n\
+				:asOppRoamType,\n\
+				:asServiceType,\n\
+				:asServiceCode,\n\
+				:asImsi,\n\
+				:asMsc,\n\
+				:asLac,\n\
+				:asCellID,\n\
+				:asOtherLac,\n\
+				:asOtherCellID,\n\
+				:asTrunkIn,\n\
+				:asTrunkOut,\n\
+				:asThirdParty,\n\
+				:asMsrn,\n\
+				:aiTrunkInTypeID,\n\
+				:aiTrunkOutTypeID,\n\
+				:aiTrunkInCarrierID,\n\
+				:aiTrunkOutCarrierID,\n\
+				:asTrunkInType,\n\
+				:asTrunkOutType,\n\
+				:aiCallingCarrierID,\n\
+				:aiCalledCarrierID,\n\
+				:aiCallingTypeID,\n\
+				:aiCalledTypeID,\n\
+				:aiCallingAreaID,\n\
+				:aiCalledAreaID,\n\
+				:asSplitType,\n\
+				:asCal,\n\
+				:asEsn,\n\
+				:asScpFlag,\n\
+				:asDeformFlag,\n\
+				:asReserve,\n\
+				:asBillMode,\n\
+				:asReserve1,\n\
+				:asRoamTariffType,\n\
+				:asTollTariffType,\n\
+				:asAddTariffType,\n\
+				:asErrCode,\n\
+				:asFileName,\n\
+				:asModule,\n\
+				:asAreaCode,\n\
+				:asState,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE STT_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement STT_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE STT_TICKETTRG USING
+				:pTarget->aiTicketTypeID,
+				:pTarget->asCallType,
+				:pTarget->asMsisdn,
+				:pTarget->asCalledCode,
+				:pTarget->asOtherParty,
+				:pTarget->asVisitAreaCode,
+				:pTarget->aiRoamFee,
+				:pTarget->aiTollFee,
+				:pTarget->aiAddFee,
+				:pTarget->aiDuration,
+				:pTarget->asStartTime,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asRoamType,
+				:pTarget->asDistanceType,
+				:pTarget->asOppType,
+				:pTarget->asUserType,
+				:pTarget->asSplitRuleID,
+				:pTarget->asOppRoamType,
+				:pTarget->asServiceType,
+				:pTarget->asServiceCode,
+				:pTarget->asImsi,
+				:pTarget->asMsc,
+				:pTarget->asLac,
+				:pTarget->asCellID,
+				:pTarget->asOtherLac,
+				:pTarget->asOtherCellID,
+				:pTarget->asTrunkIn,
+				:pTarget->asTrunkOut,
+				:pTarget->asThirdParty,
+				:pTarget->asMsrn,
+				:pTarget->aiTrunkInTypeID,
+				:pTarget->aiTrunkOutTypeID,
+				:pTarget->aiTrunkInCarrierID,
+				:pTarget->aiTrunkOutCarrierID,
+				:pTarget->asTrunkInType,
+				:pTarget->asTrunkOutType,
+				:pTarget->aiCallingCarrierID,
+				:pTarget->aiCalledCarrierID,
+				:pTarget->aiCallingTypeID,
+				:pTarget->aiCalledTypeID,
+				:pTarget->aiCallingAreaID,
+				:pTarget->aiCalledAreaID,
+				:pTarget->asSplitType,
+				:pTarget->asCal,
+				:pTarget->asEsn,
+				:pTarget->asScpFlag,
+				:pTarget->asDeformFlag,
+				:pTarget->asReserve,
+				:pTarget->asBillMode,
+				:pTarget->asReserve1,
+				:pTarget->asRoamTariffType,
+				:pTarget->asTollTariffType,
+				:pTarget->asAddTariffType,
+				:pTarget->asErrCode,
+				:pTarget->asFileName,
+				:pTarget->asModule,
+				:pTarget->asAreaCode,
+				:pTarget->asState,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into STT_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入UP_TICKET_G*/
+int EInsertStructToUpTicketG(struct UpTicketGStruct *p,int iInsertFlag,
+	struct UpTicketGStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asCalledCode[iCurPos],		p->sCalledCode);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asVisitAreaCode[iCurPos],	p->sVisitAreaCode);
+
+		pTarget->aiRoamFee[iCurPos]=			p->iRoamFee;
+		pTarget->aiTollFee[iCurPos]=			p->iTollFee;
+		pTarget->aiAddFee[iCurPos]=			p->iAddFee;
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asRoamType[iCurPos],		p->sRoamType);
+		strcpy(pTarget->asDistanceType[iCurPos],	p->sDistanceType);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asImsi[iCurPos],		p->sImsi);
+		strcpy(pTarget->asMsrn[iCurPos],		p->sMsrn);
+		strcpy(pTarget->asMsc[iCurPos],			p->sMsc);
+		strcpy(pTarget->asLac[iCurPos],			p->sLac);
+		strcpy(pTarget->asCellID[iCurPos],		p->sCellID);
+		strcpy(pTarget->asThirdParty[iCurPos],		p->sThirdParty);
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+		strcpy(pTarget->asServiceCode[iCurPos],		p->sServiceCode);
+		strcpy(pTarget->asSupplementCode[iCurPos],	p->sSupplementCode);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==UP_TICKET_G_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[4096];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\
+			INSERT INTO %s(\
+				CALL_TYPE,\
+				MSISDN,\
+				CALLED_CODE,\
+				OTHER_PARTY,\
+				VISIT_AREA_CODE,\
+				ROAM_FEE,\
+				TOLL_FEE,\
+				ADD_FEE,\
+				DURATION,\
+				START_TIME,\
+				HOME_AREA_CODE,\
+				ROAM_TYPE,\
+				DISTANCE_TYPE,\
+				USER_TYPE,\
+				IMSI,\
+				MSRN,\
+				MSC,\
+				LAC,\
+				CELL_ID,\
+				THIRD_PARTY,\
+				SERVICE_TYPE,\
+				SERVICE_CODE,\
+				SUPPLEMENT_CODE,\
+				DEAL_DATE,\
+				SOURCE_ID)\
+			VALUES (\
+				:asCallType,\
+				:asMsisdn,\
+				:asCalledCode,\
+				:asOtherParty,\
+				:asVisitAreaCode,\
+				:aiRoamFee,\
+				:aiTollFee,\
+				:aiAddFee,\
+				:aiDuration,\
+				to_date(:asStartTime,'yyyymmddhh24miss'),\
+				:asHomeAreaCode,\
+				:asRoamType,\
+				:asDistanceType,\
+				:asUserType,\
+				:asImsi,\
+				:asMsrn,\
+				:asMsc,\
+				:asLac,\
+				:asCellID,\
+				:asThirdParty,\
+				:asServiceType,\
+				:asServiceCode,\
+				:asSupplementCode,\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\
+				:asSourceID\
+			)",sTableName);
+
+		EXEC SQL PREPARE UP_TICKET_GTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement UP_TICKET_GSM")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE UP_TICKET_GTRG USING
+				:pTarget->asCallType,
+				:pTarget->asMsisdn,
+				:pTarget->asCalledCode,
+				:pTarget->asOtherParty,
+				:pTarget->asVisitAreaCode,
+				:pTarget->aiRoamFee,
+				:pTarget->aiTollFee,
+				:pTarget->aiAddFee,
+				:pTarget->aiDuration,
+				:pTarget->asStartTime,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asRoamType,
+				:pTarget->asDistanceType,
+				:pTarget->asUserType,
+				:pTarget->asImsi,
+				:pTarget->asMsrn,
+				:pTarget->asMsc,
+				:pTarget->asLac,
+				:pTarget->asCellID,
+				:pTarget->asThirdParty,
+				:pTarget->asServiceType,
+				:pTarget->asServiceCode,
+				:pTarget->asSupplementCode,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into UP_TICKET_GSM")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入T193_TICKET*/
+int EInsertStructToT193Ticket(struct T193TicketStruct *p,
+	int iInsertFlag,struct T193TicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asDuration[iCurPos],		p->sDuration);
+		strcpy(pTarget->asMsc[iCurPos],			p->sMsc);
+		strcpy(pTarget->asTrunkIn[iCurPos],		p->sTrunkIn);
+		strcpy(pTarget->asTrunkOut[iCurPos],		p->sTrunkOut);
+		strcpy(pTarget->asCallingAreaCode[iCurPos],	p->sCallingAreaCode);
+		strcpy(pTarget->asCalledAreaCode[iCurPos],	p->sCalledAreaCode);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==T193_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				CALL_TYPE,\n\
+				MSISDN,\n\
+				OTHER_PARTY,\n\
+				START_TIME,\n\
+				DURATION,\n\
+				MSC,\n\
+				TRUNK_IN,\n\
+				TRUNK_OUT,\n\
+				CALLING_AREA_CODE,\n\
+				CALLED_AREA_CODE,\n\
+				HOME_AREA_CODE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asCallType,\n\
+				:asMsisdn,\n\
+				:asOtherParty,\n\
+				:asStartTime,\n\
+				:asDuration,\n\
+				:asMsc,\n\
+				:asTrunkIn,\n\
+				:asTrunkOut,\n\
+				:asCallingAreaCode,\n\
+				:asCalledAreaCode,\n\
+				:asHomeAreaCode,\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE T193_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement T193_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE T193_TICKETTRG USING
+				:pTarget->asCallType,
+				:pTarget->asMsisdn,
+				:pTarget->asOtherParty,
+				:pTarget->asStartTime,
+				:pTarget->asDuration,
+				:pTarget->asMsc,
+				:pTarget->asTrunkIn,
+				:pTarget->asTrunkOut,
+				:pTarget->asCallingAreaCode,
+				:pTarget->asCalledAreaCode,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into T193_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMSC_TICKET*/
+int EInsertStructToSmscTicket(struct SmscTicketStruct *p,
+	int iInsertFlag,struct SmscTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asCallType[iCurPos],	p->sCallType);
+		strcpy(pTarget->asCityCode[iCurPos],	p->sCityCode);
+		strcpy(pTarget->asMsisdn[iCurPos],	p->sMsisdn);
+		strcpy(pTarget->asOtherParty[iCurPos],	p->sOtherParty);
+		strcpy(pTarget->asStartTime[iCurPos],	p->sStartTime);
+		strcpy(pTarget->asDuration[iCurPos],	p->sDuration);
+		strcpy(pTarget->asMsc[iCurPos],		p->sMsc);
+		strcpy(pTarget->asSmsp[iCurPos],	p->sSmsp);
+		strcpy(pTarget->asUserType[iCurPos],	p->sUserType);
+		strcpy(pTarget->asFee[iCurPos],		p->sFee);
+		strcpy(pTarget->asServiceCode[iCurPos],	p->sServiceCode);
+
+		pTarget->aiTicketTypeID[iCurPos]=	p->iTicketTypeID;
+
+		strcpy(pTarget->asErrCode[iCurPos],	p->sErrCode);
+		strcpy(pTarget->asFileName[iCurPos],	p->sFileName);
+		strcpy(pTarget->asModule[iCurPos],	p->sModule);
+		strcpy(pTarget->asAreaCode[iCurPos],	p->sAreaCode);
+		strcpy(pTarget->asState[iCurPos],	p->sState);
+
+		strcpy(pTarget->asUpdateDate[iCurPos],	p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],	p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],	p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SMSC_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				CALL_TYPE,\n\
+				CITY_CODE,\n\
+				MSISDN,\n\
+				OTHER_PARTY,\n\
+				START_TIME,\n\
+				DURATION,\n\
+				MSC,\n\
+				SMSP,\n\
+				USER_TYPE,\n\
+				FEE,\n\
+				SERVICE_CODE,\n\
+				TICKET_TYPE_ID,\n\
+				ERR_CODE,\n\
+				FILE_NAME,\n\
+				MODULE,\n\
+				AREA_CODE,\n\
+				STATE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asCallType,\n\
+				:asCityCode,\n\
+				:asMsisdn,\n\
+				:asOtherParty,\n\
+				:asStartTime,\n\
+				:asDuration,\n\
+				:asMsc,\n\
+				:asSmsp,\n\
+				:asUserType,\n\
+				:asFee,\n\
+				:asServiceCode,\n\
+				:aiTicketTypeID,\n\
+				:asErrCode,\n\
+				:asFileName,\n\
+				:asModule,\n\
+				:asAreaCode,\n\
+				:asState,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SMSC_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SMSC_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SMSC_TICKETTRG USING
+				:pTarget->asCallType,
+				:pTarget->asCityCode,
+				:pTarget->asMsisdn,
+				:pTarget->asOtherParty,
+				:pTarget->asStartTime,
+				:pTarget->asDuration,
+				:pTarget->asMsc,
+				:pTarget->asSmsp,
+				:pTarget->asUserType,
+				:pTarget->asFee,
+				:pTarget->asServiceCode,
+				:pTarget->aiTicketTypeID,
+				:pTarget->asErrCode,
+				:pTarget->asFileName,
+				:pTarget->asModule,
+				:pTarget->asAreaCode,
+				:pTarget->asState,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into SMSC_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMSP_TICKET*/
+int EInsertStructToSmspTicket(struct SmspTicketStruct *p,
+	int iInsertFlag,struct SmspTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asCityCode[iCurPos],		p->sCityCode);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asDuration[iCurPos],		p->sDuration);
+		strcpy(pTarget->asMsc[iCurPos],			p->sMsc);
+		strcpy(pTarget->asSmsp[iCurPos],		p->sSmsp);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asSpAccNbr[iCurPos],		p->sSpAccNbr);
+		strcpy(pTarget->asSpServiceCode[iCurPos],	p->sSpServiceCode);
+		strcpy(pTarget->asSpCode[iCurPos],		p->sSpCode);
+		strcpy(pTarget->asFee1[iCurPos],		p->sFee1);
+		strcpy(pTarget->asFee2[iCurPos],		p->sFee2);
+		strcpy(pTarget->asFee3[iCurPos],		p->sFee3);
+		strcpy(pTarget->asFee4[iCurPos],		p->sFee4);
+
+		strcpy(pTarget->asFee5[iCurPos],		p->sFee5);
+		strcpy(pTarget->asFee6[iCurPos],		p->sFee6);
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		strcpy(pTarget->asErrCode[iCurPos],	p->sErrCode);
+		strcpy(pTarget->asFileName[iCurPos],	p->sFileName);
+		strcpy(pTarget->asModule[iCurPos],	p->sModule);
+		strcpy(pTarget->asAreaCode[iCurPos],	p->sAreaCode);
+		strcpy(pTarget->asState[iCurPos],	p->sState);
+
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SMSP_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				CALL_TYPE,\n\
+				CITY_CODE,\n\
+				MSISDN,\n\
+				OTHER_PARTY,\n\
+				START_TIME,\n\
+				DURATION,\n\
+				MSC,\n\
+				SMSP,\n\
+				USER_TYPE,\n\
+				SP_ACC_NBR,\n\
+				SP_SERVICE_CODE,\n\
+				SP_CODE,\n\
+				FEE1,\n\
+				FEE2,\n\
+				FEE3,\n\
+				FEE4,\n\
+				FEE5,\n\
+				FEE6,\n\
+				TICKET_TYPE_ID,\n\
+				ERR_CODE,\n\
+				FILE_NAME,\n\
+				MODULE,\n\
+				AREA_CODE,\n\
+				STATE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asCallType,\n\
+				:asCityCode,\n\
+				:asMsisdn,\n\
+				:asOtherParty,\n\
+				:asStartTime,\n\
+				:asDuration,\n\
+				:asMsc,\n\
+				:asSmsp,\n\
+				:asUserType,\n\
+				:asSpAccNbr,\n\
+				:asSpServiceCode,\n\
+				:asSpCode,\n\
+				:asFee1,\n\
+				:asFee2,\n\
+				:asFee3,\n\
+				:asFee4,\n\
+				:asFee5,\n\
+				:asFee6,\n\
+				:aiTicketTypeID,\n\
+				:asErrCode,\n\
+				:asFileName,\n\
+				:asModule,\n\
+				:asAreaCode,\n\
+				:asState,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SMSP_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SMSP_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SMSP_TICKETTRG USING
+				:pTarget->asCallType,
+				:pTarget->asCityCode,
+				:pTarget->asMsisdn,
+				:pTarget->asOtherParty,
+				:pTarget->asStartTime,
+				:pTarget->asDuration,
+				:pTarget->asMsc,
+				:pTarget->asSmsp,
+				:pTarget->asUserType,
+				:pTarget->asSpAccNbr,
+				:pTarget->asSpServiceCode,
+				:pTarget->asSpCode,
+				:pTarget->asFee1,
+				:pTarget->asFee2,
+				:pTarget->asFee3,
+				:pTarget->asFee4,
+				:pTarget->asFee5,
+				:pTarget->asFee6,
+				:pTarget->aiTicketTypeID,
+				:pTarget->asErrCode,
+				:pTarget->asFileName,
+				:pTarget->asModule,
+				:pTarget->asAreaCode,
+				:pTarget->asState,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into SMSP_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入GPRS_TICKET*/
+int EInsertStructToGprsTicket(struct GprsTicketStruct *p,
+	int iInsertFlag,struct GprsTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asNiPdp[iCurPos],		p->sNiPdp);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asImsi[iCurPos],		p->sImsi);
+		strcpy(pTarget->asSgsn[iCurPos],		p->sSgsn);
+		strcpy(pTarget->asMsnc[iCurPos],		p->sMsnc);
+		strcpy(pTarget->asLac[iCurPos],			p->sLac);
+		strcpy(pTarget->asRouteArea[iCurPos],		p->sRouteArea);
+		strcpy(pTarget->asCellID[iCurPos],		p->sCellID);
+		strcpy(pTarget->asChargingID[iCurPos],		p->sChargingID);
+		strcpy(pTarget->asGgsn[iCurPos],		p->sGgsn);
+		strcpy(pTarget->asApnNi[iCurPos],		p->sApnNi);
+		strcpy(pTarget->asApnOi[iCurPos],		p->sApnOi);
+		strcpy(pTarget->asPdpType[iCurPos],		p->sPdpType);
+		strcpy(pTarget->asServedPdpAddress[iCurPos],	p->sServedPdpAddress);
+		strcpy(pTarget->asSgsnChange[iCurPos],		p->sSgsnChange);
+		strcpy(pTarget->asCloseCause[iCurPos],		p->sCloseCause);
+		strcpy(pTarget->asResult[iCurPos],		p->sResult);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asVisitAreaCode[iCurPos],	p->sVisitAreaCode);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asFeeType[iCurPos],		p->sFeeType);
+		strcpy(pTarget->asRoamType[iCurPos],		p->sRoamType);
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asCallDuration[iCurPos],	p->sCallDuration);
+		strcpy(pTarget->asTariff1[iCurPos],		p->sTariff1);
+		strcpy(pTarget->asDataFlowup1[iCurPos],		p->sDataFlowup1);
+		strcpy(pTarget->asDataFlowdn1[iCurPos],		p->sDataFlowdn1);
+		strcpy(pTarget->asDuration1[iCurPos],		p->sDuration1);
+		strcpy(pTarget->asTariff2[iCurPos],		p->sTariff2);
+		strcpy(pTarget->asDataFlowup2[iCurPos],		p->sDataFlowup2);
+		strcpy(pTarget->asDataFlowdn2[iCurPos],		p->sDataFlowdn2);
+		strcpy(pTarget->asDuration2[iCurPos],		p->sDuration2);
+		strcpy(pTarget->asTariff3[iCurPos],		p->sTariff3);
+		strcpy(pTarget->asDataFlowup3[iCurPos],		p->sDataFlowup3);
+		strcpy(pTarget->asDataFlowdn3[iCurPos],		p->sDataFlowdn3);
+		strcpy(pTarget->asDuration3[iCurPos],		p->sDuration3);
+		strcpy(pTarget->asTariff4[iCurPos],		p->sTariff4);
+		strcpy(pTarget->asDataFlowup4[iCurPos],		p->sDataFlowup4);
+		strcpy(pTarget->asDataFlowdn4[iCurPos],		p->sDataFlowdn4);
+		strcpy(pTarget->asDuration4[iCurPos],		p->sDuration4);
+		strcpy(pTarget->asTariff5[iCurPos],		p->sTariff5);
+		strcpy(pTarget->asDataFlowup5[iCurPos],		p->sDataFlowup5);
+		strcpy(pTarget->asDataFlowdn5[iCurPos],		p->sDataFlowdn5);
+		strcpy(pTarget->asDuration5[iCurPos],		p->sDuration5);
+		strcpy(pTarget->asTariff6[iCurPos],		p->sTariff6);
+		strcpy(pTarget->asDataFlowup6[iCurPos],		p->sDataFlowup6);
+		strcpy(pTarget->asDataFlowdn6[iCurPos],		p->sDataFlowdn6);
+		strcpy(pTarget->asDuration6[iCurPos],		p->sDuration6);
+		strcpy(pTarget->asCfee[iCurPos],		p->sCfee);
+		strcpy(pTarget->asFee1[iCurPos],		p->sFee1);
+		strcpy(pTarget->asFee2[iCurPos],		p->sFee2);
+		strcpy(pTarget->asFee3[iCurPos],		p->sFee3);
+		strcpy(pTarget->asTotalFee[iCurPos],		p->sTotalFee);
+
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		strcpy(pTarget->asErrCode[iCurPos],	p->sErrCode);
+		strcpy(pTarget->asFileName[iCurPos],	p->sFileName);
+		strcpy(pTarget->asModule[iCurPos],	p->sModule);
+		strcpy(pTarget->asAreaCode[iCurPos],	p->sAreaCode);
+		strcpy(pTarget->asState[iCurPos],	p->sState);
+
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==GPRS_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				NI_PDP,\n\
+				MSISDN,\n\
+				IMSI,\n\
+				SGSN,\n\
+				MSNC,\n\
+				LAC,\n\
+				ROUTE_AREA,\n\
+				CELL_ID,\n\
+				CHARGING_ID,\n\
+				GGSN,\n\
+				APN_NI,\n\
+				APN_OI,\n\
+				PDP_TYPE,\n\
+				SERVED_PDP_ADDRESS,\n\
+				SGSN_CHANGE,\n\
+				CLOSE_CAUSE,\n\
+				RESULT,\n\
+				HOME_AREA_CODE,\n\
+				VISIT_AREA_CODE,\n\
+				USER_TYPE,\n\
+				FEE_TYPE,\n\
+				ROAM_TYPE,\n\
+				SERVICE_TYPE,\n\
+				START_TIME,\n\
+				CALL_DURATION,\n\
+				TARIFF1,\n\
+				DATA_FLOWUP1,\n\
+				DATA_FLOWDN1,\n\
+				DURATION1,\n\
+				TARIFF2,\n\
+				DATA_FLOWUP2,\n\
+				DATA_FLOWDN2,\n\
+				DURATION2,\n\
+				TARIFF3,\n\
+				DATA_FLOWUP3,\n\
+				DATA_FLOWDN3,\n\
+				DURATION3,\n\
+				TARIFF4,\n\
+				DATA_FLOWUP4,\n\
+				DATA_FLOWDN4,\n\
+				DURATION4,\n\
+				TARIFF5,\n\
+				DATA_FLOWUP5,\n\
+				DATA_FLOWDN5,\n\
+				DURATION5,\n\
+				TARIFF6,\n\
+				DATA_FLOWUP6,\n\
+				DATA_FLOWDN6,\n\
+				DURATION6,\n\
+				CFEE,\n\
+				FEE1,\n\
+				FEE2,\n\
+				FEE3,\n\
+				TOTAL_FEE,\n\
+				TICKET_TYPE_ID,\n\
+				ERR_CODE,\n\
+				FILE_NAME,\n\
+				MODULE,\n\
+				AREA_CODE,\n\
+				STATE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asNiPdp,\n\
+				:asMsisdn,\n\
+				:asImsi,\n\
+				:asSgsn,\n\
+				:asMsnc,\n\
+				:asLac,\n\
+				:asRouteArea,\n\
+				:asCellID,\n\
+				:asChargingID,\n\
+				:asGgsn,\n\
+				:asApnNi,\n\
+				:asApnOi,\n\
+				:asPdpType,\n\
+				:asServedPdpAddress,\n\
+				:asSgsnChange,\n\
+				:asCloseCause,\n\
+				:asResult,\n\
+				:asHomeAreaCode,\n\
+				:asVisitAreaCode,\n\
+				:asUserType,\n\
+				:asFeeType,\n\
+				:asRoamType,\n\
+				:asServiceType,\n\
+				:asStartTime,\n\
+				:asCallDuration,\n\
+				:asTariff1,\n\
+				:asDataFlowup1,\n\
+				:asDataFlowdn1,\n\
+				:asDuration1,\n\
+				:asTariff2,\n\
+				:asDataFlowup2,\n\
+				:asDataFlowdn2,\n\
+				:asDuration2,\n\
+				:asTariff3,\n\
+				:asDataFlowup3,\n\
+				:asDataFlowdn3,\n\
+				:asDuration3,\n\
+				:asTariff4,\n\
+				:asDataFlowup4,\n\
+				:asDataFlowdn4,\n\
+				:asDuration4,\n\
+				:asTariff5,\n\
+				:asDataFlowup5,\n\
+				:asDataFlowdn5,\n\
+				:asDuration5,\n\
+				:asTariff6,\n\
+				:asDataFlowup6,\n\
+				:asDataFlowdn6,\n\
+				:asDuration6,\n\
+				:asCfee,\n\
+				:asFee1,\n\
+				:asFee2,\n\
+				:asFee3,\n\
+				:asTotalFee,\n\
+				:aiTicketTypeID,\n\
+				:asErrCode,\n\
+				:asFileName,\n\
+				:asModule,\n\
+				:asAreaCode,\n\
+				:asState,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+/*	printf(".%s.",statement);
+	printf("strlen=%d.\n",strlen(statement));*/
+		EXEC SQL PREPARE GPRS_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement GPRS_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE GPRS_TICKETTRG USING
+				:pTarget->asRecordType,
+				:pTarget->asNiPdp,
+				:pTarget->asMsisdn,
+				:pTarget->asImsi,
+				:pTarget->asSgsn,
+				:pTarget->asMsnc,
+				:pTarget->asLac,
+				:pTarget->asRouteArea,
+				:pTarget->asCellID,
+				:pTarget->asChargingID,
+				:pTarget->asGgsn,
+				:pTarget->asApnNi,
+				:pTarget->asApnOi,
+				:pTarget->asPdpType,
+				:pTarget->asServedPdpAddress,
+				:pTarget->asSgsnChange,
+				:pTarget->asCloseCause,
+				:pTarget->asResult,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asVisitAreaCode,
+				:pTarget->asUserType,
+				:pTarget->asFeeType,
+				:pTarget->asRoamType,
+				:pTarget->asServiceType,
+				:pTarget->asStartTime,
+				:pTarget->asCallDuration,
+				:pTarget->asTariff1,
+				:pTarget->asDataFlowup1,
+				:pTarget->asDataFlowdn1,
+				:pTarget->asDuration1,
+				:pTarget->asTariff2,
+				:pTarget->asDataFlowup2,
+				:pTarget->asDataFlowdn2,
+				:pTarget->asDuration2,
+				:pTarget->asTariff3,
+				:pTarget->asDataFlowup3,
+				:pTarget->asDataFlowdn3,
+				:pTarget->asDuration3,
+				:pTarget->asTariff4,
+				:pTarget->asDataFlowup4,
+				:pTarget->asDataFlowdn4,
+				:pTarget->asDuration4,
+				:pTarget->asTariff5,
+				:pTarget->asDataFlowup5,
+				:pTarget->asDataFlowdn5,
+				:pTarget->asDuration5,
+				:pTarget->asTariff6,
+				:pTarget->asDataFlowup6,
+				:pTarget->asDataFlowdn6,
+				:pTarget->asDuration6,
+				:pTarget->asCfee,
+				:pTarget->asFee1,
+				:pTarget->asFee2,
+				:pTarget->asFee3,
+				:pTarget->asTotalFee,
+				:pTarget->aiTicketTypeID,
+				:pTarget->asErrCode,
+				:pTarget->asFileName,
+				:pTarget->asModule,
+				:pTarget->asAreaCode,
+				:pTarget->asState,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into GPRS_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入CDMA_TICKET*/
+int EInsertStructToCdmaTicket(struct CdmaTicketStruct *p,
+	int iInsertFlag,struct CdmaTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asImsi[iCurPos],		p->sImsi);
+		strcpy(pTarget->asEsn[iCurPos],			p->sEsn);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asMsrn[iCurPos],		p->sMsrn);
+		strcpy(pTarget->asThirdParty[iCurPos],		p->sThirdParty);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asDuration[iCurPos],		p->sDuration);
+		strcpy(pTarget->asMsc[iCurPos],			p->sMsc);
+		strcpy(pTarget->asLac[iCurPos],			p->sLac);
+		strcpy(pTarget->asCellID[iCurPos],		p->sCellID);
+		strcpy(pTarget->asOtherLac[iCurPos],		p->sOtherLac);
+		strcpy(pTarget->asOtherCellID[iCurPos],		p->sOtherCellID);
+		strcpy(pTarget->asAppendServiceCode[iCurPos],	p->sAppendServiceCode);
+		strcpy(pTarget->asEndReason[iCurPos],		p->sEndReason);
+		strcpy(pTarget->asDeformityFlag[iCurPos],	p->sDeformityFlag);
+		strcpy(pTarget->asRoamFee[iCurPos],		p->sRoamFee);
+		strcpy(pTarget->asRoamDuration[iCurPos],	p->sRoamDuration);
+		strcpy(pTarget->asRoamRateType[iCurPos],	p->sRoamRateType);
+		strcpy(pTarget->asTollFee[iCurPos],		p->sTollFee);
+		strcpy(pTarget->asTollDuration[iCurPos],	p->sTollDuration);
+		strcpy(pTarget->asTollFeeType[iCurPos],		p->sTollFeeType);
+		strcpy(pTarget->asInfoFee[iCurPos],		p->sInfoFee);
+		strcpy(pTarget->asOtherFee[iCurPos],		p->sOtherFee);
+		strcpy(pTarget->asOppCityCode[iCurPos],		p->sOppCityCode);
+		strcpy(pTarget->asOppProvCode[iCurPos],		p->sOppProvCode);
+		strcpy(pTarget->asOppCountryCode[iCurPos],	p->sOppCountryCode);
+		strcpy(pTarget->asTollType[iCurPos],		p->sTollType);
+		strcpy(pTarget->asTollNetType[iCurPos],		p->sTollNetType);
+		strcpy(pTarget->asRoamType[iCurPos],		p->sRoamType);
+		strcpy(pTarget->asVisitCityCode[iCurPos],	p->sVisitCityCode);
+		strcpy(pTarget->asTrunkIn[iCurPos],		p->sTrunkIn);
+		strcpy(pTarget->asTrunkOut[iCurPos],		p->sTrunkOut);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asActCode[iCurPos],		p->sActCode);
+		strcpy(pTarget->asServiceCode[iCurPos],		p->sServiceCode);
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==CDMA_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				MSISDN,\n\
+				IMSI,\n\
+				ESN,\n\
+				OTHER_PARTY,\n\
+				MSRN,\n\
+				THIRD_PARTY,\n\
+				START_TIME,\n\
+				DURATION,\n\
+				MSC,\n\
+				LAC,\n\
+				CELL_ID,\n\
+				OTHER_LAC,\n\
+				OTHER_CELL_ID,\n\
+				APPEND_SERVICE_CODE,\n\
+				END_REASON,\n\
+				DEFORMITY_FLAG,\n\
+				ROAM_FEE,\n\
+				ROAM_DURATION,\n\
+				ROAM_RATE_TYPE,\n\
+				TOLL_FEE,\n\
+				TOLL_DURATION,\n\
+				TOLL_FEE_TYPE,\n\
+				INFO_FEE,\n\
+				OTHER_FEE,\n\
+				OPP_CITY_CODE,\n\
+				OPP_PROV_CODE,\n\
+				OPP_COUNTRY_CODE,\n\
+				TOLL_TYPE,\n\
+				TOLL_NET_TYPE,\n\
+				ROAM_TYPE,\n\
+				VISIT_CITY_CODE,\n\
+				TRUNK_IN,\n\
+				TRUNK_OUT,\n\
+				USER_TYPE,\n\
+				ACT_CODE,\n\
+				SERVICE_CODE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asMsisdn,\n\
+				:asImsi,\n\
+				:asEsn,\n\
+				:asOtherParty,\n\
+				:asMsrn,\n\
+				:asThirdParty,\n\
+				:asStartTime,\n\
+				:asDuration,\n\
+				:asMsc,\n\
+				:asLac,\n\
+				:asCellID,\n\
+				:asOtherLac,\n\
+				:asOtherCellID,\n\
+				:asAppendServiceCode,\n\
+				:asEndReason,\n\
+				:asDeformityFlag,\n\
+				:asRoamFee,\n\
+				:asRoamDuration,\n\
+				:asRoamRateType,\n\
+				:asTollFee,\n\
+				:asTollDuration,\n\
+				:asTollFeeType,\n\
+				:asInfoFee,\n\
+				:asOtherFee,\n\
+				:asOppCityCode,\n\
+				:asOppProvCode,\n\
+				:asOppCountryCode,\n\
+				:asTollType,\n\
+				:asTollNetType,\n\
+				:asRoamType,\n\
+				:asVisitCityCode,\n\
+				:asTrunkIn,\n\
+				:asTrunkOut,\n\
+				:asUserType,\n\
+				:asActCode,\n\
+				:asServiceCode,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE CDMA_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement CDMA_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE CDMA_TICKETTRG USING
+				:pTarget->asRecordType,
+				:pTarget->asMsisdn,
+				:pTarget->asImsi,
+				:pTarget->asEsn,
+				:pTarget->asOtherParty,
+				:pTarget->asMsrn,
+				:pTarget->asThirdParty,
+				:pTarget->asStartTime,
+				:pTarget->asDuration,
+				:pTarget->asMsc,
+				:pTarget->asLac,
+				:pTarget->asCellID,
+				:pTarget->asOtherLac,
+				:pTarget->asOtherCellID,
+				:pTarget->asAppendServiceCode,
+				:pTarget->asEndReason,
+				:pTarget->asDeformityFlag,
+				:pTarget->asRoamFee,
+				:pTarget->asRoamDuration,
+				:pTarget->asRoamRateType,
+				:pTarget->asTollFee,
+				:pTarget->asTollDuration,
+				:pTarget->asTollFeeType,
+				:pTarget->asInfoFee,
+				:pTarget->asOtherFee,
+				:pTarget->asOppCityCode,
+				:pTarget->asOppProvCode,
+				:pTarget->asOppCountryCode,
+				:pTarget->asTollType,
+				:pTarget->asTollNetType,
+				:pTarget->asRoamType,
+				:pTarget->asVisitCityCode,
+				:pTarget->asTrunkIn,
+				:pTarget->asTrunkOut,
+				:pTarget->asUserType,
+				:pTarget->asActCode,
+				:pTarget->asServiceCode,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into CDMA_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入CDMA1X_TICKET*/
+int EInsertStructToCdma1xTicket(struct Cdma1xTicketStruct *p,
+	int iInsertFlag,struct Cdma1xTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],			p->sRecordType);
+		strcpy(pTarget->asSeqNumber[iCurPos],			p->sSeqNumber);
+		strcpy(pTarget->asMdn[iCurPos],				p->sMdn);
+		strcpy(pTarget->asMsisdn[iCurPos],			p->sMsisdn);
+		strcpy(pTarget->asEsn[iCurPos],				p->sEsn);
+		strcpy(pTarget->asIp[iCurPos],				p->sIp);
+		strcpy(pTarget->asNai[iCurPos],				p->sNai);
+		strcpy(pTarget->asUserType[iCurPos],			p->sUserType);
+		strcpy(pTarget->asNaiAreaCode[iCurPos],			p->sNaiAreaCode);
+		strcpy(pTarget->asRoamType[iCurPos],			p->sRoamType);
+		strcpy(pTarget->asIpTechType[iCurPos],			p->sIpTechType);
+		strcpy(pTarget->asAccountSessionID[iCurPos],		p->sAccountSessionID);
+		strcpy(pTarget->asCorrelationID[iCurPos],		p->sCorrelationID);
+		strcpy(pTarget->asHaip[iCurPos],			p->sHaip);
+		strcpy(pTarget->asPdsnip[iCurPos],			p->sPdsnip);
+		strcpy(pTarget->asPcfip[iCurPos],			p->sPcfip);
+		strcpy(pTarget->asBsid[iCurPos],			p->sBsid);
+		strcpy(pTarget->asUzid[iCurPos],			p->sUzid);
+		strcpy(pTarget->asServiceOption[iCurPos],		p->sServiceOption);
+		strcpy(pTarget->asCompulsoryTunnel[iCurPos],		p->sCompulsoryTunnel);
+		strcpy(pTarget->asEndRelease[iCurPos],			p->sEndRelease);
+		strcpy(pTarget->asDataCountTermination[iCurPos],	p->sDataCountTermination);
+		strcpy(pTarget->asDataCountOrigination[iCurPos],	p->sDataCountOrigination);
+		strcpy(pTarget->asBadFrameCount[iCurPos],		p->sBadFrameCount);
+		strcpy(pTarget->asStartTime[iCurPos],			p->sStartTime);
+		strcpy(pTarget->asStopTime[iCurPos],			p->sStopTime);
+		strcpy(pTarget->asActiveTime[iCurPos],			p->sActiveTime);
+		strcpy(pTarget->asActionCount[iCurPos],			p->sActionCount);
+		strcpy(pTarget->asSdbCountTermination[iCurPos],		p->sSdbCountTermination);
+		strcpy(pTarget->asSdbCountOrigination[iCurPos],		p->sSdbCountOrigination);
+		strcpy(pTarget->asSdbTerminationnum[iCurPos],		p->sSdbTerminationnum);
+		strcpy(pTarget->asSdbOriginationnum[iCurPos],		p->sSdbOriginationnum);
+		strcpy(pTarget->asPdsnReceiveNum[iCurPos],		p->sPdsnReceiveNum);
+		strcpy(pTarget->asMipReceiveNum[iCurPos],		p->sMipReceiveNum);
+		strcpy(pTarget->asMipSendNum[iCurPos],			p->sMipSendNum);
+		strcpy(pTarget->asIpqos[iCurPos],			p->sIpqos);
+		strcpy(pTarget->asAirlinkqos[iCurPos],			p->sAirlinkqos);
+
+		pTarget->aiBaseCharge[iCurPos]=				p->iBaseCharge;
+		pTarget->aiFluxCharge[iCurPos]=				p->iFluxCharge;
+		pTarget->aiOtherCharge[iCurPos]=			p->iOtherCharge;
+
+		strcpy(pTarget->asHomeCountryCode[iCurPos],		p->sHomeCountryCode);
+		strcpy(pTarget->asHomeOperatorCode[iCurPos],		p->sHomeOperatorCode);
+		strcpy(pTarget->asVisitCountryCode[iCurPos],		p->sVisitCountryCode);
+		strcpy(pTarget->asVisitOperatoCode[iCurPos],		p->sVisitOperatoCode);
+		strcpy(pTarget->asRatingRuleID[iCurPos],		p->sRatingRuleID);
+		strcpy(pTarget->asNoused1[iCurPos],			p->sNoused1);
+		strcpy(pTarget->asNoused2[iCurPos],			p->sNoused2);
+		strcpy(pTarget->asNoused3[iCurPos],			p->sNoused3);
+
+		pTarget->aiTicketTypeID[iCurPos]=	p->iTicketTypeID;
+		strcpy(pTarget->asHomeAreaCode[iCurPos],p->sHomeAreaCode);
+		strcpy(pTarget->asErrCode[iCurPos],	p->sErrCode);
+		strcpy(pTarget->asFileName[iCurPos],	p->sFileName);
+		strcpy(pTarget->asModule[iCurPos],	p->sModule);
+		strcpy(pTarget->asAreaCode[iCurPos],	p->sAreaCode);
+		strcpy(pTarget->asState[iCurPos],	p->sState);
+
+		strcpy(pTarget->asUpdateDate[iCurPos],			p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],			p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],			p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==CDMA1X_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				SEQ_NUMBER,\n\
+				MDN,\n\
+				MSISDN,\n\
+				ESN,\n\
+				IP,\n\
+				NAI,\n\
+				USER_TYPE,\n\
+				NAI_AREA_CODE,\n\
+				ROAM_TYPE,\n\
+				IP_TECH_TYPE,\n\
+				ACCOUNT_SESSION_ID,\n\
+				CORRELATION_ID,\n\
+				HAIP,\n\
+				PDSNIP,\n\
+				PCFIP,\n\
+				BSID,\n\
+				UZID,\n\
+				SERVICE_OPTION,\n\
+				COMPULSORY_TUNNEL,\n\
+				END_RELEASE,\n\
+				DATA_COUNT_TERMINATION,\n\
+				DATA_COUNT_ORIGINATION,\n\
+				BAD_FRAME_COUNT,\n\
+				START_TIME,\n\
+				STOP_TIME,\n\
+				ACTIVE_TIME,\n\
+				ACTION_COUNT,\n\
+				SDB_COUNT_TERMINATION,\n\
+				SDB_COUNT_ORIGINATION,\n\
+				SDB_TERMINATIONNUM,\n\
+				SDB_ORIGINATIONNUM,\n\
+				PDSN_RECEIVE_NUM,\n\
+				MIP_RECEIVE_NUM,\n\
+				MIP_SEND_NUM,\n\
+				IPQOS,\n\
+				AIRLINKQOS,\n\
+				BASE_CHARGE,\n\
+				FLUX_CHARGE,\n\
+				OTHER_CHARGE,\n\
+				HOME_COUNTRY_CODE,\n\
+				HOME_OPERATOR_CODE,\n\
+				VISIT_COUNTRY_CODE,\n\
+				VISIT_OPERATO_CODE,\n\
+				RATING_RULE_ID,\n\
+				NOUSED1,\n\
+				NOUSED2,\n\
+				NOUSED3,\n\
+				TICKET_TYPE_ID,\n\
+				HOME_AREA_CODE,\n\
+				ERR_CODE,\n\
+				FILE_NAME,\n\
+				MODULE,\n\
+				AREA_CODE,\n\
+				STATE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asSeqNumber,\n\
+				:asMdn,\n\
+				:asMsisdn,\n\
+				:asEsn,\n\
+				:asIp,\n\
+				:asNai,\n\
+				:asUserType,\n\
+				:asNaiAreaCode,\n\
+				:asRoamType,\n\
+				:asIpTechType,\n\
+				:asAccountSessionID,\n\
+				:asCorrelationID,\n\
+				:asHaip,\n\
+				:asPdsnip,\n\
+				:asPcfip,\n\
+				:asBsid,\n\
+				:asUzid,\n\
+				:asServiceOption,\n\
+				:asCompulsoryTunnel,\n\
+				:asEndRelease,\n\
+				:asDataCountTermination,\n\
+				:asDataCountOrigination,\n\
+				:asBadFrameCount,\n\
+				:asStartTime,\n\
+				:asStopTime,\n\
+				:asActiveTime,\n\
+				:asActionCount,\n\
+				:asSdbCountTermination,\n\
+				:asSdbCountOrigination,\n\
+				:asSdbTerminationnum,\n\
+				:asSdbOriginationnum,\n\
+				:asPdsnReceiveNum,\n\
+				:asMipReceiveNum,\n\
+				:asMipSendNum,\n\
+				:asIpqos,\n\
+				:asAirlinkqos,\n\
+				:aiBaseCharge,\n\
+				:aiFluxCharge,\n\
+				:aiOtherCharge,\n\
+				:asHomeCountryCode,\n\
+				:asHomeOperatorCode,\n\
+				:asVisitCountryCode,\n\
+				:asVisitOperatoCode,\n\
+				:asRatingRuleID,\n\
+				:asNoused1,\n\
+				:asNoused2,\n\
+				:asNoused3,\n\
+				:aiTicketTypeID,\n\
+				:asHomeAreaCode,\n\
+				:asErrCode,\n\
+				:asFileName,\n\
+				:asModule,\n\
+				:asAreaCode,\n\
+				:asState,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE CDMA1X_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement CDMA1X_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE CDMA1X_TICKETTRG USING
+				:pTarget->asRecordType,
+				:pTarget->asSeqNumber,
+				:pTarget->asMdn,
+				:pTarget->asMsisdn,
+				:pTarget->asEsn,
+				:pTarget->asIp,
+				:pTarget->asNai,
+				:pTarget->asUserType,
+				:pTarget->asNaiAreaCode,
+				:pTarget->asRoamType,
+				:pTarget->asIpTechType,
+				:pTarget->asAccountSessionID,
+				:pTarget->asCorrelationID,
+				:pTarget->asHaip,
+				:pTarget->asPdsnip,
+				:pTarget->asPcfip,
+				:pTarget->asBsid,
+				:pTarget->asUzid,
+				:pTarget->asServiceOption,
+				:pTarget->asCompulsoryTunnel,
+				:pTarget->asEndRelease,
+				:pTarget->asDataCountTermination,
+				:pTarget->asDataCountOrigination,
+				:pTarget->asBadFrameCount,
+				:pTarget->asStartTime,
+				:pTarget->asStopTime,
+				:pTarget->asActiveTime,
+				:pTarget->asActionCount,
+				:pTarget->asSdbCountTermination,
+				:pTarget->asSdbCountOrigination,
+				:pTarget->asSdbTerminationnum,
+				:pTarget->asSdbOriginationnum,
+				:pTarget->asPdsnReceiveNum,
+				:pTarget->asMipReceiveNum,
+				:pTarget->asMipSendNum,
+				:pTarget->asIpqos,
+				:pTarget->asAirlinkqos,
+				:pTarget->aiBaseCharge,
+				:pTarget->aiFluxCharge,
+				:pTarget->aiOtherCharge,
+				:pTarget->asHomeCountryCode,
+				:pTarget->asHomeOperatorCode,
+				:pTarget->asVisitCountryCode,
+				:pTarget->asVisitOperatoCode,
+				:pTarget->asRatingRuleID,
+				:pTarget->asNoused1,
+				:pTarget->asNoused2,
+				:pTarget->asNoused3,
+				:pTarget->aiTicketTypeID,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asErrCode,
+				:pTarget->asFileName,
+				:pTarget->asModule,
+				:pTarget->asAreaCode,
+				:pTarget->asState,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into CDMA1X_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入GSM_TICKET_RATE*/
+int EInsertStructToGsmRateTicket(struct GsmRateTicketStruct *p,
+	int iInsertFlag,struct GsmRateTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asTicketID[iCurPos],			p->sTicketID);
+		strcpy(pTarget->asMsisdn[iCurPos],			p->sMsisdn);
+		strcpy(pTarget->asImsi[iCurPos],			p->sImsi);
+		strcpy(pTarget->asCityCode[iCurPos],			p->sCityCode);
+		strcpy(pTarget->asMonth[iCurPos],			p->sMonth);
+		strcpy(pTarget->asBillMonth[iCurPos],			p->sBillMonth);
+		strcpy(pTarget->asCallType[iCurPos],			p->sCallType);
+		strcpy(pTarget->asStartTime[iCurPos],			p->sStartTime);
+		strcpy(pTarget->asEndReason[iCurPos],			p->sEndReason);
+		strcpy(pTarget->asDeformFlag[iCurPos],			p->sDeformFlag);
+		strcpy(pTarget->asOtherParty[iCurPos],			p->sOtherParty);
+		strcpy(pTarget->asCalledCode[iCurPos],			p->sCalledCode);
+
+		pTarget->aiDuration[iCurPos]=				p->iDuration;
+
+		strcpy(pTarget->asMsc[iCurPos],				p->sMsc);
+		strcpy(pTarget->asCellID[iCurPos],			p->sCellID);
+		strcpy(pTarget->asOtherCellID[iCurPos],			p->sOtherCellID);
+		strcpy(pTarget->asTrunkIn[iCurPos],			p->sTrunkIn);
+		strcpy(pTarget->asTrunkOut[iCurPos],			p->sTrunkOut);
+		strcpy(pTarget->asTollType[iCurPos],			p->sTollType);
+		strcpy(pTarget->asRoamType[iCurPos],			p->sRoamType);
+		strcpy(pTarget->asTollNetType[iCurPos],			p->sTollNetType);
+		strcpy(pTarget->asValueAddBusi[iCurPos],		p->sValueAddBusi);
+		strcpy(pTarget->asGroupID[iCurPos],			p->sGroupID);
+		strcpy(pTarget->asSameGroupFlag[iCurPos],		p->sSameGroupFlag);
+		strcpy(pTarget->asHomeProvCode[iCurPos],		p->sHomeProvCode);
+		strcpy(pTarget->asVisitCityCode[iCurPos],		p->sVisitCityCode);
+		strcpy(pTarget->asThirdParty[iCurPos],			p->sThirdParty);
+		strcpy(pTarget->asBusiType[iCurPos],			p->sBusiType);
+		strcpy(pTarget->asBusiCode[iCurPos],			p->sBusiCode);
+		strcpy(pTarget->asBaseFee[iCurPos],			p->sBaseFee);
+		strcpy(pTarget->asTollFee[iCurPos],			p->sTollFee);
+		strcpy(pTarget->asTollAddFee[iCurPos],			p->sTollAddFee);
+		strcpy(pTarget->asOtherFee[iCurPos],			p->sOtherFee);
+		strcpy(pTarget->asRoamFee[iCurPos],			p->sRoamFee);
+		strcpy(pTarget->asAddFee[iCurPos],			p->sAddFee);
+		strcpy(pTarget->asDisctBaseFee[iCurPos],		p->sDisctBaseFee);
+		strcpy(pTarget->asDisctTollFee[iCurPos],		p->sDisctTollFee);
+		strcpy(pTarget->asDisctTollAddFee[iCurPos],		p->sDisctTollAddFee);
+		strcpy(pTarget->asDisctOtherFee[iCurPos],		p->sDisctOtherFee);
+		strcpy(pTarget->asSupplementActiveCode[iCurPos],	p->sSupplementActiveCode);
+		strcpy(pTarget->asSupplementCode[iCurPos],		p->sSupplementCode);
+		strcpy(pTarget->asFileSeq[iCurPos],			p->sFileSeq);
+		strcpy(pTarget->asCalledType[iCurPos],			p->sCalledType);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],		p->sHomeAreaCode);
+		strcpy(pTarget->asLac[iCurPos],				p->sLac);
+		strcpy(pTarget->asUserType[iCurPos],			p->sUserType);
+		strcpy(pTarget->asReserve[iCurPos],			p->sReserve);
+		strcpy(pTarget->asUpdateDate[iCurPos],			p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],			p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],			p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==GSM_TICKET_RATE_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				TICKET_ID,\n\
+				MSISDN,\n\
+				IMSI,\n\
+				CITY_CODE,\n\
+				MONTH,\n\
+				BILL_MONTH,\n\
+				CALL_TYPE,\n\
+				START_TIME,\n\
+				END_REASON,\n\
+				DEFORM_FLAG,\n\
+				OTHER_PARTY,\n\
+				CALLED_CODE,\n\
+				DURATION,\n\
+				MSC,\n\
+				CELL_ID,\n\
+				OTHER_CELL_ID,\n\
+				TRUNK_IN,\n\
+				TRUNK_OUT,\n\
+				TOLL_TYPE,\n\
+				ROAM_TYPE,\n\
+				TOLL_NET_TYPE,\n\
+				VALUE_ADD_BUSI,\n\
+				GROUP_ID,\n\
+				SAME_GROUP_FLAG,\n\
+				HOME_PROV_CODE,\n\
+				VISIT_CITY_CODE,\n\
+				THIRD_PARTY,\n\
+				BUSI_TYPE,\n\
+				BUSI_CODE,\n\
+				BASE_FEE,\n\
+				TOLL_FEE,\n\
+				TOLL_ADD_FEE,\n\
+				OTHER_FEE,\n\
+				ROAM_FEE,\n\
+				ADD_FEE,\n\
+				DISCT_BASE_FEE,\n\
+				DISCT_TOLL_FEE,\n\
+				DISCT_TOLL_ADD_FEE,\n\
+				DISCT_OTHER_FEE,\n\
+				SUPPLEMENT_ACTIVE_CODE,\n\
+				SUPPLEMENT_CODE,\n\
+				FILE_SEQ,\n\
+				CALLED_TYPE,\n\
+				HOME_AREA_CODE,\n\
+				LAC,\n\
+				USER_TYPE,\n\
+				RESERVE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asTicketID,\n\
+				:asMsisdn,\n\
+				:asImsi,\n\
+				:asCityCode,\n\
+				:asMonth,\n\
+				:asBillMonth,\n\
+				:asCallType,\n\
+				:asStartTime,\n\
+				:asEndReason,\n\
+				:asDeformFlag,\n\
+				:asOtherParty,\n\
+				:asCalledCode,\n\
+				:aiDuration,\n\
+				:asMsc,\n\
+				:asCellID,\n\
+				:asOtherCellID,\n\
+				:asTrunkIn,\n\
+				:asTrunkOut,\n\
+				:asTollType,\n\
+				:asRoamType,\n\
+				:asTollNetType,\n\
+				:asValueAddBusi,\n\
+				:asGroupID,\n\
+				:asSameGroupFlag,\n\
+				:asHomeProvCode,\n\
+				:asVisitCityCode,\n\
+				:asThirdParty,\n\
+				:asBusiType,\n\
+				:asBusiCode,\n\
+				:asBaseFee,\n\
+				:asTollFee,\n\
+				:asTollAddFee,\n\
+				:asOtherFee,\n\
+				:asRoamFee,\n\
+				:asAddFee,\n\
+				:asDisctBaseFee,\n\
+				:asDisctTollFee,\n\
+				:asDisctTollAddFee,\n\
+				:asDisctOtherFee,\n\
+				:asSupplementActiveCode,\n\
+				:asSupplementCode,\n\
+				:asFileSeq,\n\
+				:asCalledType,\n\
+				:asHomeAreaCode,\n\
+				:asLac,\n\
+				:asUserType,\n\
+				:asReserve,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE GSM_TICKET_RATETRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement GSM_TICKET_RATE")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE GSM_TICKET_RATETRG USING
+				:pTarget->asTicketID,
+				:pTarget->asMsisdn,
+				:pTarget->asImsi,
+				:pTarget->asCityCode,
+				:pTarget->asMonth,
+				:pTarget->asBillMonth,
+				:pTarget->asCallType,
+				:pTarget->asStartTime,
+				:pTarget->asEndReason,
+				:pTarget->asDeformFlag,
+				:pTarget->asOtherParty,
+				:pTarget->asCalledCode,
+				:pTarget->aiDuration,
+				:pTarget->asMsc,
+				:pTarget->asCellID,
+				:pTarget->asOtherCellID,
+				:pTarget->asTrunkIn,
+				:pTarget->asTrunkOut,
+				:pTarget->asTollType,
+				:pTarget->asRoamType,
+				:pTarget->asTollNetType,
+				:pTarget->asValueAddBusi,
+				:pTarget->asGroupID,
+				:pTarget->asSameGroupFlag,
+				:pTarget->asHomeProvCode,
+				:pTarget->asVisitCityCode,
+				:pTarget->asThirdParty,
+				:pTarget->asBusiType,
+				:pTarget->asBusiCode,
+				:pTarget->asBaseFee,
+				:pTarget->asTollFee,
+				:pTarget->asTollAddFee,
+				:pTarget->asOtherFee,
+				:pTarget->asRoamFee,
+				:pTarget->asAddFee,
+				:pTarget->asDisctBaseFee,
+				:pTarget->asDisctTollFee,
+				:pTarget->asDisctTollAddFee,
+				:pTarget->asDisctOtherFee,
+				:pTarget->asSupplementActiveCode,
+				:pTarget->asSupplementCode,
+				:pTarget->asFileSeq,
+				:pTarget->asCalledType,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asLac,
+				:pTarget->asUserType,
+				:pTarget->asReserve,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into GSM_TICKET_RATE")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMS_RATE_TICKET*/
+int EInsertStructToSmsRateTicket(struct SmsRateTicketStruct *p,
+	int iInsertFlag,struct SmsRateTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asCallingNbr[iCurPos],		p->sCallingNbr);
+		strcpy(pTarget->asCalledNbr[iCurPos],		p->sCalledNbr);
+		strcpy(pTarget->asBusiCode[iCurPos],		p->sBusiCode);
+		strcpy(pTarget->asFeeType[iCurPos],		p->sFeeType);
+
+		pTarget->aiMsgLen[iCurPos]=			p->iMsgLen;
+		pTarget->aiMsgCnt[iCurPos]=			p->iMsgCnt;
+
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+
+		pTarget->aiBaseFee[iCurPos]=			p->iBaseFee;
+		pTarget->aiInfoFee[iCurPos]=			p->iInfoFee;
+		pTarget->aiInfoFeeType[iCurPos]=		p->iInfoFeeType;
+
+		strcpy(pTarget->asOriFileName[iCurPos],		p->sOriFileName);
+		strcpy(pTarget->asReserve[iCurPos],		p->sReserve);
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SMS_RATE_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				CALL_TYPE,\n\
+				MSISDN,\n\
+				USER_TYPE,\n\
+				HOME_AREA_CODE,\n\
+				CALLING_NBR,\n\
+				CALLED_NBR,\n\
+				BUSI_CODE,\n\
+				FEE_TYPE,\n\
+				MSG_LEN,\n\
+				MSG_CNT,\n\
+				START_TIME,\n\
+				BASE_FEE,\n\
+				INFO_FEE,\n\
+				INFO_FEE_TYPE,\n\
+				ORI_FILE_NAME,\n\
+				RESERVE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asCallType,\n\
+				:asMsisdn,\n\
+				:asUserType,\n\
+				:asHomeAreaCode,\n\
+				:asCallingNbr,\n\
+				:asCalledNbr,\n\
+				:asBusiCode,\n\
+				:asFeeType,\n\
+				:aiMsgLen,\n\
+				:aiMsgCnt,\n\
+				:asStartTime,\n\
+				:aiBaseFee,\n\
+				:aiInfoFee,\n\
+				:aiInfoFeeType,\n\
+				:asOriFileName,\n\
+				:asReserve,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SMS_RATE_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SMS_RATE_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SMS_RATE_TICKETTRG USING
+				:pTarget->asRecordType,
+				:pTarget->asCallType,
+				:pTarget->asMsisdn,
+				:pTarget->asUserType,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asCallingNbr,
+				:pTarget->asCalledNbr,
+				:pTarget->asBusiCode,
+				:pTarget->asFeeType,
+				:pTarget->aiMsgLen,
+				:pTarget->aiMsgCnt,
+				:pTarget->asStartTime,
+				:pTarget->aiBaseFee,
+				:pTarget->aiInfoFee,
+				:pTarget->aiInfoFeeType,
+				:pTarget->asOriFileName,
+				:pTarget->asReserve,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into SMS_RATE_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMSUP_TICKET*/
+int EInsertStructToSmsupTicket(struct SmsupTicketStruct *p,
+	int iInsertFlag,struct SmsupTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asMsgType[iCurPos],		p->sMsgType);
+		strcpy(pTarget->asSpProvCode[iCurPos],		p->sSpProvCode);
+
+		pTarget->aiSmg[iCurPos]=			p->iSmg;
+		pTarget->aiSpCode[iCurPos]=			p->iSpCode;
+		pTarget->aiFwSmg[iCurPos]=			p->iFwSmg;
+
+		strcpy(pTarget->asFwSmgProv[iCurPos],		p->sFwSmgProv);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asMsgCnt[iCurPos],		p->sMsgCnt);
+		strcpy(pTarget->asBaseFee[iCurPos],		p->sBaseFee);
+		strcpy(pTarget->asInfoFee[iCurPos],		p->sInfoFee);
+		strcpy(pTarget->asHomeProvCode[iCurPos],	p->sHomeProvCode);
+		strcpy(pTarget->asFileType[iCurPos],		p->sFileType);
+		strcpy(pTarget->asReserve1[iCurPos],		p->sReserve1);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+		strcpy(pTarget->asCurFileName[iCurPos],		p->sCurFileName);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SMSUP_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				MSG_TYPE,\n\
+				SP_PROV_CODE,\n\
+				SMG,\n\
+				SP_CODE,\n\
+				FW_SMG,\n\
+				FW_SMG_PROV,\n\
+				START_TIME,\n\
+				MSG_CNT,\n\
+				BASE_FEE,\n\
+				INFO_FEE,\n\
+				HOME_PROV_CODE,\n\
+				FILE_TYPE,\n\
+				RESERVE1,\n\
+				STATE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID,\n\
+				CUR_FILE_NAME)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asMsgType,\n\
+				:asSpProvCode,\n\
+				:aiSmg,\n\
+				:aiSpCode,\n\
+				:aiFwSmg,\n\
+				:asFwSmgProv,\n\
+				:asStartTime,\n\
+				:asMsgCnt,\n\
+				to_number(:asBaseFee),\n\
+				to_number(:asInfoFee),\n\
+				:asHomeProvCode,\n\
+				:asFileType,\n\
+				:asReserve1,\n\
+				:asState,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID,\n\
+				:asCurFileName\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SMSUP_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SMSUP_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SMSUP_TICKETTRG USING
+				:pTarget->asRecordType,
+				:pTarget->asMsgType,
+				:pTarget->asSpProvCode,
+				:pTarget->aiSmg,
+				:pTarget->aiSpCode,
+				:pTarget->aiFwSmg,
+				:pTarget->asFwSmgProv,
+				:pTarget->asStartTime,
+				:pTarget->asMsgCnt,
+				:pTarget->asBaseFee,
+				:pTarget->asInfoFee,
+				:pTarget->asHomeProvCode,
+				:pTarget->asFileType,
+				:pTarget->asReserve1,
+				:pTarget->asState,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID,
+				:pTarget->asCurFileName;
+		if(CheckSqlResult("Dyn insert into SMSUP_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+int EInsertStructToSmsupIntfTicket(struct SmsupIntfTicketStruct *p,
+	int iInsertFlag,struct SmsupIntfTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asMsgType[iCurPos],		p->sMsgType);
+
+		pTarget->aiSpProvCode[iCurPos]=			p->iSpProvCode;
+		pTarget->aiSmg[iCurPos]=			p->iSmg;
+		pTarget->aiSpCode[iCurPos]=			p->iSpCode;
+		pTarget->aiFwSmg[iCurPos]=			p->iFwSmg;
+		pTarget->aiFwSmgProv[iCurPos]=		p->iFwSmgProv;
+
+		strcpy(pTarget->asMinStartTime[iCurPos],	p->sMinStartTime);
+		strcpy(pTarget->asMaxStartTime[iCurPos],	p->sMaxStartTime);
+		strcpy(pTarget->asMoCnt1[iCurPos],		p->sMoCnt1);
+		strcpy(pTarget->asMoCnt2[iCurPos],		p->sMoCnt2);
+		strcpy(pTarget->asMfCnt1[iCurPos],		p->sMfCnt1);
+		strcpy(pTarget->asMfCnt2[iCurPos],		p->sMfCnt2);
+		strcpy(pTarget->asFee1[iCurPos],		p->sFee1);
+		strcpy(pTarget->asFee2[iCurPos],		p->sFee2);
+
+		pTarget->aiHomeProvCode[iCurPos]=		p->iHomeProvCode;
+
+		strcpy(pTarget->asRoamFee1[iCurPos],		p->sRoamFee1);
+		strcpy(pTarget->asRoamFee2[iCurPos],		p->sRoamFee2);
+		strcpy(pTarget->asInfoFee1[iCurPos],		p->sInfoFee1);
+		strcpy(pTarget->asInfoFee2[iCurPos],		p->sInfoFee2);
+		strcpy(pTarget->asRoamNfee1[iCurPos],		p->sRoamNfee1);
+		strcpy(pTarget->asRoamNfee2[iCurPos],		p->sRoamNfee2);
+		strcpy(pTarget->asReserve1[iCurPos],		p->sReserve1);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SMSUP_INTF_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				MSG_TYPE,\n\
+				SP_PROV_CODE,\n\
+				SMG,\n\
+				SP_CODE,\n\
+				FW_SMG,\n\
+				FW_SMG_PROV,\n\
+				MIN_START_TIME,\n\
+				MAX_START_TIME,\n\
+				MO_CNT1,\n\
+				MO_CNT2,\n\
+				MF_CNT1,\n\
+				MF_CNT2,\n\
+				FEE1,\n\
+				FEE2,\n\
+				HOME_PROV_CODE,\n\
+				ROAM_FEE1,\n\
+				ROAM_FEE2,\n\
+				INFO_FEE1,\n\
+				INFO_FEE2,\n\
+				ROAM_NFEE1,\n\
+				ROAM_NFEE2,\n\
+				RESERVE1,\n\
+				STATE,\n\
+				DEAL_DATE,\n\
+				UPDATE_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asMsgType,\n\
+				:aiSpProvCode,\n\
+				:aiSmg,\n\
+				:aiSpCode,\n\
+				:aiFwSmg,\n\
+				:aiFwSmgProv,\n\
+				:asMinStartTime,\n\
+				:asMaxStartTime,\n\
+				:asMoCnt1,\n\
+				:asMoCnt2,\n\
+				:asMfCnt1,\n\
+				:asMfCnt2,\n\
+				to_number(:asFee1),\n\
+				to_number(:asFee2),\n\
+				:aiHomeProvCode,\n\
+				:asRoamFee1,\n\
+				:asRoamFee2,\n\
+				:asInfoFee1,\n\
+				:asInfoFee2,\n\
+				:asRoamNfee1,\n\
+				:asRoamNfee2,\n\
+				:asReserve1,\n\
+				:asState,\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SMSUP_INTF_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SMSUP_INTF_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SMSUP_INTF_TICKETTRG USING
+				:pTarget->asRecordType,
+				:pTarget->asMsgType,
+				:pTarget->aiSpProvCode,
+				:pTarget->aiSmg,
+				:pTarget->aiSpCode,
+				:pTarget->aiFwSmg,
+				:pTarget->aiFwSmgProv,
+				:pTarget->asMinStartTime,
+				:pTarget->asMaxStartTime,
+				:pTarget->asMoCnt1,
+				:pTarget->asMoCnt2,
+				:pTarget->asMfCnt1,
+				:pTarget->asMfCnt2,
+				:pTarget->asFee1,
+				:pTarget->asFee2,
+				:pTarget->aiHomeProvCode,
+				:pTarget->asRoamFee1,
+				:pTarget->asRoamFee2,
+				:pTarget->asInfoFee1,
+				:pTarget->asInfoFee2,
+				:pTarget->asRoamNfee1,
+				:pTarget->asRoamNfee2,
+				:pTarget->asReserve1,
+				:pTarget->asState,
+				:pTarget->asDealDate,
+				:pTarget->asUpdateDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into SMSUP_INTF_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入INFO_NBR_ACCT*/
+int EInsertStructToInfoNbrAcct(struct InfoNbrAcctStruct *p,
+	int iInsertFlag,struct InfoNbrAcctStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asCallingNbr[iCurPos],		p->sCallingNbr);
+		strcpy(pTarget->asSpAccNbr[iCurPos],		p->sSpAccNbr);
+		strcpy(pTarget->asSpServiceCode[iCurPos],	p->sSpServiceCode);
+
+		pTarget->aiCnt[iCurPos]=			p->iCnt;
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+		pTarget->aiFee[iCurPos]=			p->iFee;
+
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+
+		pTarget->aiCallingTypeID[iCurPos]=		p->iCallingTypeID;
+
+		strcpy(pTarget->asNetType[iCurPos],		p->sNetType);
+		strcpy(pTarget->asNotes[iCurPos],		p->sNotes);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==INFO_NBR_ACCT_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				TICKET_TYPE_ID,\n\
+				RECORD_TYPE,\n\
+				CALLING_NBR,\n\
+				SP_ACC_NBR,\n\
+				SP_SERVICE_CODE,\n\
+				CNT,\n\
+				DURATION,\n\
+				FEE,\n\
+				START_TIME,\n\
+				CALLING_TYPE_ID,\n\
+				NET_TYPE,\n\
+				NOTES,\n\
+				STATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:aiTicketTypeID,\n\
+				:asRecordType,\n\
+				:asCallingNbr,\n\
+				:asSpAccNbr,\n\
+				:asSpServiceCode,\n\
+				:aiCnt,\n\
+				:aiDuration,\n\
+				:aiFee,\n\
+				:asStartTime,\n\
+				:aiCallingTypeID,\n\
+				:asNetType,\n\
+				:asNotes,\n\
+				:asState,\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE INFO_NBR_ACCTTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement INFO_NBR_ACCT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE INFO_NBR_ACCTTRG USING
+				:pTarget->aiTicketTypeID,
+				:pTarget->asRecordType,
+				:pTarget->asCallingNbr,
+				:pTarget->asSpAccNbr,
+				:pTarget->asSpServiceCode,
+				:pTarget->aiCnt,
+				:pTarget->aiDuration,
+				:pTarget->aiFee,
+				:pTarget->asStartTime,
+				:pTarget->aiCallingTypeID,
+				:pTarget->asNetType,
+				:pTarget->asNotes,
+				:pTarget->asState,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into INFO_NBR_ACCT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入INFO_ACCT*/
+int EInsertStructToInfoAcct(struct InfoAcctStruct *p,
+	int iInsertFlag,struct InfoAcctStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		strcpy(pTarget->asProvinceID[iCurPos],		p->sProvinceID);
+		strcpy(pTarget->asAreaCode[iCurPos],		p->sAreaCode);
+
+		pTarget->aiTotalCnt[iCurPos]=			p->iTotalCnt;
+		pTarget->aiTotalFee[iCurPos]=			p->iTotalFee;
+		pTarget->aiValidCnt[iCurPos]=			p->iValidCnt;
+		pTarget->aiValidFee[iCurPos]=			p->iValidFee;
+		pTarget->aiInvalidCnt[iCurPos]=			p->iInvalidCnt;
+
+		strcpy(pTarget->asInvalidFee[iCurPos],		p->sInvalidFee);
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+		strcpy(pTarget->asSpCode[iCurPos],		p->sSpCode);
+
+		pTarget->aiFee[iCurPos]=			p->iFee;
+		pTarget->aiOweFee[iCurPos]=			p->iOweFee;
+
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==INFO_ACCT_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				TICKET_TYPE_ID,\n\
+				PROVINCE_ID,\n\
+				AREA_CODE,\n\
+				TOTAL_CNT,\n\
+				TOTAL_FEE,\n\
+				VALID_CNT,\n\
+				VALID_FEE,\n\
+				INVALID_CNT,\n\
+				INVALID_FEE,\n\
+				BILLING_CYCLE_ID,\n\
+				SP_CODE,\n\
+				FEE,\n\
+				OWE_FEE,\n\
+				STATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:aiTicketTypeID,\n\
+				:asProvinceID,\n\
+				:asAreaCode,\n\
+				:aiTotalCnt,\n\
+				:aiTotalFee,\n\
+				:aiValidCnt,\n\
+				:aiValidFee,\n\
+				:aiInvalidCnt,\n\
+				:asInvalidFee,\n\
+				:asBillingCycleID,\n\
+				:asSpCode,\n\
+				:aiFee,\n\
+				:aiOweFee,\n\
+				:asState,\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE INFO_ACCTTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement INFO_ACCT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE INFO_ACCTTRG USING
+				:pTarget->aiTicketTypeID,
+				:pTarget->asProvinceID,
+				:pTarget->asAreaCode,
+				:pTarget->aiTotalCnt,
+				:pTarget->aiTotalFee,
+				:pTarget->aiValidCnt,
+				:pTarget->aiValidFee,
+				:pTarget->aiInvalidCnt,
+				:pTarget->asInvalidFee,
+				:pTarget->asBillingCycleID,
+				:pTarget->asSpCode,
+				:pTarget->aiFee,
+				:pTarget->aiOweFee,
+				:pTarget->asState,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into INFO_ACCT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入ICC_TICKET*/
+int EInsertStructToIccTicket(struct IccTicketStruct *p,
+	int iInsertFlag,struct IccTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asProvinceCode[iCurPos],	p->sProvinceCode);
+		strcpy(pTarget->asCallAreaCode[iCurPos],	p->sCallAreaCode);
+		strcpy(pTarget->asCardID[iCurPos],		p->sCardID);
+		strcpy(pTarget->asCardProvinceCode[iCurPos],	p->sCardProvinceCode);
+		strcpy(pTarget->asCardAreaCode[iCurPos],	p->sCardAreaCode);
+		strcpy(pTarget->asCardAreaID[iCurPos],		p->sCardAreaID);
+		strcpy(pTarget->asCallingNbr[iCurPos],		p->sCallingNbr);
+		strcpy(pTarget->asCalledNbr[iCurPos],		p->sCalledNbr);
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+		pTarget->aiTotalFee[iCurPos]=			p->iTotalFee;
+
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+		strcpy(pTarget->asDistanceType[iCurPos],	p->sDistanceType);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==ICC_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				TICKET_TYPE_ID,\n\
+				RECORD_TYPE,\n\
+				PROVINCE_CODE,\n\
+				CALL_AREA_CODE,\n\
+				CARD_ID,\n\
+				CARD_PROVINCE_CODE,\n\
+				CARD_AREA_CODE,\n\
+				CARD_AREA_ID,\n\
+				CALLING_NBR,\n\
+				CALLED_NBR,\n\
+				BILLING_CYCLE_ID,\n\
+				START_TIME,\n\
+				DURATION,\n\
+				TOTAL_FEE,\n\
+				SERVICE_TYPE,\n\
+				DISTANCE_TYPE,\n\
+				STATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:aiTicketTypeID,\n\
+				:asRecordType,\n\
+				:asProvinceCode,\n\
+				:asCallAreaCode,\n\
+				:asCardID,\n\
+				:asCardProvinceCode,\n\
+				:asCardAreaCode,\n\
+				:asCardAreaID,\n\
+				:asCallingNbr,\n\
+				:asCalledNbr,\n\
+				:asBillingCycleID,\n\
+				:asStartTime,\n\
+				:aiDuration,\n\
+				:aiTotalFee,\n\
+				:asServiceType,\n\
+				:asDistanceType,\n\
+				:asState,\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE ICC_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement ICC_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE ICC_TICKETTRG USING
+				:pTarget->aiTicketTypeID,
+				:pTarget->asRecordType,
+				:pTarget->asProvinceCode,
+				:pTarget->asCallAreaCode,
+				:pTarget->asCardID,
+				:pTarget->asCardProvinceCode,
+				:pTarget->asCardAreaCode,
+				:pTarget->asCardAreaID,
+				:pTarget->asCallingNbr,
+				:pTarget->asCalledNbr,
+				:pTarget->asBillingCycleID,
+				:pTarget->asStartTime,
+				:pTarget->aiDuration,
+				:pTarget->aiTotalFee,
+				:pTarget->asServiceType,
+				:pTarget->asDistanceType,
+				:pTarget->asState,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into ICC_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入ZNW_TICKET*/
+int EInsertStructToZnwTicket(struct ZnwTicketStruct *p,
+	int iInsertFlag,struct ZnwTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asStreamNumber[iCurPos],	p->sStreamNumber);
+		strcpy(pTarget->asServiceKey[iCurPos],		p->sServiceKey);
+		strcpy(pTarget->asBillingMode[iCurPos],		p->sBillingMode);
+		strcpy(pTarget->asChargeRecordID[iCurPos],	p->sChargeRecordID);
+		strcpy(pTarget->asCallingNbr[iCurPos],		p->sCallingNbr);
+		strcpy(pTarget->asCalledNbr[iCurPos],		p->sCalledNbr);
+		strcpy(pTarget->asTranslatedNbr[iCurPos],	p->sTranslatedNbr);
+		strcpy(pTarget->asLocationNbr[iCurPos],		p->sLocationNbr);
+		strcpy(pTarget->asBillingFlag[iCurPos],		p->sBillingFlag);
+		strcpy(pTarget->asBillingNbr[iCurPos],		p->sBillingNbr);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asStopTime[iCurPos],		p->sStopTime);
+
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+		pTarget->aiTotalFee[iCurPos]=			p->iTotalFee;
+
+		strcpy(pTarget->asBearCapability[iCurPos],	p->sBearCapability);
+		strcpy(pTarget->asTariffClass[iCurPos],		p->sTariffClass);
+		strcpy(pTarget->asBillType[iCurPos],		p->sBillType);
+		strcpy(pTarget->asUserID[iCurPos],		p->sUserID);
+		strcpy(pTarget->asServiceNbr[iCurPos],		p->sServiceNbr);
+
+		pTarget->aiCount[iCurPos]=			p->iCount;
+		pTarget->aiBaseFee[iCurPos]=			p->iBaseFee;
+		pTarget->aiBountyFee[iCurPos]=			p->iBountyFee;
+		pTarget->aiAddFee[iCurPos]=			p->iAddFee;
+
+		strcpy(pTarget->asTransParam[iCurPos],		p->sTransParam);
+		strcpy(pTarget->asCallparttobecharger[iCurPos],	p->sCallparttobecharger);
+		strcpy(pTarget->asScpID[iCurPos],		p->sScpID);
+		strcpy(pTarget->asCauseOfCallend[iCurPos],	p->sCauseOfCallend);
+		strcpy(pTarget->asServiceModulator[iCurPos],	p->sServiceModulator);
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+		strcpy(pTarget->asCardID[iCurPos],		p->sCardID);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asCalledCode[iCurPos],		p->sCalledCode);
+		strcpy(pTarget->asBillingAreaCode[iCurPos],	p->sBillingAreaCode);
+		strcpy(pTarget->asCardAreaCode[iCurPos],	p->sCardAreaCode);
+		strcpy(pTarget->asDistanceType[iCurPos],	p->sDistanceType);
+		strcpy(pTarget->asOriFileName[iCurPos],		p->sOriFileName);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==ZNW_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				TICKET_TYPE_ID,\n\
+				RECORD_TYPE,\n\
+				STREAM_NUMBER,\n\
+				SERVICE_KEY,\n\
+				BILLING_MODE,\n\
+				CHARGE_RECORD_ID,\n\
+				CALLING_NBR,\n\
+				CALLED_NBR,\n\
+				TRANSLATED_NBR,\n\
+				LOCATION_NBR,\n\
+				BILLING_FLAG,\n\
+				BILLING_NBR,\n\
+				START_TIME,\n\
+				STOP_TIME,\n\
+				DURATION,\n\
+				TOTAL_FEE,\n\
+				BEAR_CAPABILITY,\n\
+				TARIFF_CLASS,\n\
+				BILL_TYPE,\n\
+				USER_ID,\n\
+				SERVICE_NBR,\n\
+				COUNT,\n\
+				BASE_FEE,\n\
+				BOUNTY_FEE,\n\
+				ADD_FEE,\n\
+				TRANS_PARAM,\n\
+				CALLPARTTOBECHARGER,\n\
+				SCP_ID,\n\
+				CAUSE_OF_CALLEND,\n\
+				SERVICE_MODULATOR,\n\
+				SERVICE_TYPE,\n\
+				CARD_ID,\n\
+				HOME_AREA_CODE,\n\
+				CALLED_CODE,\n\
+				BILLING_AREA_CODE,\n\
+				CARD_AREA_CODE,\n\
+				DISTANCE_TYPE,\n\
+				ORI_FILE_NAME,\n\
+				STATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:aiTicketTypeID,\n\
+				:asRecordType,\n\
+				:asStreamNumber,\n\
+				:asServiceKey,\n\
+				:asBillingMode,\n\
+				:asChargeRecordID,\n\
+				:asCallingNbr,\n\
+				:asCalledNbr,\n\
+				:asTranslatedNbr,\n\
+				:asLocationNbr,\n\
+				:asBillingFlag,\n\
+				:asBillingNbr,\n\
+				:asStartTime,\n\
+				:asStopTime,\n\
+				:aiDuration,\n\
+				:aiTotalFee,\n\
+				:asBearCapability,\n\
+				:asTariffClass,\n\
+				:asBillType,\n\
+				:asUserID,\n\
+				:asServiceNbr,\n\
+				:aiCount,\n\
+				:aiBaseFee,\n\
+				:aiBountyFee,\n\
+				:aiAddFee,\n\
+				:asTransParam,\n\
+				:asCallparttobecharger,\n\
+				:asScpID,\n\
+				:asCauseOfCallend,\n\
+				:asServiceModulator,\n\
+				:asServiceType,\n\
+				:asCardID,\n\
+				:asHomeAreaCode,\n\
+				:asCalledCode,\n\
+				:asBillingAreaCode,\n\
+				:asCardAreaCode,\n\
+				:asDistanceType,\n\
+				:asOriFileName,\n\
+				:asState,\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE ZNW_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement ZNW_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE ZNW_TICKETTRG USING
+				:pTarget->aiTicketTypeID,
+				:pTarget->asRecordType,
+				:pTarget->asStreamNumber,
+				:pTarget->asServiceKey,
+				:pTarget->asBillingMode,
+				:pTarget->asChargeRecordID,
+				:pTarget->asCallingNbr,
+				:pTarget->asCalledNbr,
+				:pTarget->asTranslatedNbr,
+				:pTarget->asLocationNbr,
+				:pTarget->asBillingFlag,
+				:pTarget->asBillingNbr,
+				:pTarget->asStartTime,
+				:pTarget->asStopTime,
+				:pTarget->aiDuration,
+				:pTarget->aiTotalFee,
+				:pTarget->asBearCapability,
+				:pTarget->asTariffClass,
+				:pTarget->asBillType,
+				:pTarget->asUserID,
+				:pTarget->asServiceNbr,
+				:pTarget->aiCount,
+				:pTarget->aiBaseFee,
+				:pTarget->aiBountyFee,
+				:pTarget->aiAddFee,
+				:pTarget->asTransParam,
+				:pTarget->asCallparttobecharger,
+				:pTarget->asScpID,
+				:pTarget->asCauseOfCallend,
+				:pTarget->asServiceModulator,
+				:pTarget->asServiceType,
+				:pTarget->asCardID,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asCalledCode,
+				:pTarget->asBillingAreaCode,
+				:pTarget->asCardAreaCode,
+				:pTarget->asDistanceType,
+				:pTarget->asOriFileName,
+				:pTarget->asState,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into ZNW_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMG_TICKET*/
+int EInsertStructToSmgTicket(struct SmgTicketStruct *p,
+	int iInsertFlag,struct SmgTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asMessageID[iCurPos],		p->sMessageID);
+		strcpy(pTarget->asSmsType[iCurPos],		p->sSmsType);
+		strcpy(pTarget->asSubType[iCurPos],		p->sSubType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asSpCode[iCurPos],		p->sSpCode);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asSpServiceCode[iCurPos],	p->sSpServiceCode);
+		strcpy(pTarget->asBillType[iCurPos],		p->sBillType);
+		strcpy(pTarget->asInfoFee[iCurPos],		p->sInfoFee);
+		strcpy(pTarget->asPriority[iCurPos],		p->sPriority);
+		strcpy(pTarget->asMsgLen[iCurPos],		p->sMsgLen);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asSmg[iCurPos],			p->sSmg);
+		strcpy(pTarget->asTsmg[iCurPos],		p->sTsmg);
+		strcpy(pTarget->asSmc[iCurPos],			p->sSmc);
+		strcpy(pTarget->asRecvDateTime[iCurPos],	p->sRecvDateTime);
+		strcpy(pTarget->asDoneDateTime[iCurPos],	p->sDoneDateTime);
+		strcpy(pTarget->asMsgID[iCurPos],		p->sMsgID);
+		strcpy(pTarget->asOppMsgID[iCurPos],		p->sOppMsgID);
+		strcpy(pTarget->asCallingNbr[iCurPos],		p->sCallingNbr);
+
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SMG_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				MESSAGE_ID,\n\
+				SMS_TYPE,\n\
+				SUB_TYPE,\n\
+				MSISDN,\n\
+				SP_CODE,\n\
+				OTHER_PARTY,\n\
+				SP_SERVICE_CODE,\n\
+				BILL_TYPE,\n\
+				INFO_FEE,\n\
+				PRIORITY,\n\
+				MSG_LEN,\n\
+				HOME_AREA_CODE,\n\
+				SMG,\n\
+				TSMG,\n\
+				SMC,\n\
+				RECV_DATE_TIME,\n\
+				DONE_DATE_TIME,\n\
+				MSG_ID,\n\
+				OPP_MSG_ID,\n\
+				CALLING_NBR,\n\
+				TICKET_TYPE_ID,\n\
+				STATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asMessageID,\n\
+				:asSmsType,\n\
+				:asSubType,\n\
+				:asMsisdn,\n\
+				:asSpCode,\n\
+				:asOtherParty,\n\
+				:asSpServiceCode,\n\
+				:asBillType,\n\
+				:asInfoFee,\n\
+				:asPriority,\n\
+				:asMsgLen,\n\
+				:asHomeAreaCode,\n\
+				:asSmg,\n\
+				:asTsmg,\n\
+				:asSmc,\n\
+				:asRecvDateTime,\n\
+				:asDoneDateTime,\n\
+				:asMsgID,\n\
+				:asOppMsgID,\n\
+				:asCallingNbr,\n\
+				:aiTicketTypeID,\n\
+				:asState,\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SMG_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SMG_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SMG_TICKETTRG USING
+				:pTarget->asMessageID,
+				:pTarget->asSmsType,
+				:pTarget->asSubType,
+				:pTarget->asMsisdn,
+				:pTarget->asSpCode,
+				:pTarget->asOtherParty,
+				:pTarget->asSpServiceCode,
+				:pTarget->asBillType,
+				:pTarget->asInfoFee,
+				:pTarget->asPriority,
+				:pTarget->asMsgLen,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asSmg,
+				:pTarget->asTsmg,
+				:pTarget->asSmc,
+				:pTarget->asRecvDateTime,
+				:pTarget->asDoneDateTime,
+				:pTarget->asMsgID,
+				:pTarget->asOppMsgID,
+				:pTarget->asCallingNbr,
+				:pTarget->aiTicketTypeID,
+				:pTarget->asState,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into SMG_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入RHJF_TICKET*/
+int EInsertStructToRhjfTicket(struct RhjfTicketStruct *p,
+	int iInsertFlag,struct RhjfTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asTicketType[iCurPos],		p->sTicketType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asDuration[iCurPos],		p->sDuration);
+		strcpy(pTarget->asMsc[iCurPos],			p->sMsc);
+		strcpy(pTarget->asTrunkIn[iCurPos],		p->sTrunkIn);
+		strcpy(pTarget->asTrunkOut[iCurPos],		p->sTrunkOut);
+		strcpy(pTarget->asBaseCharge[iCurPos],		p->sBaseCharge);
+		strcpy(pTarget->asLandCharge[iCurPos],		p->sLandCharge);
+		strcpy(pTarget->asOtherCharge[iCurPos],		p->sOtherCharge);
+		strcpy(pTarget->asLandType[iCurPos],		p->sLandType);
+		strcpy(pTarget->asVisitAreaCode[iCurPos],	p->sVisitAreaCode);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asCalledAreaCode[iCurPos],	p->sCalledAreaCode);
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==RHJF_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				CALL_TYPE,\n\
+				TICKET_TYPE,\n\
+				MSISDN,\n\
+				OTHER_PARTY,\n\
+				START_TIME,\n\
+				DURATION,\n\
+				MSC,\n\
+				TRUNK_IN,\n\
+				TRUNK_OUT,\n\
+				BASE_CHARGE,\n\
+				LAND_CHARGE,\n\
+				OTHER_CHARGE,\n\
+				LAND_TYPE,\n\
+				VISIT_AREA_CODE,\n\
+				HOME_AREA_CODE,\n\
+				CALLED_AREA_CODE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asCallType,\n\
+				:asTicketType,\n\
+				:asMsisdn,\n\
+				:asOtherParty,\n\
+				:asStartTime,\n\
+				:asDuration,\n\
+				:asMsc,\n\
+				:asTrunkIn,\n\
+				:asTrunkOut,\n\
+				:asBaseCharge,\n\
+				:asLandCharge,\n\
+				:asOtherCharge,\n\
+				:asLandType,\n\
+				:asVisitAreaCode,\n\
+				:asHomeAreaCode,\n\
+				:asCalledAreaCode,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE RHJF_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement RHJF_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE RHJF_TICKETTRG USING
+				:pTarget->asCallType,
+				:pTarget->asTicketType,
+				:pTarget->asMsisdn,
+				:pTarget->asOtherParty,
+				:pTarget->asStartTime,
+				:pTarget->asDuration,
+				:pTarget->asMsc,
+				:pTarget->asTrunkIn,
+				:pTarget->asTrunkOut,
+				:pTarget->asBaseCharge,
+				:pTarget->asLandCharge,
+				:pTarget->asOtherCharge,
+				:pTarget->asLandType,
+				:pTarget->asVisitAreaCode,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asCalledAreaCode,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into RHJF_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMS_TICKET*/
+int EInsertStructToSmsTicket(struct SmsTicketStruct *p,
+	int iInsertFlag,struct SmsTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asCalledCode[iCurPos],		p->sCalledCode);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+
+		pTarget->aiMsgLen[iCurPos]=			p->iMsgLen;
+
+		strcpy(pTarget->asMsgID[iCurPos],		p->sMsgID);
+		strcpy(pTarget->asSmsc[iCurPos],		p->sSmsc);
+		strcpy(pTarget->asSmg[iCurPos],			p->sSmg);
+		strcpy(pTarget->asTsmg[iCurPos],		p->sTsmg);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asCalledType[iCurPos],		p->sCalledType);
+
+		strcpy(pTarget->asSpAccNbr[iCurPos],		p->sSpAccNbr);
+		strcpy(pTarget->asSpServiceCode[iCurPos],	p->sSpServiceCode);
+		strcpy(pTarget->asSpCode[iCurPos],		p->sSpCode);
+
+		pTarget->aiBaseFee[iCurPos]=			p->iBaseFee;
+		pTarget->aiInfoFee[iCurPos]=			p->iInfoFee;
+		pTarget->aiRentFee[iCurPos]=			p->iRentFee;
+		pTarget->aiOtherFee[iCurPos]=			p->iOtherFee;
+		pTarget->aiInFee[iCurPos]=			p->iInFee;
+		pTarget->aiOutFee[iCurPos]=			p->iOutFee;
+
+		strcpy(pTarget->asOriCallType[iCurPos],		p->sOriCallType);
+		strcpy(pTarget->asReserve[iCurPos],		p->sReserve);
+
+		strcpy(pTarget->asSpProvCode[iCurPos],		p->sSpProvCode);
+		strcpy(pTarget->asHomeProvCode[iCurPos],	p->sHomeProvCode);
+		strcpy(pTarget->asScpFlag[iCurPos],		p->sScpFlag);
+		pTarget->aiCallingTypeID[iCurPos]=		p->iCallingTypeID;
+		strcpy(pTarget->asBillType[iCurPos],		p->sBillType);
+
+
+		strcpy(pTarget->asErrCode[iCurPos],		p->sErrCode);
+		strcpy(pTarget->asFileName[iCurPos],		p->sFileName);
+		strcpy(pTarget->asModule[iCurPos],		p->sModule);
+		strcpy(pTarget->asAreaCode[iCurPos],		p->sAreaCode);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SMS_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				TICKET_TYPE_ID,\n\
+				CALL_TYPE,\n\
+				HOME_AREA_CODE,\n\
+				MSISDN,\n\
+				CALLED_CODE,\n\
+				OTHER_PARTY,\n\
+				START_TIME,\n\
+				MSG_LEN,\n\
+				MSG_ID,\n\
+				SMSC,\n\
+				SMG,\n\
+				TSMG,\n\
+				USER_TYPE,\n\
+				CALLED_TYPE,\n\
+				SP_ACC_NBR,\n\
+				SP_SERVICE_CODE,\n\
+				SP_CODE,\n\
+				BASE_FEE,\n\
+				INFO_FEE,\n\
+				RENT_FEE,\n\
+				OTHER_FEE,\n\
+				IN_FEE,\n\
+				OUT_FEE,\n\
+				ORI_CALL_TYPE,\n\
+				RESERVE,\n\
+				SP_PROV_CODE,\n\
+				HOME_PROV_CODE,\n\
+				SCP_FLAG,\n\
+				CALLING_TYPE_ID,\n\
+				BILL_TYPE,\n\
+				ERR_CODE,\n\
+				FILE_NAME,\n\
+				MODULE,\n\
+				AREA_CODE,\n\
+				STATE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:aiTicketTypeID,\n\
+				:asCallType,\n\
+				:asHomeAreaCode,\n\
+				:asMsisdn,\n\
+				:asCalledCode,\n\
+				:asOtherParty,\n\
+				:asStartTime,\n\
+				:aiMsgLen,\n\
+				:asMsgID,\n\
+				:asSmsc,\n\
+				:asSmg,\n\
+				:asTsmg,\n\
+				:asUserType,\n\
+				:asCalledType,\n\
+				:asSpAccNbr,\n\
+				:asSpServiceCode,\n\
+				:asSpCode,\n\
+				:aiBaseFee,\n\
+				:aiInfoFee,\n\
+				:aiRentFee,\n\
+				:aiOtherFee,\n\
+				:aiInFee,\n\
+				:aiOutFee,\n\
+				:asOriCallType,\n\
+				:asReserve,\n\
+				:asSpProvCode,\n\
+				:asHomeProvCode,\n\
+				:asScpFlag,\n\
+				:aiCallingTypeID,\n\
+				:asBillType,\n\
+				:asErrCode,\n\
+				:asFileName,\n\
+				:asModule,\n\
+				:asAreaCode,\n\
+				:asState,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+/*printf("statement=%s\n",statement);*/
+		EXEC SQL PREPARE SMS_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SMS_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SMS_TICKETTRG USING
+				:pTarget->aiTicketTypeID,
+				:pTarget->asCallType,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asMsisdn,
+				:pTarget->asCalledCode,
+				:pTarget->asOtherParty,
+				:pTarget->asStartTime,
+				:pTarget->aiMsgLen,
+				:pTarget->asMsgID,
+				:pTarget->asSmsc,
+				:pTarget->asSmg,
+				:pTarget->asTsmg,
+				:pTarget->asUserType,
+				:pTarget->asCalledType,
+				:pTarget->asSpAccNbr,
+				:pTarget->asSpServiceCode,
+				:pTarget->asSpCode,
+				:pTarget->aiBaseFee,
+				:pTarget->aiInfoFee,
+				:pTarget->aiRentFee,
+				:pTarget->aiOtherFee,
+				:pTarget->aiInFee,
+				:pTarget->aiOutFee,
+				:pTarget->asOriCallType,
+				:pTarget->asReserve,
+				:pTarget->asSpProvCode,
+				:pTarget->asHomeProvCode,
+				:pTarget->asScpFlag,
+				:pTarget->aiCallingTypeID,
+				:pTarget->asBillType,
+				:pTarget->asErrCode,
+				:pTarget->asFileName,
+				:pTarget->asModule,
+				:pTarget->asAreaCode,
+				:pTarget->asState,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into SMS_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入NSMS_TICKET*/
+int EInsertStructToNsmsTicket(struct NsmsTicketStruct *p,
+	int iInsertFlag,struct NsmsTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asCalledCode[iCurPos],		p->sCalledCode);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+
+		pTarget->aiMsgLen[iCurPos]=			p->iMsgLen;
+
+		strcpy(pTarget->asMsgID[iCurPos],		p->sMsgID);
+		strcpy(pTarget->asOppMsgID[iCurPos],		p->sOppMsgID);
+		strcpy(pTarget->asSubType[iCurPos],		p->sSubType);
+		strcpy(pTarget->asSmsc[iCurPos],		p->sSmsc);
+		strcpy(pTarget->asSmg[iCurPos],			p->sSmg);
+		strcpy(pTarget->asTsmg[iCurPos],		p->sTsmg);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asCalledType[iCurPos],		p->sCalledType);
+		strcpy(pTarget->asSpAccNbr[iCurPos],		p->sSpAccNbr);
+		strcpy(pTarget->asSpServiceCode[iCurPos],	p->sSpServiceCode);
+		strcpy(pTarget->asSpCode[iCurPos],		p->sSpCode);
+
+		pTarget->aiBaseFee[iCurPos]=			p->iBaseFee;
+		pTarget->aiInfoFee[iCurPos]=			p->iInfoFee;
+		pTarget->aiRentFee[iCurPos]=			p->iRentFee;
+		pTarget->aiOtherFee[iCurPos]=			p->iOtherFee;
+		pTarget->aiInFee[iCurPos]=			p->iInFee;
+		pTarget->aiOutFee[iCurPos]=			p->iOutFee;
+
+		strcpy(pTarget->asOriCallType[iCurPos],		p->sOriCallType);
+		strcpy(pTarget->asReserve[iCurPos],		p->sReserve);
+		strcpy(pTarget->asSpProvCode[iCurPos],		p->sSpProvCode);
+		strcpy(pTarget->asHomeProvCode[iCurPos],	p->sHomeProvCode);
+		strcpy(pTarget->asScpFlag[iCurPos],		p->sScpFlag);
+
+		pTarget->aiCallingTypeID[iCurPos]=		p->iCallingTypeID;
+
+		strcpy(pTarget->asBillType[iCurPos],		p->sBillType);
+		strcpy(pTarget->asErrCode[iCurPos],		p->sErrCode);
+		strcpy(pTarget->asFileName[iCurPos],		p->sFileName);
+		strcpy(pTarget->asModule[iCurPos],		p->sModule);
+		strcpy(pTarget->asAreaCode[iCurPos],		p->sAreaCode);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==NSMS_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				TICKET_TYPE_ID,\n\
+				CALL_TYPE,\n\
+				HOME_AREA_CODE,\n\
+				MSISDN,\n\
+				CALLED_CODE,\n\
+				OTHER_PARTY,\n\
+				START_TIME,\n\
+				MSG_LEN,\n\
+				MSG_ID,\n\
+				OPP_MSG_ID,\n\
+				SUB_TYPE,\n\
+				SMSC,\n\
+				SMG,\n\
+				TSMG,\n\
+				USER_TYPE,\n\
+				CALLED_TYPE,\n\
+				SP_ACC_NBR,\n\
+				SP_SERVICE_CODE,\n\
+				SP_CODE,\n\
+				BASE_FEE,\n\
+				INFO_FEE,\n\
+				RENT_FEE,\n\
+				OTHER_FEE,\n\
+				IN_FEE,\n\
+				OUT_FEE,\n\
+				ORI_CALL_TYPE,\n\
+				RESERVE,\n\
+				SP_PROV_CODE,\n\
+				HOME_PROV_CODE,\n\
+				SCP_FLAG,\n\
+				CALLING_TYPE_ID,\n\
+				BILL_TYPE,\n\
+				ERR_CODE,\n\
+				FILE_NAME,\n\
+				MODULE,\n\
+				AREA_CODE,\n\
+				STATE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:aiTicketTypeID,\n\
+				:asCallType,\n\
+				:asHomeAreaCode,\n\
+				:asMsisdn,\n\
+				:asCalledCode,\n\
+				:asOtherParty,\n\
+				:asStartTime,\n\
+				:aiMsgLen,\n\
+				:asMsgID,\n\
+				:asOppMsgID,\n\
+				:asSubType,\n\
+				:asSmsc,\n\
+				:asSmg,\n\
+				:asTsmg,\n\
+				:asUserType,\n\
+				:asCalledType,\n\
+				:asSpAccNbr,\n\
+				:asSpServiceCode,\n\
+				:asSpCode,\n\
+				:aiBaseFee,\n\
+				:aiInfoFee,\n\
+				:aiRentFee,\n\
+				:aiOtherFee,\n\
+				:aiInFee,\n\
+				:aiOutFee,\n\
+				:asOriCallType,\n\
+				:asReserve,\n\
+				:asSpProvCode,\n\
+				:asHomeProvCode,\n\
+				:asScpFlag,\n\
+				:aiCallingTypeID,\n\
+				:asBillType,\n\
+				:asErrCode,\n\
+				:asFileName,\n\
+				:asModule,\n\
+				:asAreaCode,\n\
+				:asState,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE NSMS_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement NSMS_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE NSMS_TICKETTRG USING
+				:pTarget->aiTicketTypeID,
+				:pTarget->asCallType,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asMsisdn,
+				:pTarget->asCalledCode,
+				:pTarget->asOtherParty,
+				:pTarget->asStartTime,
+				:pTarget->aiMsgLen,
+				:pTarget->asMsgID,
+				:pTarget->asOppMsgID,
+				:pTarget->asSubType,
+				:pTarget->asSmsc,
+				:pTarget->asSmg,
+				:pTarget->asTsmg,
+				:pTarget->asUserType,
+				:pTarget->asCalledType,
+				:pTarget->asSpAccNbr,
+				:pTarget->asSpServiceCode,
+				:pTarget->asSpCode,
+				:pTarget->aiBaseFee,
+				:pTarget->aiInfoFee,
+				:pTarget->aiRentFee,
+				:pTarget->aiOtherFee,
+				:pTarget->aiInFee,
+				:pTarget->aiOutFee,
+				:pTarget->asOriCallType,
+				:pTarget->asReserve,
+				:pTarget->asSpProvCode,
+				:pTarget->asHomeProvCode,
+				:pTarget->asScpFlag,
+				:pTarget->aiCallingTypeID,
+				:pTarget->asBillType,
+				:pTarget->asErrCode,
+				:pTarget->asFileName,
+				:pTarget->asModule,
+				:pTarget->asAreaCode,
+				:pTarget->asState,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into NSMS_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入TELECOM_TICKET*/
+int EInsertStructToTelecomTicket(struct TelecomTicketStruct *p,
+	int iInsertFlag,struct TelecomTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asCallingAreaCode[iCurPos],	p->sCallingAreaCode);
+		strcpy(pTarget->asCallingNbr[iCurPos],		p->sCallingNbr);
+		strcpy(pTarget->asCalledAreaCode[iCurPos],	p->sCalledAreaCode);
+		strcpy(pTarget->asCalledNbr[iCurPos],		p->sCalledNbr);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+		pTarget->aiCharge[iCurPos]=			p->iCharge;
+		pTarget->aiTalkTypeID[iCurPos]=			p->iTalkTypeID;
+
+		strcpy(pTarget->asOCallingNbr[iCurPos],		p->sOCallingNbr);
+		strcpy(pTarget->asOCalledNbr[iCurPos],		p->sOCalledNbr);
+		strcpy(pTarget->asTrunkIn[iCurPos],		p->sTrunkIn);
+		strcpy(pTarget->asTrunkOut[iCurPos],		p->sTrunkOut);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==TELECOM_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				CALLING_AREA_CODE,\n\
+				CALLING_NBR,\n\
+				CALLED_AREA_CODE,\n\
+				CALLED_NBR,\n\
+				START_TIME,\n\
+				DURATION,\n\
+				CHARGE,\n\
+				TALK_TYPE_ID,\n\
+				O_CALLING_NBR,\n\
+				O_CALLED_NBR,\n\
+				TRUNK_IN,\n\
+				TRUNK_OUT)\n\
+			VALUES (\n\
+				:asCallingAreaCode,\n\
+				:asCallingNbr,\n\
+				:asCalledAreaCode,\n\
+				:asCalledNbr,\n\
+				:asStartTime,\n\
+				:aiDuration,\n\
+				:aiCharge,\n\
+				:aiTalkTypeID,\n\
+				:asOCallingNbr,\n\
+				:asOCalledNbr,\n\
+				:asTrunkIn,\n\
+				:asTrunkOut\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE TELECOM_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement TELECOM_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE TELECOM_TICKETTRG USING
+				:pTarget->asCallingAreaCode,
+				:pTarget->asCallingNbr,
+				:pTarget->asCalledAreaCode,
+				:pTarget->asCalledNbr,
+				:pTarget->asStartTime,
+				:pTarget->aiDuration,
+				:pTarget->aiCharge,
+				:pTarget->aiTalkTypeID,
+				:pTarget->asOCallingNbr,
+				:pTarget->asOCalledNbr,
+				:pTarget->asTrunkIn,
+				:pTarget->asTrunkOut;
+		if(CheckSqlResult("Dyn insert into TELECOM_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMS_NBR_STAT*/
+int EInsertStructToSmsNbrStat(struct SmsNbrStatStruct *p,int iInsertFlag,
+	struct SmsNbrStatStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+		strcpy(pTarget->asTicketType[iCurPos],		p->sTicketType);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+
+		pTarget->aiTotalCommFee[iCurPos]=		p->iTotalCommFee;
+		pTarget->aiMoCnt[iCurPos]=			p->iMoCnt;
+		pTarget->aiMtCnt[iCurPos]=			p->iMtCnt;
+
+		strcpy(pTarget->asMinStartTime[iCurPos],	p->sMinStartTime);
+		strcpy(pTarget->asMaxStartTime[iCurPos],	p->sMaxStartTime);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asCreatedDate[iCurPos],		p->sCreatedDate);
+		strcpy(pTarget->asUpdatedDate[iCurPos],		p->sUpdatedDate);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SMS_NBR_STAT_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[4096];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\
+			INSERT INTO %s(\
+				BILLING_CYCLE_ID,\
+				TICKET_TYPE,\
+				USER_TYPE,\
+				MSISDN,\
+				TOTAL_COMM_FEE,\
+				MO_CNT,\
+				MT_CNT,\
+				MIN_START_TIME,\
+				MAX_START_TIME,\
+				HOME_AREA_CODE,\
+				CREATED_DATE,\
+				UPDATED_DATE)\
+			VALUES (\
+				:asBillingCycleID,\
+				:asTicketType,\
+				:asUserType,\
+				:asMsisdn,\
+				:aiTotalCommFee,\
+				:aiMoCnt,\
+				:aiMtCnt,\
+				:asMinStartTime,\
+				:asMaxStartTime,\
+				:asHomeAreaCode,\
+				to_date(:asCreatedDate,'yyyymmddhh24miss'),\
+				to_date(:asUpdatedDate,'yyyymmddhh24miss')\
+			)",sTableName);
+
+		EXEC SQL PREPARE SMS_NBR_STATTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SMS_NBR_STAT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SMS_NBR_STATTRG USING
+				:pTarget->asBillingCycleID,
+				:pTarget->asTicketType,
+				:pTarget->asUserType,
+				:pTarget->asMsisdn,
+				:pTarget->aiTotalCommFee,
+				:pTarget->aiMoCnt,
+				:pTarget->aiMtCnt,
+				:pTarget->asMinStartTime,
+				:pTarget->asMaxStartTime,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asCreatedDate,
+				:pTarget->asUpdatedDate;
+		if(CheckSqlResult("Dyn insert into SMS_NBR_STAT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMSP_NBR_RENT_STAT*/
+int EInsertStructToSmspNbrRentStat(struct SmspNbrRentStatStruct *p,
+	int iInsertFlag,struct SmspNbrRentStatStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asSpCode[iCurPos],		p->sSpCode);
+		strcpy(pTarget->asSpAccNbr[iCurPos],		p->sSpAccNbr);
+		strcpy(pTarget->asSpServiceCode[iCurPos],	p->sSpServiceCode);
+		strcpy(pTarget->asBillingType[iCurPos],		p->sBillingType);
+
+		pTarget->aiRentRate[iCurPos]=			p->iRentRate;
+
+		strcpy(pTarget->asMoFlag[iCurPos],		p->sMoFlag);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asCreatedDate[iCurPos],		p->sCreatedDate);
+		strcpy(pTarget->asUpdatedDate[iCurPos],		p->sUpdatedDate);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SMSP_NBR_RENT_STAT_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				BILLING_CYCLE_ID,\n\
+				USER_TYPE,\n\
+				MSISDN,\n\
+				SP_CODE,\n\
+				SP_ACC_NBR,\n\
+				SP_SERVICE_CODE,\n\
+				BILLING_TYPE,\n\
+				RENT_RATE,\n\
+				MO_FLAG,\n\
+				HOME_AREA_CODE,\n\
+				CREATED_DATE,\n\
+				UPDATED_DATE)\n\
+			VALUES (\n\
+				:asBillingCycleID,\n\
+				:asUserType,\n\
+				:asMsisdn,\n\
+				:asSpCode,\n\
+				:asSpAccNbr,\n\
+				:asSpServiceCode,\n\
+				:asBillingType,\n\
+				:aiRentRate,\n\
+				:asMoFlag,\n\
+				:asHomeAreaCode,\n\
+				to_date(:asCreatedDate,'yyyymmddhh24miss'),\n\
+				to_date(:asUpdatedDate,'yyyymmddhh24miss')\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SMSP_NBR_RENT_STATTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SMSP_NBR_RENT_STAT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SMSP_NBR_RENT_STATTRG USING
+				:pTarget->asBillingCycleID,
+				:pTarget->asUserType,
+				:pTarget->asMsisdn,
+				:pTarget->asSpCode,
+				:pTarget->asSpAccNbr,
+				:pTarget->asSpServiceCode,
+				:pTarget->asBillingType,
+				:pTarget->aiRentRate,
+				:pTarget->asMoFlag,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asCreatedDate,
+				:pTarget->asUpdatedDate;
+		if(CheckSqlResult("Dyn insert into SMSP_NBR_RENT_STAT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMS_NBR_STAT*/
+int EUpdateStructToUSmsNbrStat(struct USmsNbrStatStruct *p,
+	int iUpdateFlag,struct USmsNbrStatStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+		strcpy(pTarget->asTicketType[iCurPos],		p->sTicketType);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+
+		pTarget->aiTotalCommFee[iCurPos]=		p->iTotalCommFee;
+		pTarget->aiMoCnt[iCurPos]=			p->iMoCnt;
+		pTarget->aiMtCnt[iCurPos]=			p->iMtCnt;
+
+		strcpy(pTarget->asMinStartTime[iCurPos],	p->sMinStartTime);
+		strcpy(pTarget->asMaxStartTime[iCurPos],	p->sMaxStartTime);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asCreatedDate[iCurPos],		p->sCreatedDate);
+		strcpy(pTarget->asUpdatedDate[iCurPos],		p->sUpdatedDate);
+		strcpy(pTarget->asRowID[iCurPos],		p->sRowID);
+
+		iCurPos++;
+	}
+	if(iUpdateFlag==TRUE||iCurPos==SMS_NBR_STAT_BUFLEN_UP){
+
+/* Update */
+		char statement[4096];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE  %s \n\
+			SET \n\
+				TOTAL_COMM_FEE=	:aiTotalCommFee,\n\
+				MO_CNT=        	:aiMoCnt,\n\
+				MT_CNT=        	:aiMtCnt,\n\
+				MIN_START_TIME=	:asMinStartTime,\n\
+				MAX_START_TIME=	:asMaxStartTime,\n\
+				UPDATED_DATE=  	SYSDATE \n\
+			WHERE \n\
+				ROWID = chartorowid(:asRowID)\n\
+			",sTableName);
+
+		EXEC SQL PREPARE RSMS_NBR_STATTRG FROM :statement;
+		if(CheckSqlResult("Prepare update statement SMS_NBR_STAT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE RSMS_NBR_STATTRG USING
+				:pTarget->aiTotalCommFee,
+				:pTarget->aiMoCnt,
+				:pTarget->aiMtCnt,
+				:pTarget->asMinStartTime,
+				:pTarget->asMaxStartTime,
+				:pTarget->asRowID;
+		if(CheckSqlResult("Dyn update SMS_NBR_STAT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMSP_SP_STAT*/
+int EUpdateStructToUSmspSpStat(struct USmspSpStatStruct *p,
+	int iUpdateFlag,struct USmspSpStatStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asSpCode[iCurPos],		p->sSpCode);
+		strcpy(pTarget->asSpAccNbr[iCurPos],		p->sSpAccNbr);
+		strcpy(pTarget->asMinStartTime[iCurPos],	p->sMinStartTime);
+		strcpy(pTarget->asMaxStartTime[iCurPos],	p->sMaxStartTime);
+
+		pTarget->aiMoCnt[iCurPos]=			p->iMoCnt;
+		pTarget->aiMtCnt[iCurPos]=			p->iMtCnt;
+		pTarget->aiTotalCnt[iCurPos]=			p->iTotalCnt;
+		pTarget->aiTotalFee[iCurPos]=			p->iTotalFee;
+		pTarget->aiTotalInfoFee[iCurPos]=		p->iTotalInfoFee;
+		pTarget->aiTotalCommFee[iCurPos]=		p->iTotalCommFee;
+		pTarget->aiTotalRentFee[iCurPos]=		p->iTotalRentFee;
+
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asCreatedDate[iCurPos],		p->sCreatedDate);
+		strcpy(pTarget->asUpdatedDate[iCurPos],		p->sUpdatedDate);
+		strcpy(pTarget->asRowID[iCurPos],		p->sRowID);
+
+		iCurPos++;
+	}
+
+	if(iUpdateFlag==TRUE||iCurPos==SMSP_SP_STAT_BUFLEN_UP){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE  %s \n\
+			SET \n\
+				MIN_START_TIME=	:asMinStartTime,\n\
+				MAX_START_TIME=	:asMaxStartTime,\n\
+				MO_CNT=        	:aiMoCnt,\n\
+				MT_CNT=        	:aiMtCnt,\n\
+				TOTAL_CNT=	:aiTotalCnt,\n\
+				TOTAL_FEE=	:aiTotalFee,\n\
+				TOTAL_INFO_FEE=	:aiTotalInfoFee,\n\
+				TOTAL_COMM_FEE=	:aiTotalCommFee,\n\
+				TOTAL_RENT_FEE=	:aiTotalRentFee,\n\
+				UPDATED_DATE=  	SYSDATE \n\
+			WHERE \n\
+				ROWID = chartorowid(:asRowID)\n\
+			",sTableName);
+
+		EXEC SQL PREPARE USMSP_SP_STATTRG FROM :statement;
+		if(CheckSqlResult("Prepare update statement SMSP_SP_STAT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE USMSP_SP_STATTRG USING
+				:pTarget->asMinStartTime,
+				:pTarget->asMaxStartTime,
+				:pTarget->aiMoCnt,
+				:pTarget->aiMtCnt,
+				:pTarget->aiTotalCnt,
+				:pTarget->aiTotalFee,
+				:pTarget->aiTotalInfoFee,
+				:pTarget->aiTotalCommFee,
+				:pTarget->aiTotalRentFee,
+				:pTarget->asRowID;
+		if(CheckSqlResult("Dyn update SMSP_SP_STAT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMSP_SP_STAT*/
+int EInsertStructToSmspSpStat(struct SmspSpStatStruct *p,
+	int iInsertFlag,struct SmspSpStatStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asSpCode[iCurPos],		p->sSpCode);
+		strcpy(pTarget->asSpAccNbr[iCurPos],		p->sSpAccNbr);
+		strcpy(pTarget->asMinStartTime[iCurPos],	p->sMinStartTime);
+		strcpy(pTarget->asMaxStartTime[iCurPos],	p->sMaxStartTime);
+
+		pTarget->aiMoCnt[iCurPos]=			p->iMoCnt;
+		pTarget->aiMtCnt[iCurPos]=			p->iMtCnt;
+		pTarget->aiTotalCnt[iCurPos]=			p->iTotalCnt;
+		pTarget->aiTotalFee[iCurPos]=			p->iTotalFee;
+		pTarget->aiTotalInfoFee[iCurPos]=		p->iTotalInfoFee;
+		pTarget->aiTotalCommFee[iCurPos]=		p->iTotalCommFee;
+		pTarget->aiTotalRentFee[iCurPos]=		p->iTotalRentFee;
+
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asCreatedDate[iCurPos],		p->sCreatedDate);
+		strcpy(pTarget->asUpdatedDate[iCurPos],		p->sUpdatedDate);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SMSP_SP_STAT_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				BILLING_CYCLE_ID,\n\
+				USER_TYPE,\n\
+				SP_CODE,\n\
+				SP_ACC_NBR,\n\
+				MIN_START_TIME,\n\
+				MAX_START_TIME,\n\
+				MO_CNT,\n\
+				MT_CNT,\n\
+				TOTAL_CNT,\n\
+				TOTAL_FEE,\n\
+				TOTAL_INFO_FEE,\n\
+				TOTAL_COMM_FEE,\n\
+				TOTAL_RENT_FEE,\n\
+				HOME_AREA_CODE,\n\
+				CREATED_DATE,\n\
+				UPDATED_DATE)\n\
+			VALUES (\n\
+				:asBillingCycleID,\n\
+				:asUserType,\n\
+				:asSpCode,\n\
+				:asSpAccNbr,\n\
+				:asMinStartTime,\n\
+				:asMaxStartTime,\n\
+				:aiMoCnt,\n\
+				:aiMtCnt,\n\
+				:aiTotalCnt,\n\
+				:aiTotalFee,\n\
+				:aiTotalInfoFee,\n\
+				:aiTotalCommFee,\n\
+				:aiTotalRentFee,\n\
+				:asHomeAreaCode,\n\
+				to_date(:asCreatedDate,'yyyymmddhh24miss'),\n\
+				to_date(:asUpdatedDate,'yyyymmddhh24miss')\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SMSP_SP_STATTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SMSP_SP_STAT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SMSP_SP_STATTRG USING
+				:pTarget->asBillingCycleID,
+				:pTarget->asUserType,
+				:pTarget->asSpCode,
+				:pTarget->asSpAccNbr,
+				:pTarget->asMinStartTime,
+				:pTarget->asMaxStartTime,
+				:pTarget->aiMoCnt,
+				:pTarget->aiMtCnt,
+				:pTarget->aiTotalCnt,
+				:pTarget->aiTotalFee,
+				:pTarget->aiTotalInfoFee,
+				:pTarget->aiTotalCommFee,
+				:pTarget->aiTotalRentFee,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asCreatedDate,
+				:pTarget->asUpdatedDate;
+		if(CheckSqlResult("Dyn insert into SMSP_SP_STAT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMSP_NBR_STAT*/
+int EInsertStructToSmspNbrStat(struct SmspNbrStatStruct *p,
+	int iInsertFlag,struct SmspNbrStatStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+
+		pTarget->aiTotalFee[iCurPos]=			p->iTotalFee;
+		pTarget->aiTotalInfoFee[iCurPos]=		p->iTotalInfoFee;
+		pTarget->aiTotalCommFee[iCurPos]=		p->iTotalCommFee;
+		pTarget->aiTotalRentFee[iCurPos]=		p->iTotalRentFee;
+
+		strcpy(pTarget->asSpCode[iCurPos],		p->sSpCode);
+		strcpy(pTarget->asSpServiceCode[iCurPos],	p->sSpServiceCode);
+		strcpy(pTarget->asSpAccNbr[iCurPos],		p->sSpAccNbr);
+
+		pTarget->aiMoCnt[iCurPos]=			p->iMoCnt;
+		pTarget->aiMtCnt[iCurPos]=			p->iMtCnt;
+		pTarget->aiTotalCnt[iCurPos]=			p->iTotalCnt;
+
+		strcpy(pTarget->asMinStartTime[iCurPos],	p->sMinStartTime);
+		strcpy(pTarget->asMaxStartTime[iCurPos],	p->sMaxStartTime);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asCreatedDate[iCurPos],		p->sCreatedDate);
+		strcpy(pTarget->asUpdatedDate[iCurPos],		p->sUpdatedDate);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SMSP_NBR_STAT_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				TICKET_TYPE_ID,\n\
+				BILLING_CYCLE_ID,\n\
+				USER_TYPE,\n\
+				MSISDN,\n\
+				TOTAL_FEE,\n\
+				TOTAL_INFO_FEE,\n\
+				TOTAL_COMM_FEE,\n\
+				TOTAL_RENT_FEE,\n\
+				SP_CODE,\n\
+				SP_SERVICE_CODE,\n\
+				SP_ACC_NBR,\n\
+				MO_CNT,\n\
+				MT_CNT,\n\
+				TOTAL_CNT,\n\
+				MIN_START_TIME,\n\
+				MAX_START_TIME,\n\
+				HOME_AREA_CODE,\n\
+				CREATED_DATE,\n\
+				UPDATED_DATE)\n\
+			VALUES (\n\
+				:aiTicketTypeID,\n\
+				:asBillingCycleID,\n\
+				:asUserType,\n\
+				:asMsisdn,\n\
+				:aiTotalFee,\n\
+				:aiTotalInfoFee,\n\
+				:aiTotalCommFee,\n\
+				:aiTotalRentFee,\n\
+				:asSpCode,\n\
+				:asSpServiceCode,\n\
+				:asSpAccNbr,\n\
+				:aiMoCnt,\n\
+				:aiMtCnt,\n\
+				:aiTotalCnt,\n\
+				:asMinStartTime,\n\
+				:asMaxStartTime,\n\
+				:asHomeAreaCode,\n\
+				to_date(:asCreatedDate,'yyyymmddhh24miss'),\n\
+				to_date(:asUpdatedDate,'yyyymmddhh24miss')\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SMSP_NBR_STATTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SMSP_NBR_STAT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SMSP_NBR_STATTRG USING
+				:pTarget->aiTicketTypeID,
+				:pTarget->asBillingCycleID,
+				:pTarget->asUserType,
+				:pTarget->asMsisdn,
+				:pTarget->aiTotalFee,
+				:pTarget->aiTotalInfoFee,
+				:pTarget->aiTotalCommFee,
+				:pTarget->aiTotalRentFee,
+				:pTarget->asSpCode,
+				:pTarget->asSpServiceCode,
+				:pTarget->asSpAccNbr,
+				:pTarget->aiMoCnt,
+				:pTarget->aiMtCnt,
+				:pTarget->aiTotalCnt,
+				:pTarget->asMinStartTime,
+				:pTarget->asMaxStartTime,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asCreatedDate,
+				:pTarget->asUpdatedDate;
+		if(CheckSqlResult("Dyn insert into SMSP_NBR_STAT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SMSP_NBR_STAT*/
+int EUpdateStructToSmspNbrStat(struct USmspNbrStatStruct *p,
+	int iUpdateFlag,struct USmspNbrStatStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+
+		pTarget->aiTotalFee[iCurPos]=			p->iTotalFee;
+		pTarget->aiTotalInfoFee[iCurPos]=		p->iTotalInfoFee;
+		pTarget->aiTotalCommFee[iCurPos]=		p->iTotalCommFee;
+		pTarget->aiTotalRentFee[iCurPos]=		p->iTotalRentFee;
+
+		strcpy(pTarget->asSpCode[iCurPos],		p->sSpCode);
+		strcpy(pTarget->asSpServiceCode[iCurPos],	p->sSpServiceCode);
+		strcpy(pTarget->asSpAccNbr[iCurPos],		p->sSpAccNbr);
+
+		pTarget->aiMoCnt[iCurPos]=			p->iMoCnt;
+		pTarget->aiMtCnt[iCurPos]=			p->iMtCnt;
+		pTarget->aiTotalCnt[iCurPos]=			p->iTotalCnt;
+
+		strcpy(pTarget->asMinStartTime[iCurPos],	p->sMinStartTime);
+		strcpy(pTarget->asMaxStartTime[iCurPos],	p->sMaxStartTime);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asCreatedDate[iCurPos],		p->sCreatedDate);
+		strcpy(pTarget->asUpdatedDate[iCurPos],		p->sUpdatedDate);
+		strcpy(pTarget->asRowID[iCurPos],		p->sRowID);
+
+		iCurPos++;
+	}
+
+	if(iUpdateFlag==TRUE||iCurPos==SMSP_NBR_STAT_BUFLEN_UP){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE  %s \n\
+			SET \n\
+				MIN_START_TIME=	:asMinStartTime,\n\
+				MAX_START_TIME=	:asMaxStartTime,\n\
+				MO_CNT=        	:aiMoCnt,\n\
+				MT_CNT=        	:aiMtCnt,\n\
+				TOTAL_CNT=	:aiTotalCnt,\n\
+				TOTAL_FEE=	:aiTotalFee,\n\
+				TOTAL_INFO_FEE=	:aiTotalInfoFee,\n\
+				TOTAL_COMM_FEE=	:aiTotalCommFee,\n\
+				TOTAL_RENT_FEE=	:aiTotalRentFee,\n\
+				UPDATED_DATE=  	SYSDATE \n\
+			WHERE \n\
+				ROWID = chartorowid(:asRowID)\n\
+			",sTableName);
+
+		EXEC SQL PREPARE USMSP_NBR_STATTRG FROM :statement;
+		if(CheckSqlResult("Prepare update statement USMSP_NBR_STAT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE USMSP_NBR_STATTRG USING
+				:pTarget->asMinStartTime,
+				:pTarget->asMaxStartTime,
+				:pTarget->aiMoCnt,
+				:pTarget->aiMtCnt,
+				:pTarget->aiTotalCnt,
+				:pTarget->aiTotalFee,
+				:pTarget->aiTotalInfoFee,
+				:pTarget->aiTotalCommFee,
+				:pTarget->aiTotalRentFee,
+				:pTarget->asRowID;
+		if(CheckSqlResult("Dyn update SMSP_NBR_STAT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SP_ACCT_ITEM*/
+int EInsertStructToSpAcctItem(struct SpAcctItemStruct *p,
+	int iInsertFlag,struct SpAcctItemStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+		strcpy(pTarget->asPayCycleID[iCurPos],		p->sPayCycleID);
+		strcpy(pTarget->asSpCode[iCurPos],		p->sSpCode);
+		strcpy(pTarget->asSpServiceCode[iCurPos],	p->sSpServiceCode);
+		strcpy(pTarget->asCharge[iCurPos],		p->sCharge);
+
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		strcpy(pTarget->asServiceCode[iCurPos],		p->sServiceCode);
+		strcpy(pTarget->asPayTime[iCurPos],		p->sPayTime);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SP_ACCT_ITEM_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				MSISDN,\n\
+				BILLING_CYCLE_ID,\n\
+				PAY_CYCLE_ID,\n\
+				SP_CODE,\n\
+				SP_SERVICE_CODE,\n\
+				CHARGE,\n\
+				TICKET_TYPE_ID,\n\
+				SERVICE_CODE,\n\
+				PAY_TIME)\n\
+			VALUES (\n\
+				:asMsisdn,\n\
+				:asBillingCycleID,\n\
+				:asPayCycleID,\n\
+				:asSpCode,\n\
+				:asSpServiceCode,\n\
+				:asCharge,\n\
+				:aiTicketTypeID,\n\
+				:asServiceCode,\n\
+				to_date(:asPayTime,'yyyymmddhh24miss')\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SP_ACCT_ITEMTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SP_ACCT_ITEM")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SP_ACCT_ITEMTRG USING
+				:pTarget->asMsisdn,
+				:pTarget->asBillingCycleID,
+				:pTarget->asPayCycleID,
+				:pTarget->asSpCode,
+				:pTarget->asSpServiceCode,
+				:pTarget->asCharge,
+				:pTarget->aiTicketTypeID,
+				:pTarget->asServiceCode,
+				:pTarget->asPayTime;
+		if(CheckSqlResult("Dyn insert into SP_ACCT_ITEM")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入NX_RHJF_TICKET*/
+int EInsertStructToNxRhjfTicket(struct NxRhjfTicketStruct *p,
+	int iInsertFlag,struct NxRhjfTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asCallingRef[iCurPos],		p->sCallingRef);
+		strcpy(pTarget->asCallingAreaCode[iCurPos],	p->sCallingAreaCode);
+		strcpy(pTarget->asCallingNbr[iCurPos],		p->sCallingNbr);
+		strcpy(pTarget->asCalledRef[iCurPos],		p->sCalledRef);
+		strcpy(pTarget->asCalledCode[iCurPos],		p->sCalledCode);
+		strcpy(pTarget->asCalledNbr[iCurPos],		p->sCalledNbr);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asCallingCarrType[iCurPos],	p->sCallingCarrType);
+		strcpy(pTarget->asCalledCarrType[iCurPos],	p->sCalledCarrType);
+		strcpy(pTarget->asCalledAreaID[iCurPos],	p->sCalledAreaID);
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+		strcpy(pTarget->asRouteType[iCurPos],		p->sRouteType);
+		strcpy(pTarget->asCardNbr[iCurPos],		p->sCardNbr);
+		strcpy(pTarget->asTrunkIn[iCurPos],		p->sTrunkIn);
+		strcpy(pTarget->asTrunkOut[iCurPos],		p->sTrunkOut);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asEndTime[iCurPos],		p->sEndTime);
+		strcpy(pTarget->asDuration[iCurPos],		p->sDuration);
+		strcpy(pTarget->asChargeDuration[iCurPos],	p->sChargeDuration);
+		strcpy(pTarget->asBaseFee[iCurPos],		p->sBaseFee);
+		strcpy(pTarget->asDisctFee[iCurPos],		p->sDisctFee);
+		strcpy(pTarget->asTotalFee[iCurPos],		p->sTotalFee);
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==NX_RHJF_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				CALLING_REF,\n\
+				CALLING_AREA_CODE,\n\
+				CALLING_NBR,\n\
+				CALLED_REF,\n\
+				CALLED_CODE,\n\
+				CALLED_NBR,\n\
+				USER_TYPE,\n\
+				CALLING_CARR_TYPE,\n\
+				CALLED_CARR_TYPE,\n\
+				CALLED_AREA_ID,\n\
+				SERVICE_TYPE,\n\
+				ROUTE_TYPE,\n\
+				CARD_NBR,\n\
+				TRUNK_IN,\n\
+				TRUNK_OUT,\n\
+				START_TIME,\n\
+				END_TIME,\n\
+				DURATION,\n\
+				CHARGE_DURATION,\n\
+				BASE_FEE,\n\
+				DISCT_FEE,\n\
+				TOTAL_FEE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asCallingRef,\n\
+				:asCallingAreaCode,\n\
+				:asCallingNbr,\n\
+				:asCalledRef,\n\
+				:asCalledCode,\n\
+				:asCalledNbr,\n\
+				:asUserType,\n\
+				:asCallingCarrType,\n\
+				:asCalledCarrType,\n\
+				:asCalledAreaID,\n\
+				:asServiceType,\n\
+				:asRouteType,\n\
+				:asCardNbr,\n\
+				:asTrunkIn,\n\
+				:asTrunkOut,\n\
+				:asStartTime,\n\
+				:asEndTime,\n\
+				:asDuration,\n\
+				:asChargeDuration,\n\
+				to_number(:asBaseFee),\n\
+				to_number(:asDisctFee),\n\
+				to_number(:asTotalFee),\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE NX_RHJF_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement NX_RHJF_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE NX_RHJF_TICKETTRG USING
+				:pTarget->asRecordType,
+				:pTarget->asCallingRef,
+				:pTarget->asCallingAreaCode,
+				:pTarget->asCallingNbr,
+				:pTarget->asCalledRef,
+				:pTarget->asCalledCode,
+				:pTarget->asCalledNbr,
+				:pTarget->asUserType,
+				:pTarget->asCallingCarrType,
+				:pTarget->asCalledCarrType,
+				:pTarget->asCalledAreaID,
+				:pTarget->asServiceType,
+				:pTarget->asRouteType,
+				:pTarget->asCardNbr,
+				:pTarget->asTrunkIn,
+				:pTarget->asTrunkOut,
+				:pTarget->asStartTime,
+				:pTarget->asEndTime,
+				:pTarget->asDuration,
+				:pTarget->asChargeDuration,
+				:pTarget->asBaseFee,
+				:pTarget->asDisctFee,
+				:pTarget->asTotalFee,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into NX_RHJF_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入SERV_CARD*/
+int EInsertStructToServCard(struct ServCardStruct *p,
+	int iInsertFlag,struct ServCardStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asAccNbr[iCurPos],		p->sAccNbr);
+		strcpy(pTarget->asAreaCode[iCurPos],		p->sAreaCode);
+		strcpy(pTarget->asAreaCodeName[iCurPos],	p->sAreaCodeName);
+		strcpy(pTarget->asAreaName[iCurPos],		p->sAreaName);
+		strcpy(pTarget->asCustNane[iCurPos],		p->sCustNane);
+
+		pTarget->aiTypeID[iCurPos]=			p->iTypeID;
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SERV_CARD_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				ACC_NBR,\n\
+				AREA_CODE,\n\
+				AREA_CODE_NAME,\n\
+				AREA_NAME,\n\
+				CUST_NANE,\n\
+				TYPE_ID)\n\
+			VALUES (\n\
+				:asAccNbr,\n\
+				:asAreaCode,\n\
+				:asAreaCodeName,\n\
+				:asAreaName,\n\
+				:asCustNane,\n\
+				:aiTypeID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SERV_CARDTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SERV_CARD")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SERV_CARDTRG USING
+				:pTarget->asAccNbr,
+				:pTarget->asAreaCode,
+				:pTarget->asAreaCodeName,
+				:pTarget->asAreaName,
+				:pTarget->asCustNane,
+				:pTarget->aiTypeID;
+		if(CheckSqlResult("Dyn insert into SERV_CARD")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据结构缓冲写入MSISDN_STAT*/
+int EInsertStructToMsisdnStat(struct MsisdnStatStruct *p,
+	int iInsertFlag,struct MsisdnStatStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asAreaCode[iCurPos],		p->sAreaCode);
+
+		pTarget->aiAreaID[iCurPos]=			p->iAreaID;
+
+		strcpy(pTarget->asNetType[iCurPos],		p->sNetType);
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+
+		pTarget->aiTotalDuration[iCurPos]=		p->iTotalDuration;
+		pTarget->aiTotalMin[iCurPos]=			p->iTotalMin;
+		pTarget->aiTotalCnt[iCurPos]=			p->iTotalCnt;
+		pTarget->aiTotalFee1[iCurPos]=			p->iTotalFee1;
+		pTarget->aiTotalFee2[iCurPos]=			p->iTotalFee2;
+		pTarget->aiTotalFee3[iCurPos]=			p->iTotalFee3;
+
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==MSISDN_STAT_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				MSISDN,\n\
+				AREA_CODE,\n\
+				AREA_ID,\n\
+				NET_TYPE,\n\
+				CALL_TYPE,\n\
+				SERVICE_TYPE,\n\
+				TOTAL_DURATION,\n\
+				TOTAL_MIN,\n\
+				TOTAL_CNT,\n\
+				TOTAL_FEE1,\n\
+				TOTAL_FEE2,\n\
+				TOTAL_FEE3,\n\
+				BILLING_CYCLE_ID)\n\
+			VALUES (\n\
+				:asMsisdn,\n\
+				:asAreaCode,\n\
+				:aiAreaID,\n\
+				:asNetType,\n\
+				:asCallType,\n\
+				:asServiceType,\n\
+				:aiTotalDuration,\n\
+				:aiTotalMin,\n\
+				:aiTotalCnt,\n\
+				:aiTotalFee1,\n\
+				:aiTotalFee2,\n\
+				:aiTotalFee3,\n\
+				:asBillingCycleID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE MSISDN_STATTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement MSISDN_STAT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE MSISDN_STATTRG USING
+				:pTarget->asMsisdn,
+				:pTarget->asAreaCode,
+				:pTarget->aiAreaID,
+				:pTarget->asNetType,
+				:pTarget->asCallType,
+				:pTarget->asServiceType,
+				:pTarget->aiTotalDuration,
+				:pTarget->aiTotalMin,
+				:pTarget->aiTotalCnt,
+				:pTarget->aiTotalFee1,
+				:pTarget->aiTotalFee2,
+				:pTarget->aiTotalFee3,
+				:pTarget->asBillingCycleID;
+		if(CheckSqlResult("Dyn insert into MSISDN_STAT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据结构缓冲更新MSISDN_STAT*/
+int EUpdateStructToMsisdnStat(struct MsisdnStatStruct *p,
+	int iUpdateFlag,struct MsisdnStatStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asAreaCode[iCurPos],		p->sAreaCode);
+
+		pTarget->aiAreaID[iCurPos]=			p->iAreaID;
+
+		strcpy(pTarget->asNetType[iCurPos],		p->sNetType);
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+
+		pTarget->aiTotalDuration[iCurPos]=		p->iTotalDuration;
+		pTarget->aiTotalMin[iCurPos]=			p->iTotalMin;
+		pTarget->aiTotalCnt[iCurPos]=			p->iTotalCnt;
+		pTarget->aiTotalFee1[iCurPos]=			p->iTotalFee1;
+		pTarget->aiTotalFee2[iCurPos]=			p->iTotalFee2;
+		pTarget->aiTotalFee3[iCurPos]=			p->iTotalFee3;
+
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+		strcpy(pTarget->asRowID[iCurPos],               p->sRowID);
+
+		iCurPos++;
+	}
+
+	if(iUpdateFlag==TRUE||iCurPos==MSISDN_STAT_BUFLEN_UP){
+
+/* UPDATE */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE %s \n\
+			SET \n\
+				TOTAL_DURATION	=:aiTotalDuration,\n\
+				TOTAL_MIN	=:aiTotalMin,\n\
+				TOTAL_CNT	=:aiTotalCnt,\n\
+				TOTAL_FEE1	=:aiTotalFee1,\n\
+				TOTAL_FEE2	=:aiTotalFee2,\n\
+				TOTAL_FEE3	=:aiTotalFee3 \n\
+			WHERE \n\
+                                ROWID = chartorowid(:asRowID)\n\
+                        ",sTableName);
+
+		EXEC SQL PREPARE MSISDN_STATTRG FROM :statement;
+		if(CheckSqlResult("Prepare update statement MSISDN_STAT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE MSISDN_STATTRG USING
+				:pTarget->aiTotalDuration,
+				:pTarget->aiTotalMin,
+				:pTarget->aiTotalCnt,
+				:pTarget->aiTotalFee1,
+				:pTarget->aiTotalFee2,
+				:pTarget->aiTotalFee3,
+				:pTarget->asRowID;
+		if(CheckSqlResult("Dyn update into MSISDN_STAT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据结构缓冲写入SETT_SUM_DAY*/
+int EInsertStructToSettSumDay(struct SettSumDayStruct *p,
+	int iInsertFlag,struct SettSumDayStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+
+		strcpy(pTarget->asVisitAreaCode[iCurPos],	p->sVisitAreaCode);
+		strcpy(pTarget->asStatMonth[iCurPos],		p->sStatMonth);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asCalledCode[iCurPos],		p->sCalledCode);
+		strcpy(pTarget->asStartDate[iCurPos],		p->sStartDate);
+
+		pTarget->aiCallingCarrierID[iCurPos]=		p->iCallingCarrierID;
+		pTarget->aiCalledCarrierID[iCurPos]=		p->iCalledCarrierID;
+		pTarget->aiThirdCarrierID[iCurPos]=		p->iThirdCarrierID;
+
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asIpAccNbr[iCurPos],		p->sIpAccNbr);
+
+		pTarget->aiDurationCnt[iCurPos]=		p->iDurationCnt;
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+		pTarget->aiSettCnt[iCurPos]=			p->iSettCnt;
+		pTarget->aiTotalFee[iCurPos]=			p->iTotalFee;
+		pTarget->aiCount[iCurPos]=			p->iCount;
+
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SETT_SUM_DAY_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				TICKET_TYPE_ID,\n\
+				VISIT_AREA_CODE,\n\
+				STAT_MONTH,\n\
+				HOME_AREA_CODE,\n\
+				CALLED_CODE,\n\
+				START_DATE,\n\
+				CALLING_CARRIER_ID,\n\
+				CALLED_CARRIER_ID,\n\
+				THIRD_CARRIER_ID,\n\
+				USER_TYPE,\n\
+				IP_ACC_NBR,\n\
+				DURATION_CNT,\n\
+				DURATION,\n\
+				SETT_CNT,\n\
+				TOTAL_FEE,\n\
+				COUNT,\n\
+				STATE,\n\
+				DEAL_DATE)\n\
+			VALUES (\n\
+				:aiTicketTypeID,\n\
+				:asVisitAreaCode,\n\
+				:asStatMonth,\n\
+				:asHomeAreaCode,\n\
+				:asCalledCode,\n\
+				:asStartDate,\n\
+				:aiCallingCarrierID,\n\
+				:aiCalledCarrierID,\n\
+				:aiThirdCarrierID,\n\
+				:asUserType,\n\
+				:asIpAccNbr,\n\
+				:aiDurationCnt,\n\
+				:aiDuration,\n\
+				:aiSettCnt,\n\
+				:aiTotalFee,\n\
+				:aiCount,\n\
+				:asState,\n\
+				to_date(:asDealDate,'yyyymmddhh24miss')\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SETT_SUM_DAYTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SETT_SUM_DAY")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SETT_SUM_DAYTRG USING
+				:pTarget->aiTicketTypeID,
+				:pTarget->asVisitAreaCode,
+				:pTarget->asStatMonth,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asCalledCode,
+				:pTarget->asStartDate,
+				:pTarget->aiCallingCarrierID,
+				:pTarget->aiCalledCarrierID,
+				:pTarget->aiThirdCarrierID,
+				:pTarget->asUserType,
+				:pTarget->asIpAccNbr,
+				:pTarget->aiDurationCnt,
+				:pTarget->aiDuration,
+				:pTarget->aiSettCnt,
+				:pTarget->aiTotalFee,
+				:pTarget->aiCount,
+				:pTarget->asState,
+				:pTarget->asDealDate;
+		if(CheckSqlResult("Dyn insert into SETT_SUM_DAY")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据结构缓冲写入ERR_TICKET*/
+int EInsertStructToErrTicket(struct ErrTicketStruct *p,
+	int iInsertFlag,struct ErrTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],	p->sRecordType);
+		strcpy(pTarget->asCallType[iCurPos],	p->sCallType);
+		strcpy(pTarget->asMsisdn[iCurPos],	p->sMsisdn);
+		strcpy(pTarget->asOtherParty[iCurPos],	p->sOtherParty);
+		strcpy(pTarget->asStartTime[iCurPos],	p->sStartTime);
+		strcpy(pTarget->asDuration[iCurPos],	p->sDuration);
+		strcpy(pTarget->asImsi[iCurPos],	p->sImsi);
+		strcpy(pTarget->asMsc[iCurPos],		p->sMsc);
+		strcpy(pTarget->asReserve1[iCurPos],	p->sReserve1);
+		strcpy(pTarget->asReserve2[iCurPos],	p->sReserve2);
+		strcpy(pTarget->asReserve3[iCurPos],	p->sReserve3);
+		strcpy(pTarget->asReserve4[iCurPos],	p->sReserve4);
+		strcpy(pTarget->asOriSourceID[iCurPos],	p->sOriSourceID);
+		strcpy(pTarget->asOriFileName[iCurPos],	p->sOriFileName);
+
+		pTarget->aiLine[iCurPos]=		p->iLine;
+
+		strcpy(pTarget->asErrCode[iCurPos],	p->sErrCode);
+		strcpy(pTarget->asFileName[iCurPos],	p->sFileName);
+		strcpy(pTarget->asModule[iCurPos],	p->sModule);
+		strcpy(pTarget->asAreaCode[iCurPos],	p->sAreaCode);
+		strcpy(pTarget->asState[iCurPos],	p->sState);
+		strcpy(pTarget->asUpdateDate[iCurPos],	p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],	p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],	p->sSourceID);
+		strcpy(pTarget->asErrRec[iCurPos],	p->sErrRec);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==ERR_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				CALL_TYPE,\n\
+				MSISDN,\n\
+				OTHER_PARTY,\n\
+				START_TIME,\n\
+				DURATION,\n\
+				IMSI,\n\
+				MSC,\n\
+				RESERVE1,\n\
+				RESERVE2,\n\
+				RESERVE3,\n\
+				RESERVE4,\n\
+				ORI_SOURCE_ID,\n\
+				ORI_FILE_NAME,\n\
+				LINE,\n\
+				ERR_CODE,\n\
+				FILE_NAME,\n\
+				MODULE,\n\
+				AREA_CODE,\n\
+				STATE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID,\n\
+				ERR_REC)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asCallType,\n\
+				:asMsisdn,\n\
+				:asOtherParty,\n\
+				:asStartTime,\n\
+				:asDuration,\n\
+				:asImsi,\n\
+				:asMsc,\n\
+				:asReserve1,\n\
+				:asReserve2,\n\
+				:asReserve3,\n\
+				:asReserve4,\n\
+				:asOriSourceID,\n\
+				:asOriFileName,\n\
+				:aiLine,\n\
+				:asErrCode,\n\
+				:asFileName,\n\
+				:asModule,\n\
+				:asAreaCode,\n\
+				:asState,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID,\n\
+				:asErrRec\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE ERR_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement ERR_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE ERR_TICKETTRG USING
+				:pTarget->asRecordType,
+				:pTarget->asCallType,
+				:pTarget->asMsisdn,
+				:pTarget->asOtherParty,
+				:pTarget->asStartTime,
+				:pTarget->asDuration,
+				:pTarget->asImsi,
+				:pTarget->asMsc,
+				:pTarget->asReserve1,
+				:pTarget->asReserve2,
+				:pTarget->asReserve3,
+				:pTarget->asReserve4,
+				:pTarget->asOriSourceID,
+				:pTarget->asOriFileName,
+				:pTarget->aiLine,
+				:pTarget->asErrCode,
+				:pTarget->asFileName,
+				:pTarget->asModule,
+				:pTarget->asAreaCode,
+				:pTarget->asState,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID,
+				:pTarget->asErrRec;
+		if(CheckSqlResult("Dyn insert into ERR_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据结构缓冲写入GPRS_ZTE_INTF*/
+int EInsertStructToGprsZteIntf(struct GprsZteIntfStruct *p,
+	int iInsertFlag,struct GprsZteIntfStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asNiPdp[iCurPos],		p->sNiPdp);
+		strcpy(pTarget->asImsi[iCurPos],		p->sImsi);
+		strcpy(pTarget->asEsn[iCurPos],			p->sEsn);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+
+		pTarget->aiCallDuration[iCurPos]=		p->iCallDuration;
+
+		strcpy(pTarget->asSgsnAddr[iCurPos],		p->sSgsnAddr);
+
+		pTarget->aiCellID[iCurPos]=			p->iCellID;
+		pTarget->aiLac[iCurPos]=			p->iLac;
+
+		strcpy(pTarget->asChargingID[iCurPos],		p->sChargingID);
+		strcpy(pTarget->asGgsnAddr[iCurPos],		p->sGgsnAddr);
+		strcpy(pTarget->asApnNi[iCurPos],		p->sApnNi);
+		strcpy(pTarget->asApnOi[iCurPos],		p->sApnOi);
+		strcpy(pTarget->asPdpType[iCurPos],		p->sPdpType);
+		strcpy(pTarget->asServedPdpAddress[iCurPos],	p->sServedPdpAddress);
+
+		pTarget->aiSgsnChange[iCurPos]=			p->iSgsnChange;
+		pTarget->aiCloseCause[iCurPos]=			p->iCloseCause;
+
+		strcpy(pTarget->asIntegrityFlag[iCurPos],	p->sIntegrityFlag);
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asDataFlowup1[iCurPos],		p->sDataFlowup1);
+		strcpy(pTarget->asDataFlowdn1[iCurPos],		p->sDataFlowdn1);
+		strcpy(pTarget->asBillItem[iCurPos],		p->sBillItem);
+		strcpy(pTarget->asBillService[iCurPos],		p->sBillService);
+		strcpy(pTarget->asRoamType[iCurPos],		p->sRoamType);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asVisitAreaCode[iCurPos],	p->sVisitAreaCode);
+		strcpy(pTarget->asDurationCnt[iCurPos],		p->sDurationCnt);
+		strcpy(pTarget->asFlowCnt[iCurPos],		p->sFlowCnt);
+		strcpy(pTarget->asDurationUnit[iCurPos],	p->sDurationUnit);
+		strcpy(pTarget->asBillUnit[iCurPos],		p->sBillUnit);
+		strcpy(pTarget->asCfee[iCurPos],		p->sCfee);
+		strcpy(pTarget->asFee1[iCurPos],		p->sFee1);
+		strcpy(pTarget->asFileName[iCurPos],		p->sFileName);
+		strcpy(pTarget->asHomeCityCode[iCurPos],	p->sHomeCityCode);
+		strcpy(pTarget->asMsnc[iCurPos],		p->sMsnc);
+		strcpy(pTarget->asCloseCause1[iCurPos],		p->sCloseCause1);
+		strcpy(pTarget->asGgsn[iCurPos],		p->sGgsn);
+		strcpy(pTarget->asApnMode[iCurPos],		p->sApnMode);
+		strcpy(pTarget->asBillFlag[iCurPos],		p->sBillFlag);
+		strcpy(pTarget->asGsnIp[iCurPos],		p->sGsnIp);
+		strcpy(pTarget->asBillSeq[iCurPos],		p->sBillSeq);
+		strcpy(pTarget->asSgsnPlmnID[iCurPos],		p->sSgsnPlmnID);
+		strcpy(pTarget->asFee2[iCurPos],		p->sFee2);
+		strcpy(pTarget->asRouteArea[iCurPos],		p->sRouteArea);
+		strcpy(pTarget->asErrCode[iCurPos],		p->sErrCode);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==GPRS_ZTE_INTF_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				NI_PDP,\n\
+				IMSI,\n\
+				ESN,\n\
+				MSISDN,\n\
+				START_TIME,\n\
+				CALL_DURATION,\n\
+				SGSN_ADDR,\n\
+				CELL_ID,\n\
+				LAC,\n\
+				CHARGING_ID,\n\
+				GGSN_ADDR,\n\
+				APN_NI,\n\
+				APN_OI,\n\
+				PDP_TYPE,\n\
+				SERVED_PDP_ADDRESS,\n\
+				SGSN_CHANGE,\n\
+				CLOSE_CAUSE,\n\
+				INTEGRITY_FLAG,\n\
+				SERVICE_TYPE,\n\
+				USER_TYPE,\n\
+				DATA_FLOWUP1,\n\
+				DATA_FLOWDN1,\n\
+				BILL_ITEM,\n\
+				BILL_SERVICE,\n\
+				ROAM_TYPE,\n\
+				HOME_AREA_CODE,\n\
+				VISIT_AREA_CODE,\n\
+				DURATION_CNT,\n\
+				FLOW_CNT,\n\
+				DURATION_UNIT,\n\
+				BILL_UNIT,\n\
+				CFEE,\n\
+				FEE1,\n\
+				FILE_NAME,\n\
+				HOME_CITY_CODE,\n\
+				MSNC,\n\
+				CLOSE_CAUSE1,\n\
+				GGSN,\n\
+				APN_MODE,\n\
+				BILL_FLAG,\n\
+				GSN_IP,\n\
+				BILL_SEQ,\n\
+				SGSN_PLMN_ID,\n\
+				FEE2,\n\
+				ROUTE_AREA,\n\
+				ERR_CODE,\n\
+				STATE,\n\
+				UPDATE_DATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asNiPdp,\n\
+				:asImsi,\n\
+				:asEsn,\n\
+				:asMsisdn,\n\
+				:asStartTime,\n\
+				:aiCallDuration,\n\
+				:asSgsnAddr,\n\
+				:aiCellID,\n\
+				:aiLac,\n\
+				to_number(:asChargingID),\n\
+				:asGgsnAddr,\n\
+				:asApnNi,\n\
+				:asApnOi,\n\
+				:asPdpType,\n\
+				:asServedPdpAddress,\n\
+				:aiSgsnChange,\n\
+				:aiCloseCause,\n\
+				:asIntegrityFlag,\n\
+				:asServiceType,\n\
+				:asUserType,\n\
+				to_number(:asDataFlowup1),\n\
+				to_number(:asDataFlowdn1),\n\
+				:asBillItem,\n\
+				:asBillService,\n\
+				:asRoamType,\n\
+				:asHomeAreaCode,\n\
+				:asVisitAreaCode,\n\
+				to_number(:asDurationCnt),\n\
+				to_number(:asFlowCnt),\n\
+				to_number(:asDurationUnit),\n\
+				to_number(:asBillUnit),\n\
+				to_number(:asCfee),\n\
+				to_number(:asFee1),\n\
+				:asFileName,\n\
+				:asHomeCityCode,\n\
+				:asMsnc,\n\
+				:asCloseCause1,\n\
+				:asGgsn,\n\
+				:asApnMode,\n\
+				:asBillFlag,\n\
+				:asGsnIp,\n\
+				:asBillSeq,\n\
+				:asSgsnPlmnID,\n\
+				:asFee2,\n\
+				:asRouteArea,\n\
+				:asErrCode,\n\
+				:asState,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE GPRS_ZTE_INTFTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement GPRS_ZTE_INTF")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE GPRS_ZTE_INTFTRG USING
+				:pTarget->asRecordType,
+				:pTarget->asNiPdp,
+				:pTarget->asImsi,
+				:pTarget->asEsn,
+				:pTarget->asMsisdn,
+				:pTarget->asStartTime,
+				:pTarget->aiCallDuration,
+				:pTarget->asSgsnAddr,
+				:pTarget->aiCellID,
+				:pTarget->aiLac,
+				:pTarget->asChargingID,
+				:pTarget->asGgsnAddr,
+				:pTarget->asApnNi,
+				:pTarget->asApnOi,
+				:pTarget->asPdpType,
+				:pTarget->asServedPdpAddress,
+				:pTarget->aiSgsnChange,
+				:pTarget->aiCloseCause,
+				:pTarget->asIntegrityFlag,
+				:pTarget->asServiceType,
+				:pTarget->asUserType,
+				:pTarget->asDataFlowup1,
+				:pTarget->asDataFlowdn1,
+				:pTarget->asBillItem,
+				:pTarget->asBillService,
+				:pTarget->asRoamType,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asVisitAreaCode,
+				:pTarget->asDurationCnt,
+				:pTarget->asFlowCnt,
+				:pTarget->asDurationUnit,
+				:pTarget->asBillUnit,
+				:pTarget->asCfee,
+				:pTarget->asFee1,
+				:pTarget->asFileName,
+				:pTarget->asHomeCityCode,
+				:pTarget->asMsnc,
+				:pTarget->asCloseCause1,
+				:pTarget->asGgsn,
+				:pTarget->asApnMode,
+				:pTarget->asBillFlag,
+				:pTarget->asGsnIp,
+				:pTarget->asBillSeq,
+				:pTarget->asSgsnPlmnID,
+				:pTarget->asFee2,
+				:pTarget->asRouteArea,
+				:pTarget->asErrCode,
+				:pTarget->asState,
+				:pTarget->asUpdateDate,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into GPRS_ZTE_INTF")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据结构缓冲写入GPRS_STD_INTF*/
+int EInsertStructToGprsStdIntf(struct GprsStdIntfStruct *p,
+	int iInsertFlag,struct GprsStdIntfStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asRoamType[iCurPos],		p->sRoamType);
+		strcpy(pTarget->asImsi[iCurPos],		p->sImsi);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asSgsn[iCurPos],		p->sSgsn);
+		strcpy(pTarget->asSgsnChange[iCurPos],		p->sSgsnChange);
+		strcpy(pTarget->asGgsn[iCurPos],		p->sGgsn);
+		strcpy(pTarget->asServedPdpAddress[iCurPos],	p->sServedPdpAddress);
+		strcpy(pTarget->asApnNi[iCurPos],		p->sApnNi);
+		strcpy(pTarget->asApnOi[iCurPos],		p->sApnOi);
+		strcpy(pTarget->asReserv1[iCurPos],		p->sReserv1);
+
+		pTarget->aiCallDuration[iCurPos]=		p->iCallDuration;
+
+		strcpy(pTarget->asPartialType[iCurPos],		p->sPartialType);
+		strcpy(pTarget->asCloseCause[iCurPos],		p->sCloseCause);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asNiPdp[iCurPos],		p->sNiPdp);
+		strcpy(pTarget->asChargingID[iCurPos],		p->sChargingID);
+		strcpy(pTarget->asLac[iCurPos],			p->sLac);
+		strcpy(pTarget->asCellID[iCurPos],		p->sCellID);
+		strcpy(pTarget->asVisitCityCode[iCurPos],	p->sVisitCityCode);
+		strcpy(pTarget->asReserv2[iCurPos],		p->sReserv2);
+		strcpy(pTarget->asRoamRemark[iCurPos],		p->sRoamRemark);
+		strcpy(pTarget->asImei[iCurPos],		p->sImei);
+		strcpy(pTarget->asDataFlowdn[iCurPos],		p->sDataFlowdn);
+		strcpy(pTarget->asDataFlowup[iCurPos],		p->sDataFlowup);
+		strcpy(pTarget->asChargeItem[iCurPos],		p->sChargeItem);
+		strcpy(pTarget->asChargeUnit[iCurPos],		p->sChargeUnit);
+		strcpy(pTarget->asChargeOperation[iCurPos],	p->sChargeOperation);
+
+		pTarget->aiTotalFee[iCurPos]=			p->iTotalFee;
+
+		strcpy(pTarget->asReserv3[iCurPos],		p->sReserv3);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==GPRS_STD_INTF_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				ROAM_TYPE,\n\
+				IMSI,\n\
+				MSISDN,\n\
+				SGSN,\n\
+				SGSN_CHANGE,\n\
+				GGSN,\n\
+				SERVED_PDP_ADDRESS,\n\
+				APN_NI,\n\
+				APN_OI,\n\
+				RESERV1,\n\
+				CALL_DURATION,\n\
+				PARTIAL_TYPE,\n\
+				CLOSE_CAUSE,\n\
+				START_TIME,\n\
+				NI_PDP,\n\
+				CHARGING_ID,\n\
+				LAC,\n\
+				CELL_ID,\n\
+				VISIT_CITY_CODE,\n\
+				RESERV2,\n\
+				ROAM_REMARK,\n\
+				IMEI,\n\
+				DATA_FLOWDN,\n\
+				DATA_FLOWUP,\n\
+				CHARGE_ITEM,\n\
+				CHARGE_UNIT,\n\
+				CHARGE_OPERATION,\n\
+				TOTAL_FEE,\n\
+				RESERV3,\n\
+				STATE,\n\
+				DEAL_DATE,\n\
+				SOURCE_ID,\n\
+				UPDATE_DATE)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asRoamType,\n\
+				:asImsi,\n\
+				:asMsisdn,\n\
+				:asSgsn,\n\
+				:asSgsnChange,\n\
+				:asGgsn,\n\
+				:asServedPdpAddress,\n\
+				:asApnNi,\n\
+				:asApnOi,\n\
+				:asReserv1,\n\
+				:aiCallDuration,\n\
+				:asPartialType,\n\
+				:asCloseCause,\n\
+				:asStartTime,\n\
+				:asNiPdp,\n\
+				:asChargingID,\n\
+				:asLac,\n\
+				:asCellID,\n\
+				:asVisitCityCode,\n\
+				:asReserv2,\n\
+				:asRoamRemark,\n\
+				:asImei,\n\
+				to_number(:asDataFlowdn),\n\
+				to_number(:asDataFlowup),\n\
+				:asChargeItem,\n\
+				to_number(:asChargeUnit),\n\
+				:asChargeOperation,\n\
+				:aiTotalFee,\n\
+				:asReserv3,\n\
+				:asState,\n\
+				to_date(:asDealDate,'yyyymmddhh24miss'),\n\
+				:asSourceID,\n\
+				to_date(:asUpdateDate,'yyyymmddhh24miss')\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE GPRS_STD_INTFTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement GPRS_STD_INTF")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE GPRS_STD_INTFTRG USING
+				:pTarget->asRecordType,
+				:pTarget->asRoamType,
+				:pTarget->asImsi,
+				:pTarget->asMsisdn,
+				:pTarget->asSgsn,
+				:pTarget->asSgsnChange,
+				:pTarget->asGgsn,
+				:pTarget->asServedPdpAddress,
+				:pTarget->asApnNi,
+				:pTarget->asApnOi,
+				:pTarget->asReserv1,
+				:pTarget->aiCallDuration,
+				:pTarget->asPartialType,
+				:pTarget->asCloseCause,
+				:pTarget->asStartTime,
+				:pTarget->asNiPdp,
+				:pTarget->asChargingID,
+				:pTarget->asLac,
+				:pTarget->asCellID,
+				:pTarget->asVisitCityCode,
+				:pTarget->asReserv2,
+				:pTarget->asRoamRemark,
+				:pTarget->asImei,
+				:pTarget->asDataFlowdn,
+				:pTarget->asDataFlowup,
+				:pTarget->asChargeItem,
+				:pTarget->asChargeUnit,
+				:pTarget->asChargeOperation,
+				:pTarget->aiTotalFee,
+				:pTarget->asReserv3,
+				:pTarget->asState,
+				:pTarget->asDealDate,
+				:pTarget->asSourceID,
+				:pTarget->asUpdateDate;
+		if(CheckSqlResult("Dyn insert into GPRS_STD_INTF")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据结构缓冲写入VISIT_GSMUP_CRI_02*/
+int EInsertStructToVisitGsmupCri(struct VisitGsmupCriStruct *p,
+	int iInsertFlag,struct VisitGsmupCriStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asInCityCode[iCurPos],		p->sInCityCode);
+		strcpy(pTarget->asOutCityCode[iCurPos],		p->sOutCityCode);
+		strcpy(pTarget->asScpFlagID[iCurPos],		p->sScpFlagID);
+		strcpy(pTarget->asLinkRef[iCurPos],		p->sLinkRef);
+		strcpy(pTarget->asReserve1[iCurPos],		p->sReserve1);
+		strcpy(pTarget->asImsi[iCurPos],		p->sImsi);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asModifyTag[iCurPos],		p->sModifyTag);
+		strcpy(pTarget->asNbrType[iCurPos],		p->sNbrType);
+		strcpy(pTarget->asNbrPlan[iCurPos],		p->sNbrPlan);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+		strcpy(pTarget->asServiceCode[iCurPos],		p->sServiceCode);
+		strcpy(pTarget->asDupServiceType[iCurPos],	p->sDupServiceType);
+		strcpy(pTarget->asDupServiceCode[iCurPos],	p->sDupServiceCode);
+		strcpy(pTarget->asAckChannel[iCurPos],		p->sAckChannel);
+		strcpy(pTarget->asUseChannel[iCurPos],		p->sUseChannel);
+		strcpy(pTarget->asTransparentFlag[iCurPos],	p->sTransparentFlag);
+		strcpy(pTarget->asAct1[iCurPos],		p->sAct1);
+		strcpy(pTarget->asCode1[iCurPos],		p->sCode1);
+		strcpy(pTarget->asAct2[iCurPos],		p->sAct2);
+		strcpy(pTarget->asCode2[iCurPos],		p->sCode2);
+		strcpy(pTarget->asAct3[iCurPos],		p->sAct3);
+		strcpy(pTarget->asCode3[iCurPos],		p->sCode3);
+		strcpy(pTarget->asAct4[iCurPos],		p->sAct4);
+		strcpy(pTarget->asCode4[iCurPos],		p->sCode4);
+		strcpy(pTarget->asAct5[iCurPos],		p->sAct5);
+		strcpy(pTarget->asCode5[iCurPos],		p->sCode5);
+		strcpy(pTarget->asMsc[iCurPos],			p->sMsc);
+		strcpy(pTarget->asLac[iCurPos],			p->sLac);
+		strcpy(pTarget->asCellID[iCurPos],		p->sCellID);
+		strcpy(pTarget->asServType[iCurPos],		p->sServType);
+		strcpy(pTarget->asStartDate[iCurPos],		p->sStartDate);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asPayUnit[iCurPos],		p->sPayUnit);
+		strcpy(pTarget->asFlowRef[iCurPos],		p->sFlowRef);
+		strcpy(pTarget->asTollCode[iCurPos],		p->sTollCode);
+		strcpy(pTarget->asOtherCode[iCurPos],		p->sOtherCode);
+		strcpy(pTarget->asRoamFee[iCurPos],		p->sRoamFee);
+		strcpy(pTarget->asTollFee[iCurPos],		p->sTollFee);
+		strcpy(pTarget->asOtherFee[iCurPos],		p->sOtherFee);
+		strcpy(pTarget->asPayItem[iCurPos],		p->sPayItem);
+		strcpy(pTarget->asSystemType[iCurPos],		p->sSystemType);
+		strcpy(pTarget->asRateIndication[iCurPos],	p->sRateIndication);
+		strcpy(pTarget->asHotBillingTag[iCurPos],	p->sHotBillingTag);
+		strcpy(pTarget->asImei[iCurPos],		p->sImei);
+		strcpy(pTarget->asReserve2[iCurPos],		p->sReserve2);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==VISIT_GSMUP_CRI_02_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				IN_CITY_CODE,\n\
+				OUT_CITY_CODE,\n\
+				SCP_FLAG_ID,\n\
+				LINK_REF,\n\
+				RESERVE1,\n\
+				IMSI,\n\
+				MSISDN,\n\
+				MODIFY_TAG,\n\
+				NBR_TYPE,\n\
+				NBR_PLAN,\n\
+				OTHER_PARTY,\n\
+				SERVICE_TYPE,\n\
+				SERVICE_CODE,\n\
+				DUP_SERVICE_TYPE,\n\
+				DUP_SERVICE_CODE,\n\
+				ACK_CHANNEL,\n\
+				USE_CHANNEL,\n\
+				TRANSPARENT_FLAG,\n\
+				ACT1,\n\
+				CODE1,\n\
+				ACT2,\n\
+				CODE2,\n\
+				ACT3,\n\
+				CODE3,\n\
+				ACT4,\n\
+				CODE4,\n\
+				ACT5,\n\
+				CODE5,\n\
+				MSC,\n\
+				LAC,\n\
+				CELL_ID,\n\
+				SERV_TYPE,\n\
+				START_DATE,\n\
+				START_TIME,\n\
+				PAY_UNIT,\n\
+				FLOW_REF,\n\
+				TOLL_CODE,\n\
+				OTHER_CODE,\n\
+				ROAM_FEE,\n\
+				TOLL_FEE,\n\
+				OTHER_FEE,\n\
+				PAY_ITEM,\n\
+				SYSTEM_TYPE,\n\
+				RATE_INDICATION,\n\
+				HOT_BILLING_TAG,\n\
+				IMEI,\n\
+				RESERVE2)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asInCityCode,\n\
+				:asOutCityCode,\n\
+				:asScpFlagID,\n\
+				:asLinkRef,\n\
+				:asReserve1,\n\
+				:asImsi,\n\
+				:asMsisdn,\n\
+				:asModifyTag,\n\
+				:asNbrType,\n\
+				:asNbrPlan,\n\
+				:asOtherParty,\n\
+				:asServiceType,\n\
+				:asServiceCode,\n\
+				:asDupServiceType,\n\
+				:asDupServiceCode,\n\
+				:asAckChannel,\n\
+				:asUseChannel,\n\
+				:asTransparentFlag,\n\
+				:asAct1,\n\
+				:asCode1,\n\
+				:asAct2,\n\
+				:asCode2,\n\
+				:asAct3,\n\
+				:asCode3,\n\
+				:asAct4,\n\
+				:asCode4,\n\
+				:asAct5,\n\
+				:asCode5,\n\
+				:asMsc,\n\
+				:asLac,\n\
+				:asCellID,\n\
+				:asServType,\n\
+				:asStartDate,\n\
+				:asStartTime,\n\
+				:asPayUnit,\n\
+				:asFlowRef,\n\
+				:asTollCode,\n\
+				:asOtherCode,\n\
+				:asRoamFee,\n\
+				:asTollFee,\n\
+				:asOtherFee,\n\
+				:asPayItem,\n\
+				:asSystemType,\n\
+				:asRateIndication,\n\
+				:asHotBillingTag,\n\
+				:asImei,\n\
+				:asReserve2\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE VISIT_GSMUP_CRI_02TRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement VISIT_GSMUP_CRI_02")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE VISIT_GSMUP_CRI_02TRG USING
+				:pTarget->asRecordType,
+				:pTarget->asInCityCode,
+				:pTarget->asOutCityCode,
+				:pTarget->asScpFlagID,
+				:pTarget->asLinkRef,
+				:pTarget->asReserve1,
+				:pTarget->asImsi,
+				:pTarget->asMsisdn,
+				:pTarget->asModifyTag,
+				:pTarget->asNbrType,
+				:pTarget->asNbrPlan,
+				:pTarget->asOtherParty,
+				:pTarget->asServiceType,
+				:pTarget->asServiceCode,
+				:pTarget->asDupServiceType,
+				:pTarget->asDupServiceCode,
+				:pTarget->asAckChannel,
+				:pTarget->asUseChannel,
+				:pTarget->asTransparentFlag,
+				:pTarget->asAct1,
+				:pTarget->asCode1,
+				:pTarget->asAct2,
+				:pTarget->asCode2,
+				:pTarget->asAct3,
+				:pTarget->asCode3,
+				:pTarget->asAct4,
+				:pTarget->asCode4,
+				:pTarget->asAct5,
+				:pTarget->asCode5,
+				:pTarget->asMsc,
+				:pTarget->asLac,
+				:pTarget->asCellID,
+				:pTarget->asServType,
+				:pTarget->asStartDate,
+				:pTarget->asStartTime,
+				:pTarget->asPayUnit,
+				:pTarget->asFlowRef,
+				:pTarget->asTollCode,
+				:pTarget->asOtherCode,
+				:pTarget->asRoamFee,
+				:pTarget->asTollFee,
+				:pTarget->asOtherFee,
+				:pTarget->asPayItem,
+				:pTarget->asSystemType,
+				:pTarget->asRateIndication,
+				:pTarget->asHotBillingTag,
+				:pTarget->asImei,
+				:pTarget->asReserve2;
+		if(CheckSqlResult("Dyn insert into VISIT_GSMUP_CRI_02")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据结构缓冲写入VISIT_GSMUP_CRICF_02*/
+int EInsertStructToVisitGsmupCricf(struct VisitGsmupCricfStruct *p,
+	int iInsertFlag,struct VisitGsmupCricfStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asInCityCode[iCurPos],		p->sInCityCode);
+		strcpy(pTarget->asOutCityCode[iCurPos],		p->sOutCityCode);
+		strcpy(pTarget->asScpFlagID[iCurPos],		p->sScpFlagID);
+		strcpy(pTarget->asLinkRef[iCurPos],		p->sLinkRef);
+		strcpy(pTarget->asReserve1[iCurPos],		p->sReserve1);
+		strcpy(pTarget->asImsi[iCurPos],		p->sImsi);
+		strcpy(pTarget->asThirdParty[iCurPos],		p->sThirdParty);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+		strcpy(pTarget->asServiceCode[iCurPos],		p->sServiceCode);
+		strcpy(pTarget->asReserve2[iCurPos],		p->sReserve2);
+		strcpy(pTarget->asMsc[iCurPos],			p->sMsc);
+		strcpy(pTarget->asLac[iCurPos],			p->sLac);
+		strcpy(pTarget->asCellID[iCurPos],		p->sCellID);
+		strcpy(pTarget->asServType[iCurPos],		p->sServType);
+		strcpy(pTarget->asStartDate[iCurPos],		p->sStartDate);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asPayUnit[iCurPos],		p->sPayUnit);
+		strcpy(pTarget->asSystemType[iCurPos],		p->sSystemType);
+		strcpy(pTarget->asRateIndication[iCurPos],	p->sRateIndication);
+		strcpy(pTarget->asHotBillingTag[iCurPos],	p->sHotBillingTag);
+		strcpy(pTarget->asImei[iCurPos],		p->sImei);
+		strcpy(pTarget->asReserve3[iCurPos],		p->sReserve3);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==VISIT_GSMUP_CRICF_02_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				IN_CITY_CODE,\n\
+				OUT_CITY_CODE,\n\
+				SCP_FLAG_ID,\n\
+				LINK_REF,\n\
+				RESERVE1,\n\
+				IMSI,\n\
+				THIRD_PARTY,\n\
+				MSISDN,\n\
+				OTHER_PARTY,\n\
+				SERVICE_TYPE,\n\
+				SERVICE_CODE,\n\
+				RESERVE2,\n\
+				MSC,\n\
+				LAC,\n\
+				CELL_ID,\n\
+				SERV_TYPE,\n\
+				START_DATE,\n\
+				START_TIME,\n\
+				PAY_UNIT,\n\
+				SYSTEM_TYPE,\n\
+				RATE_INDICATION,\n\
+				HOT_BILLING_TAG,\n\
+				IMEI,\n\
+				RESERVE3)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asInCityCode,\n\
+				:asOutCityCode,\n\
+				:asScpFlagID,\n\
+				:asLinkRef,\n\
+				:asReserve1,\n\
+				:asImsi,\n\
+				:asThirdParty,\n\
+				:asMsisdn,\n\
+				:asOtherParty,\n\
+				:asServiceType,\n\
+				:asServiceCode,\n\
+				:asReserve2,\n\
+				:asMsc,\n\
+				:asLac,\n\
+				:asCellID,\n\
+				:asServType,\n\
+				:asStartDate,\n\
+				:asStartTime,\n\
+				:asPayUnit,\n\
+				:asSystemType,\n\
+				:asRateIndication,\n\
+				:asHotBillingTag,\n\
+				:asImei,\n\
+				:asReserve3\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE VISIT_GSMUP_CRICF_02TRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement VISIT_GSMUP_CRICF_02")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE VISIT_GSMUP_CRICF_02TRG USING
+				:pTarget->asRecordType,
+				:pTarget->asInCityCode,
+				:pTarget->asOutCityCode,
+				:pTarget->asScpFlagID,
+				:pTarget->asLinkRef,
+				:pTarget->asReserve1,
+				:pTarget->asImsi,
+				:pTarget->asThirdParty,
+				:pTarget->asMsisdn,
+				:pTarget->asOtherParty,
+				:pTarget->asServiceType,
+				:pTarget->asServiceCode,
+				:pTarget->asReserve2,
+				:pTarget->asMsc,
+				:pTarget->asLac,
+				:pTarget->asCellID,
+				:pTarget->asServType,
+				:pTarget->asStartDate,
+				:pTarget->asStartTime,
+				:pTarget->asPayUnit,
+				:pTarget->asSystemType,
+				:pTarget->asRateIndication,
+				:pTarget->asHotBillingTag,
+				:pTarget->asImei,
+				:pTarget->asReserve3;
+		if(CheckSqlResult("Dyn insert into VISIT_GSMUP_CRICF_02")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据结构缓冲写入VISIT_GSMUP_CII_02*/
+int EInsertStructToVisitGsmupCii(struct VisitGsmupCiiStruct *p,
+	int iInsertFlag,struct VisitGsmupCiiStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asRecordType[iCurPos],		p->sRecordType);
+		strcpy(pTarget->asInCityCode[iCurPos],		p->sInCityCode);
+		strcpy(pTarget->asOutCityCode[iCurPos],		p->sOutCityCode);
+		strcpy(pTarget->asLinkRef[iCurPos],		p->sLinkRef);
+		strcpy(pTarget->asReserve1[iCurPos],		p->sReserve1);
+		strcpy(pTarget->asImsi[iCurPos],		p->sImsi);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asModifyTag[iCurPos],		p->sModifyTag);
+		strcpy(pTarget->asNbrType[iCurPos],		p->sNbrType);
+		strcpy(pTarget->asNbrPlan[iCurPos],		p->sNbrPlan);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+		strcpy(pTarget->asServiceCode[iCurPos],		p->sServiceCode);
+		strcpy(pTarget->asDupServiceType[iCurPos],	p->sDupServiceType);
+		strcpy(pTarget->asDupServiceCode[iCurPos],	p->sDupServiceCode);
+		strcpy(pTarget->asAckChannel[iCurPos],		p->sAckChannel);
+		strcpy(pTarget->asUseChannel[iCurPos],		p->sUseChannel);
+		strcpy(pTarget->asTransparentFlag[iCurPos],	p->sTransparentFlag);
+		strcpy(pTarget->asAct1[iCurPos],		p->sAct1);
+		strcpy(pTarget->asCode1[iCurPos],		p->sCode1);
+		strcpy(pTarget->asAct2[iCurPos],		p->sAct2);
+		strcpy(pTarget->asCode2[iCurPos],		p->sCode2);
+		strcpy(pTarget->asAct3[iCurPos],		p->sAct3);
+		strcpy(pTarget->asCode3[iCurPos],		p->sCode3);
+		strcpy(pTarget->asAct4[iCurPos],		p->sAct4);
+		strcpy(pTarget->asCode4[iCurPos],		p->sCode4);
+		strcpy(pTarget->asAct5[iCurPos],		p->sAct5);
+		strcpy(pTarget->asCode5[iCurPos],		p->sCode5);
+		strcpy(pTarget->asMsc[iCurPos],			p->sMsc);
+		strcpy(pTarget->asLac[iCurPos],			p->sLac);
+		strcpy(pTarget->asCellID[iCurPos],		p->sCellID);
+		strcpy(pTarget->asServType[iCurPos],		p->sServType);
+		strcpy(pTarget->asStartDate[iCurPos],		p->sStartDate);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		strcpy(pTarget->asPayUnit[iCurPos],		p->sPayUnit);
+		strcpy(pTarget->asFlowRef[iCurPos],		p->sFlowRef);
+		strcpy(pTarget->asFee[iCurPos],			p->sFee);
+		strcpy(pTarget->asPayItem[iCurPos],		p->sPayItem);
+		strcpy(pTarget->asSystemType[iCurPos],		p->sSystemType);
+		strcpy(pTarget->asRateIndication[iCurPos],	p->sRateIndication);
+		strcpy(pTarget->asHotBillingTag[iCurPos],	p->sHotBillingTag);
+		strcpy(pTarget->asVhe[iCurPos],			p->sVhe);
+		strcpy(pTarget->asInterScpFlag[iCurPos],	p->sInterScpFlag);
+		strcpy(pTarget->asReserve2[iCurPos],		p->sReserve2);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==VISIT_GSMUP_CII_02_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				RECORD_TYPE,\n\
+				IN_CITY_CODE,\n\
+				OUT_CITY_CODE,\n\
+				LINK_REF,\n\
+				RESERVE1,\n\
+				IMSI,\n\
+				MSISDN,\n\
+				MODIFY_TAG,\n\
+				NBR_TYPE,\n\
+				NBR_PLAN,\n\
+				OTHER_PARTY,\n\
+				SERVICE_TYPE,\n\
+				SERVICE_CODE,\n\
+				DUP_SERVICE_TYPE,\n\
+				DUP_SERVICE_CODE,\n\
+				ACK_CHANNEL,\n\
+				USE_CHANNEL,\n\
+				TRANSPARENT_FLAG,\n\
+				ACT1,\n\
+				CODE1,\n\
+				ACT2,\n\
+				CODE2,\n\
+				ACT3,\n\
+				CODE3,\n\
+				ACT4,\n\
+				CODE4,\n\
+				ACT5,\n\
+				CODE5,\n\
+				MSC,\n\
+				LAC,\n\
+				CELL_ID,\n\
+				SERV_TYPE,\n\
+				START_DATE,\n\
+				START_TIME,\n\
+				PAY_UNIT,\n\
+				FLOW_REF,\n\
+				FEE,\n\
+				PAY_ITEM,\n\
+				SYSTEM_TYPE,\n\
+				RATE_INDICATION,\n\
+				HOT_BILLING_TAG,\n\
+				VHE,\n\
+				INTER_SCP_FLAG,\n\
+				RESERVE2)\n\
+			VALUES (\n\
+				:asRecordType,\n\
+				:asInCityCode,\n\
+				:asOutCityCode,\n\
+				:asLinkRef,\n\
+				:asReserve1,\n\
+				:asImsi,\n\
+				:asMsisdn,\n\
+				:asModifyTag,\n\
+				:asNbrType,\n\
+				:asNbrPlan,\n\
+				:asOtherParty,\n\
+				:asServiceType,\n\
+				:asServiceCode,\n\
+				:asDupServiceType,\n\
+				:asDupServiceCode,\n\
+				:asAckChannel,\n\
+				:asUseChannel,\n\
+				:asTransparentFlag,\n\
+				:asAct1,\n\
+				:asCode1,\n\
+				:asAct2,\n\
+				:asCode2,\n\
+				:asAct3,\n\
+				:asCode3,\n\
+				:asAct4,\n\
+				:asCode4,\n\
+				:asAct5,\n\
+				:asCode5,\n\
+				:asMsc,\n\
+				:asLac,\n\
+				:asCellID,\n\
+				:asServType,\n\
+				:asStartDate,\n\
+				:asStartTime,\n\
+				:asPayUnit,\n\
+				:asFlowRef,\n\
+				:asFee,\n\
+				:asPayItem,\n\
+				:asSystemType,\n\
+				:asRateIndication,\n\
+				:asHotBillingTag,\n\
+				:asVhe,\n\
+				:asInterScpFlag,\n\
+				:asReserve2\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE VISIT_GSMUP_CII_02TRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement VISIT_GSMUP_CII_02")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE VISIT_GSMUP_CII_02TRG USING
+				:pTarget->asRecordType,
+				:pTarget->asInCityCode,
+				:pTarget->asOutCityCode,
+				:pTarget->asLinkRef,
+				:pTarget->asReserve1,
+				:pTarget->asImsi,
+				:pTarget->asMsisdn,
+				:pTarget->asModifyTag,
+				:pTarget->asNbrType,
+				:pTarget->asNbrPlan,
+				:pTarget->asOtherParty,
+				:pTarget->asServiceType,
+				:pTarget->asServiceCode,
+				:pTarget->asDupServiceType,
+				:pTarget->asDupServiceCode,
+				:pTarget->asAckChannel,
+				:pTarget->asUseChannel,
+				:pTarget->asTransparentFlag,
+				:pTarget->asAct1,
+				:pTarget->asCode1,
+				:pTarget->asAct2,
+				:pTarget->asCode2,
+				:pTarget->asAct3,
+				:pTarget->asCode3,
+				:pTarget->asAct4,
+				:pTarget->asCode4,
+				:pTarget->asAct5,
+				:pTarget->asCode5,
+				:pTarget->asMsc,
+				:pTarget->asLac,
+				:pTarget->asCellID,
+				:pTarget->asServType,
+				:pTarget->asStartDate,
+				:pTarget->asStartTime,
+				:pTarget->asPayUnit,
+				:pTarget->asFlowRef,
+				:pTarget->asFee,
+				:pTarget->asPayItem,
+				:pTarget->asSystemType,
+				:pTarget->asRateIndication,
+				:pTarget->asHotBillingTag,
+				:pTarget->asVhe,
+				:pTarget->asInterScpFlag,
+				:pTarget->asReserve2;
+		if(CheckSqlResult("Dyn insert into VISIT_GSMUP_CII_02")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+

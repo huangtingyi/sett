@@ -1,0 +1,131 @@
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdb.h>
+
+#include <stt_ticket.h>
+
+int EUpdateStructToUSttTicket1(struct USttTicketStruct *p,
+	int iUpdateFlag,struct USttTicketStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+		pTarget->aiRoamFee[iCurPos]=			p->iRoamFee;
+		pTarget->aiTollFee[iCurPos]=			p->iTollFee;
+		pTarget->aiAddFee[iCurPos]=			p->iAddFee;
+
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asVisitAreaCode[iCurPos],	p->sVisitAreaCode);
+		strcpy(pTarget->asCalledCode[iCurPos],		p->sCalledCode);
+		strcpy(pTarget->asRoamType[iCurPos],		p->sRoamType);
+		strcpy(pTarget->asDistanceType[iCurPos],	p->sDistanceType);
+
+		pTarget->aiTrunkInTypeID[iCurPos]=		p->iTrunkInTypeID;
+		pTarget->aiTrunkOutTypeID[iCurPos]=		p->iTrunkOutTypeID;
+		pTarget->aiTrunkInCarrierID[iCurPos]=		p->iTrunkInCarrierID;
+		pTarget->aiTrunkOutCarrierID[iCurPos]=		p->iTrunkOutCarrierID;
+		pTarget->aiCallingTypeID[iCurPos]=		p->iCallingTypeID;
+		pTarget->aiCalledTypeID[iCurPos]=		p->iCalledTypeID;
+		pTarget->aiCallingCarrierID[iCurPos]=		p->iCallingCarrierID;
+		pTarget->aiCalledCarrierID[iCurPos]=		p->iCalledCarrierID;
+		pTarget->aiCallingAreaID[iCurPos]=		p->iCallingAreaID;
+		pTarget->aiCalledAreaID[iCurPos]=		p->iCalledAreaID;
+
+		strcpy(pTarget->asSplitRuleID[iCurPos],		p->sSplitRuleID);
+		strcpy(pTarget->asTrunkIn[iCurPos],		p->sTrunkIn);
+		strcpy(pTarget->asTrunkOut[iCurPos],		p->sTrunkOut);
+		strcpy(pTarget->asBillMode[iCurPos],		p->sBillMode);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asRowID[iCurPos],		p->sRowID);
+
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+
+
+		iCurPos++;
+	}
+
+	if(iUpdateFlag==TRUE||iCurPos==STT_TICKET_BUFLEN_UP){
+
+/* INSERT */
+		char statement[4096];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE %s\n\
+			SET \n\
+				TICKET_TYPE_ID=		:aiTicketTypeID,\n\
+				ROAM_FEE=               :aiRoamFee,\n\
+				TOLL_FEE=               :aiTollFee,\n\
+				ADD_FEE=                :aiAddFee,\n\
+				HOME_AREA_CODE=         :asHomeAreaCode,\n\
+				VISIT_AREA_CODE=        :asVisitAreaCode,\n\
+				CALLED_CODE=            :asCalledCode,\n\
+				ROAM_TYPE=              :asRoamType,\n\
+				DISTANCE_TYPE=          :asDistanceType,\n\
+				TRUNK_IN_TYPE_ID=       :aiTrunkInTypeID,\n\
+				TRUNK_OUT_TYPE_ID=      :aiTrunkOutTypeID,\n\
+				TRUNK_IN_CARRIER_ID=    :aiTrunkInCarrierID,\n\
+				TRUNK_OUT_CARRIER_ID=   :aiTrunkOutCarrierID,\n\
+				CALLING_TYPE_ID=        :aiCallingTypeID,\n\
+				CALLED_TYPE_ID=         :aiCalledTypeID,\n\
+				CALLING_CARRIER_ID=     :aiCallingCarrierID,\n\
+				CALLED_CARRIER_ID=      :aiCalledCarrierID,\n\
+				CALLING_AREA_ID=        :aiCallingAreaID,\n\
+				CALLED_AREA_ID=         :aiCalledAreaID,\n\
+				SPLIT_RULE_ID=          :asSplitRuleID,\n\
+				TRUNK_IN=               :asTrunkIn,\n\
+				TRUNK_OUT=     	        :asTrunkOut,\n\
+				BILL_MODE=		:asBillMode,\n\
+				STATE=			:asState,\n\
+				UPDATE_DATE=		SYSDATE\n\
+			WHERE \n\
+				ROWID = chartorowid(:asRowID)\n\
+			",sTableName);
+
+		EXEC SQL PREPARE RSTT_TICKETUCR FROM :statement;
+		if(CheckSqlResult("Prepare update statement STT_TICKET")<0)
+			return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE RSTT_TICKETUCR USING
+				:pTarget->aiTicketTypeID,
+				:pTarget->aiRoamFee,
+				:pTarget->aiTollFee,
+				:pTarget->aiAddFee,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asVisitAreaCode,
+				:pTarget->asCalledCode,
+				:pTarget->asRoamType,
+				:pTarget->asDistanceType,
+				:pTarget->aiTrunkInTypeID,
+				:pTarget->aiTrunkOutTypeID,
+				:pTarget->aiTrunkInCarrierID,
+				:pTarget->aiTrunkOutCarrierID,
+				:pTarget->aiCallingTypeID,
+				:pTarget->aiCalledTypeID,
+				:pTarget->aiCallingCarrierID,
+				:pTarget->aiCalledCarrierID,
+				:pTarget->aiCallingAreaID,
+				:pTarget->aiCalledAreaID,
+				:pTarget->asSplitRuleID,
+				:pTarget->asTrunkIn,
+				:pTarget->asTrunkOut,
+				:pTarget->asBillMode,
+				:pTarget->asState,
+				:pTarget->asRowID;
+		if(CheckSqlResult("Dyn update STT_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}

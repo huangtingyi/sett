@@ -1,0 +1,506 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <wwtiny.h>
+#include <wwcoding.h>
+#include <wwdb.h>
+#include <list.h>
+#include <bintree.h>
+#include <wwlog.h>
+
+#include <expr.h>
+#include <expr_fun.h>
+#include <expr_var.h>
+#include <expr_supp.h>
+
+#include <param_intf.h>
+#include <settreport_supp.h>
+/*批量数据动态从PARAM_REPORT_STAT中用结构缓冲方式取数据*/
+int EGetParamReportStatToStruct(struct ParamReportStatStruct *p,
+	struct ParamReportStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				ITEM_ID,\n\
+				ACCT_ITEM_TYPE_ID,\n\
+				OPP_CARRIER_ID,\n\
+				USER_TYPE,\n\
+				REMARK,\n\
+				to_char(nvl(EFF_DATE,SYSDATE-3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(EXP_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(STATE,' '),\n\
+				to_char(nvl(STATE_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(CREATED_DATE,SYSDATE+3000),'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE PARAM_REPORT_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE PARAM_REPORT_STATSCR PARAM_REPORT_STATCR");
+
+		EXEC SQL DECLARE PARAM_REPORT_STATCR CURSOR FOR PARAM_REPORT_STATSCR;
+		CheckSqlError("Declare PARAM_REPORT_STATCR");
+
+		EXEC SQL OPEN PARAM_REPORT_STATCR;
+		CheckSqlError("Open PARAM_REPORT_STATCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE PARAM_REPORT_STATCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH PARAM_REPORT_STATCR INTO
+			:pSource->aiItemID,
+			:pSource->aiAcctItemTypeID,
+			:pSource->asOppCarrierID,
+			:pSource->asUserType,
+			:pSource->asRemark,
+			:pSource->asEffDate,
+			:pSource->asExpDate,
+			:pSource->asState,
+			:pSource->asStateDate,
+			:pSource->asCreatedDate;
+		CheckSqlError("Fetch PARAM_REPORT_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE PARAM_REPORT_STATCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=PARAM_REPORT_STAT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iItemID=			pSource->aiItemID[iCurPos];
+		p->iAcctItemTypeID=		pSource->aiAcctItemTypeID[iCurPos];
+
+		strcpy(p->sOppCarrierID,	pSource->asOppCarrierID[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sRemark,		pSource->asRemark[iCurPos]);
+		strcpy(p->sEffDate,		pSource->asEffDate[iCurPos]);
+		strcpy(p->sExpDate,		pSource->asExpDate[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sStateDate,		pSource->asStateDate[iCurPos]);
+		strcpy(p->sCreatedDate,		pSource->asCreatedDate[iCurPos]);
+
+		AllTrim(p->sOppCarrierID);
+		AllTrim(p->sUserType);
+		AllTrim(p->sRemark);
+		AllTrim(p->sEffDate);
+		AllTrim(p->sExpDate);
+		AllTrim(p->sState);
+		AllTrim(p->sStateDate);
+		AllTrim(p->sCreatedDate);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/**对表PARAM_REPORT_STAT的链表释放函数**/
+void DestroyParamReportStat(struct ParamReportStatStruct *ptHead)
+{
+	struct ParamReportStatStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+int data_search_bintree_paramreportstat_e(void *pValue,void*pData)
+{
+	struct ParamReportStatStruct *pSource=(struct ParamReportStatStruct *)pValue;
+	struct ParamReportStatStruct *pTarget=(struct ParamReportStatStruct *)pData;
+
+	return pSource->iAcctItemTypeID-pTarget->iAcctItemTypeID;
+}
+int chkRuleStr(char sRuleStr[])
+{
+	int iCnt=0,i=0;
+	char sTemp[41],sStr[41],sStr1[2];
+	strncpy(sTemp,sRuleStr,2);sTemp[2]=0;
+	if(strcmp(sTemp,"I:")!=0&&
+		strcmp(sTemp,"E:")!=0)return -1;
+	
+	strcpy(sTemp,sRuleStr+2);
+	if(strcmp(sTemp,"")==0)return -1;
+	
+	if(strcmp(sTemp,"ALL")!=0){
+	
+		strncpy(sStr1,sTemp+strlen(sTemp)-1,1);sStr1[1]=0;
+		if(strcmp(sStr1,",")!=0)return -1;
+		
+		iCnt=GetSepCnt(sTemp,',');
+		while(i<iCnt){
+			i++;
+			GetSepStrX(sTemp,',',i,40,sStr);
+			
+			if(strcmp(sStr,"")==0)continue;
+			
+			strncpy(sStr1,sStr,1);sStr1[1]=0;
+			if(strcmp(sStr1,"*")!=0)return -1;
+
+			strncpy(sStr1,sStr+strlen(sStr)-1,1);sStr1[1]=0;
+			
+			if(strcmp(sStr1,"*")!=0)return -1;
+			
+			
+			i++;
+		}
+	}
+
+	return 0;
+}
+int InitParamReportStat2Bin(BINTREE **ppRoot)
+{
+	int iCnt=0;
+	static struct ParamReportStatStruct *pTemp,*ptHead=NULL;
+	struct ParamReportStatStruct Temp;
+	struct ParamReportStatStructIn TempIn;
+
+	/*释放内部链表**/
+	DestroyParamReportStat(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct ParamReportStatStructIn));
+	sprintf(TempIn.sTableName,"PARAM_REPORT_STAT");
+	sprintf(TempIn.sCondition,
+	" WHERE STATE='A0A' AND NVL(EFF_DATE,SYSDATE-2)<TRUNC(SYSDATE) AND NVL(EXP_DATE,SYSDATE+2)>TRUNC(SYSDATE) ");
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetParamReportStatToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+
+		if(chkRuleStr(Temp.sOppCarrierID)<0){
+			printf("报表项 %d sOppCarrierID=%s规则非法.\n ",Temp.iItemID,Temp.sOppCarrierID);
+			return -1;
+		}
+		if(chkRuleStr(Temp.sUserType)<0){
+			printf("报表项 %d sUserType=%s规则非法.\n ",Temp.iItemID,Temp.sUserType);
+			return -1;
+		}		
+		
+		if((pTemp=(struct ParamReportStatStruct*)
+			malloc(sizeof(struct ParamReportStatStruct)))==NULL){
+
+			DestroyParamReportStat(ptHead);
+			ptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct ParamReportStatStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		
+		if(InsertBin(ppRoot,(void*)pTemp,
+				data_search_bintree_paramreportstat_e,
+				assign_insert_bintree)<0) return -1;
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表PARAM_REPORT_STAT记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表PARAM_REPORT_STAT完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+
+
+
+/*批量数据动态从REPORT_STAT中用结构缓冲方式取数据*/
+int EGetReportStatToStruct(struct ReportStatStruct *p,
+	struct ReportStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				REPORT_STAT_ID,\n\
+				ITEM_ID,\n\
+				LATN_ID,\n\
+				to_char(CHARGE),\n\
+				to_char(SETT_ITEM_DATE,'yyyymmddhh24miss'),\n\
+				SETT_CYCLE_ID,\n\
+				to_char(CREATED_DATE,'yyyymmddhh24miss'),\n\
+				STATE,\n\
+				OPP_CARRIER_ID,\n\
+				OPP_AREA,\n\
+				RESERVE,\n\
+				SOURCE_ID\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE REPORT_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE REPORT_STATSCR REPORT_STATCR");
+
+		EXEC SQL DECLARE REPORT_STATCR CURSOR FOR REPORT_STATSCR;
+		CheckSqlError("Declare REPORT_STATCR");
+
+		EXEC SQL OPEN REPORT_STATCR;
+		CheckSqlError("Open REPORT_STATCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE REPORT_STATCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH REPORT_STATCR INTO
+			:pSource->aiReportStatID,
+			:pSource->aiItemID,
+			:pSource->aiLatnID,
+			:pSource->asCharge,
+			:pSource->asSettItemDate,
+			:pSource->aiSettCycleID,
+			:pSource->asCreatedDate,
+			:pSource->asState,
+			:pSource->aiOppCarrierID,
+			:pSource->asOppArea,
+			:pSource->asReserve,
+			:pSource->asSourceID;
+		CheckSqlError("Fetch REPORT_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE REPORT_STATCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=REPORT_STAT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iReportStatID=		pSource->aiReportStatID[iCurPos];
+		p->iItemID=			pSource->aiItemID[iCurPos];
+		p->iLatnID=			pSource->aiLatnID[iCurPos];
+
+		strcpy(p->sCharge,		pSource->asCharge[iCurPos]);
+		strcpy(p->sSettItemDate,	pSource->asSettItemDate[iCurPos]);
+
+		p->iSettCycleID=		pSource->aiSettCycleID[iCurPos];
+
+		strcpy(p->sCreatedDate,		pSource->asCreatedDate[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+
+		p->iOppCarrierID=		pSource->aiOppCarrierID[iCurPos];
+
+		strcpy(p->sOppArea,		pSource->asOppArea[iCurPos]);
+		strcpy(p->sReserve,		pSource->asReserve[iCurPos]);
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+
+		AllTrim(p->sCharge);
+		AllTrim(p->sSettItemDate);
+		AllTrim(p->sCreatedDate);
+		AllTrim(p->sState);
+		AllTrim(p->sOppArea);
+		AllTrim(p->sReserve);
+		AllTrim(p->sSourceID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据结构缓冲写入REPORT_STAT*/
+int EInsertStructToReportStat(struct ReportStatStruct *p,
+	int iInsertFlag,struct ReportStatStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiReportStatID[iCurPos]=		p->iReportStatID;
+		pTarget->aiItemID[iCurPos]=			p->iItemID;
+		pTarget->aiLatnID[iCurPos]=			p->iLatnID;
+
+		strcpy(pTarget->asCharge[iCurPos],		p->sCharge);
+		strcpy(pTarget->asSettItemDate[iCurPos],	p->sSettItemDate);
+
+		pTarget->aiSettCycleID[iCurPos]=		p->iSettCycleID;
+
+		strcpy(pTarget->asCreatedDate[iCurPos],		p->sCreatedDate);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+
+		pTarget->aiOppCarrierID[iCurPos]=		p->iOppCarrierID;
+
+		strcpy(pTarget->asOppArea[iCurPos],		p->sOppArea);
+		strcpy(pTarget->asReserve[iCurPos],		p->sReserve);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==REPORT_STAT_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				REPORT_STAT_ID,\n\
+				ITEM_ID,\n\
+				LATN_ID,\n\
+				CHARGE,\n\
+				SETT_ITEM_DATE,\n\
+				SETT_CYCLE_ID,\n\
+				CREATED_DATE,\n\
+				STATE,\n\
+				OPP_CARRIER_ID,\n\
+				OPP_AREA,\n\
+				RESERVE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:aiReportStatID,\n\
+				:aiItemID,\n\
+				:aiLatnID,\n\
+				to_number(:asCharge),\n\
+				to_date(:asSettItemDate,'yyyymmddhh24miss'),\n\
+				:aiSettCycleID,\n\
+				to_date(:asCreatedDate,'yyyymmddhh24miss'),\n\
+				:asState,\n\
+				:aiOppCarrierID,\n\
+				:asOppArea,\n\
+				:asReserve,\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE REPORT_STATTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement REPORT_STAT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE REPORT_STATTRG USING
+				:pTarget->aiReportStatID,
+				:pTarget->aiItemID,
+				:pTarget->aiLatnID,
+				:pTarget->asCharge,
+				:pTarget->asSettItemDate,
+				:pTarget->aiSettCycleID,
+				:pTarget->asCreatedDate,
+				:pTarget->asState,
+				:pTarget->aiOppCarrierID,
+				:pTarget->asOppArea,
+				:pTarget->asReserve,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into REPORT_STAT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+int iReportStatID()
+{
+	static int  iReportStatIDStep=0;
+	static int  iReportStatID=0,iBaseReportStatID=0;
+
+	if(iReportStatID-iBaseReportStatID==iReportStatIDStep){
+		if(!iReportStatIDStep){
+			EXEC SQL SELECT INCREMENT_BY INTO :iReportStatIDStep
+				FROM USER_SEQUENCES
+			WHERE SEQUENCE_NAME ='REPORT_STAT_ID_SEQ';
+			CheckSqlError("Get ReportStatID SeqStep");
+		}
+		EXEC SQL SELECT REPORT_STAT_ID_SEQ.NEXTVAL 
+			INTO :iBaseReportStatID FROM DUAL;
+		CheckSqlError("Get Base Value0");
+		iReportStatID=iBaseReportStatID;
+     	}
+	return iReportStatID++;
+}
+

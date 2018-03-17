@@ -1,0 +1,3022 @@
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdir.h>
+#include <list.h>
+#include <wwfile.h>
+#include <wwdb.h>
+#include <bintree.h>
+#include <dbsupp.h>
+
+#include "settle_supp.h"
+
+
+/*批量数据动态从TEMPLATE_STT_TICKET中用结构缓冲方式取数据*/
+int EGetTemplateSttTicketToStruct(struct TemplateSttTicketStruct *p,
+	struct TemplateSttTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(SETT_LATN_ID,' '),\n\
+				nvl(REPORT_ITEM_ID,0),\n\
+				nvl(PROD_ID,' '),\n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(OPP_AREA_CODE,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(DURATION,0),\n\
+				nvl(SETT_FEE,0),\n\
+				nvl(MY_DISTANCE_TYPE,' '),\n\
+				nvl(OPP_DISTANCE_TYPE,' '),\n\
+				nvl(MY_NBR_TYPE,' '),\n\
+				nvl(OPP_NBR_TYPE,' '),\n\
+				nvl(MY_3G_FLAG,' '),\n\
+				nvl(OPP_3G_FLAG,' '),\n\
+				nvl(MSC,' '),\n\
+				nvl(TRUNK_IN,' '),\n\
+				nvl(TRUNK_OUT,' '),\n\
+				nvl(TRUNK_IN_CARR_ID,' '),\n\
+				nvl(TRUNK_OUT_CARR_ID,' '),\n\
+				nvl(MY_CARR_ID,' '),\n\
+				nvl(OPP_CARR_ID,' '),\n\
+				nvl(MY_AREA_ID,0),\n\
+				nvl(OPP_AREA_ID,0),\n\
+				nvl(SERV_FLAG,' '),\n\
+				nvl(FILE_NAME,' '),\n\
+				nvl(GROUP_ID,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE TEMPLATE_STT_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE TEMPLATE_STT_TICKETSCR TEMPLATE_STT_TICKETCR");
+
+		EXEC SQL DECLARE TEMPLATE_STT_TICKETCR CURSOR FOR TEMPLATE_STT_TICKETSCR;
+		CheckSqlError("Declare TEMPLATE_STT_TICKETCR");
+
+		EXEC SQL OPEN TEMPLATE_STT_TICKETCR;
+		CheckSqlError("Open TEMPLATE_STT_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE TEMPLATE_STT_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH TEMPLATE_STT_TICKETCR INTO
+			:pSource->asSettLatnID,
+			:pSource->aiReportItemID,
+			:pSource->asProdID,
+			:pSource->asCallType,
+			:pSource->asHomeAreaCode,
+			:pSource->asMsisdn,
+			:pSource->asOppAreaCode,
+			:pSource->asOtherParty,
+			:pSource->asStartTime,
+			:pSource->aiDuration,
+			:pSource->aiSettFee,
+			:pSource->asMyDistanceType,
+			:pSource->asOppDistanceType,
+			:pSource->asMyNbrType,
+			:pSource->asOppNbrType,
+			:pSource->asMy3gFlag,
+			:pSource->asOpp3gFlag,
+			:pSource->asMsc,
+			:pSource->asTrunkIn,
+			:pSource->asTrunkOut,
+			:pSource->asTrunkInCarrID,
+			:pSource->asTrunkOutCarrID,
+			:pSource->asMyCarrID,
+			:pSource->asOppCarrID,
+			:pSource->aiMyAreaID,
+			:pSource->aiOppAreaID,
+			:pSource->asServFlag,
+			:pSource->asFileName,
+			:pSource->asGroupID;
+		CheckSqlError("Fetch TEMPLATE_STT_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE TEMPLATE_STT_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=TEMPLATE_STT_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sSettLatnID,		pSource->asSettLatnID[iCurPos]);
+
+		p->iReportItemID=		pSource->aiReportItemID[iCurPos];
+
+		strcpy(p->sProdID,		pSource->asProdID[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sOppAreaCode,		pSource->asOppAreaCode[iCurPos]);
+		strcpy(p->sOtherParty,		pSource->asOtherParty[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iSettFee=			pSource->aiSettFee[iCurPos];
+
+		strcpy(p->sMyDistanceType,	pSource->asMyDistanceType[iCurPos]);
+		strcpy(p->sOppDistanceType,	pSource->asOppDistanceType[iCurPos]);
+		strcpy(p->sMyNbrType,		pSource->asMyNbrType[iCurPos]);
+		strcpy(p->sOppNbrType,		pSource->asOppNbrType[iCurPos]);
+		strcpy(p->sMy3gFlag,		pSource->asMy3gFlag[iCurPos]);
+		strcpy(p->sOpp3gFlag,		pSource->asOpp3gFlag[iCurPos]);
+		strcpy(p->sMsc,			pSource->asMsc[iCurPos]);
+		strcpy(p->sTrunkIn,		pSource->asTrunkIn[iCurPos]);
+		strcpy(p->sTrunkOut,		pSource->asTrunkOut[iCurPos]);
+		strcpy(p->sTrunkInCarrID,	pSource->asTrunkInCarrID[iCurPos]);
+		strcpy(p->sTrunkOutCarrID,	pSource->asTrunkOutCarrID[iCurPos]);
+		strcpy(p->sMyCarrID,		pSource->asMyCarrID[iCurPos]);
+		strcpy(p->sOppCarrID,		pSource->asOppCarrID[iCurPos]);
+
+		p->iMyAreaID=			pSource->aiMyAreaID[iCurPos];
+		p->iOppAreaID=			pSource->aiOppAreaID[iCurPos];
+
+		strcpy(p->sServFlag,		pSource->asServFlag[iCurPos]);
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sGroupID,		pSource->asGroupID[iCurPos]);
+
+		AllTrim(p->sSettLatnID);
+		AllTrim(p->sProdID);
+		AllTrim(p->sCallType);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sOppAreaCode);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sMyDistanceType);
+		AllTrim(p->sOppDistanceType);
+		AllTrim(p->sMyNbrType);
+		AllTrim(p->sOppNbrType);
+		AllTrim(p->sMy3gFlag);
+		AllTrim(p->sOpp3gFlag);
+		AllTrim(p->sMsc);
+		AllTrim(p->sTrunkIn);
+		AllTrim(p->sTrunkOut);
+		AllTrim(p->sTrunkInCarrID);
+		AllTrim(p->sTrunkOutCarrID);
+		AllTrim(p->sMyCarrID);
+		AllTrim(p->sOppCarrID);
+		AllTrim(p->sServFlag);
+		AllTrim(p->sFileName);
+		AllTrim(p->sGroupID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据结构缓冲写入TEMPLATE_STT_TICKET*/
+int EInsertStructToTemplateSttTicket(struct TemplateSttTicketStruct *p,
+	int iInsertFlag,struct TemplateSttTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asSettLatnID[iCurPos],		p->sSettLatnID);
+
+		pTarget->aiReportItemID[iCurPos]=		p->iReportItemID;
+
+		strcpy(pTarget->asProdID[iCurPos],		p->sProdID);
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asOppAreaCode[iCurPos],		p->sOppAreaCode);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+		pTarget->aiSettFee[iCurPos]=			p->iSettFee;
+
+		strcpy(pTarget->asMyDistanceType[iCurPos],	p->sMyDistanceType);
+		strcpy(pTarget->asOppDistanceType[iCurPos],	p->sOppDistanceType);
+		strcpy(pTarget->asMyNbrType[iCurPos],		p->sMyNbrType);
+		strcpy(pTarget->asOppNbrType[iCurPos],		p->sOppNbrType);
+		strcpy(pTarget->asMy3gFlag[iCurPos],		p->sMy3gFlag);
+		strcpy(pTarget->asOpp3gFlag[iCurPos],		p->sOpp3gFlag);
+		strcpy(pTarget->asMsc[iCurPos],			p->sMsc);
+		strcpy(pTarget->asTrunkIn[iCurPos],		p->sTrunkIn);
+		strcpy(pTarget->asTrunkOut[iCurPos],		p->sTrunkOut);
+		strcpy(pTarget->asTrunkInCarrID[iCurPos],	p->sTrunkInCarrID);
+		strcpy(pTarget->asTrunkOutCarrID[iCurPos],	p->sTrunkOutCarrID);
+		strcpy(pTarget->asMyCarrID[iCurPos],		p->sMyCarrID);
+		strcpy(pTarget->asOppCarrID[iCurPos],		p->sOppCarrID);
+
+		pTarget->aiMyAreaID[iCurPos]=			p->iMyAreaID;
+		pTarget->aiOppAreaID[iCurPos]=			p->iOppAreaID;
+
+		strcpy(pTarget->asServFlag[iCurPos],		p->sServFlag);
+		strcpy(pTarget->asFileName[iCurPos],		p->sFileName);
+		strcpy(pTarget->asGroupID[iCurPos],		p->sGroupID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==TEMPLATE_STT_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				SETT_LATN_ID,\n\
+				REPORT_ITEM_ID,\n\
+				PROD_ID,\n\
+				CALL_TYPE,\n\
+				HOME_AREA_CODE,\n\
+				MSISDN,\n\
+				OPP_AREA_CODE,\n\
+				OTHER_PARTY,\n\
+				START_TIME,\n\
+				DURATION,\n\
+				SETT_FEE,\n\
+				MY_DISTANCE_TYPE,\n\
+				OPP_DISTANCE_TYPE,\n\
+				MY_NBR_TYPE,\n\
+				OPP_NBR_TYPE,\n\
+				MY_3G_FLAG,\n\
+				OPP_3G_FLAG,\n\
+				MSC,\n\
+				TRUNK_IN,\n\
+				TRUNK_OUT,\n\
+				TRUNK_IN_CARR_ID,\n\
+				TRUNK_OUT_CARR_ID,\n\
+				MY_CARR_ID,\n\
+				OPP_CARR_ID,\n\
+				MY_AREA_ID,\n\
+				OPP_AREA_ID,\n\
+				SERV_FLAG,\n\
+				FILE_NAME,\n\
+				GROUP_ID)\n\
+			VALUES (\n\
+				:asSettLatnID,\n\
+				:aiReportItemID,\n\
+				:asProdID,\n\
+				:asCallType,\n\
+				:asHomeAreaCode,\n\
+				:asMsisdn,\n\
+				:asOppAreaCode,\n\
+				:asOtherParty,\n\
+				:asStartTime,\n\
+				:aiDuration,\n\
+				:aiSettFee,\n\
+				:asMyDistanceType,\n\
+				:asOppDistanceType,\n\
+				:asMyNbrType,\n\
+				:asOppNbrType,\n\
+				:asMy3gFlag,\n\
+				:asOpp3gFlag,\n\
+				:asMsc,\n\
+				:asTrunkIn,\n\
+				:asTrunkOut,\n\
+				:asTrunkInCarrID,\n\
+				:asTrunkOutCarrID,\n\
+				:asMyCarrID,\n\
+				:asOppCarrID,\n\
+				:aiMyAreaID,\n\
+				:aiOppAreaID,\n\
+				:asServFlag,\n\
+				:asFileName,\n\
+				:asGroupID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE TEMPLATE_STT_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement TEMPLATE_STT_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE TEMPLATE_STT_TICKETTRG USING
+				:pTarget->asSettLatnID,
+				:pTarget->aiReportItemID,
+				:pTarget->asProdID,
+				:pTarget->asCallType,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asMsisdn,
+				:pTarget->asOppAreaCode,
+				:pTarget->asOtherParty,
+				:pTarget->asStartTime,
+				:pTarget->aiDuration,
+				:pTarget->aiSettFee,
+				:pTarget->asMyDistanceType,
+				:pTarget->asOppDistanceType,
+				:pTarget->asMyNbrType,
+				:pTarget->asOppNbrType,
+				:pTarget->asMy3gFlag,
+				:pTarget->asOpp3gFlag,
+				:pTarget->asMsc,
+				:pTarget->asTrunkIn,
+				:pTarget->asTrunkOut,
+				:pTarget->asTrunkInCarrID,
+				:pTarget->asTrunkOutCarrID,
+				:pTarget->asMyCarrID,
+				:pTarget->asOppCarrID,
+				:pTarget->aiMyAreaID,
+				:pTarget->aiOppAreaID,
+				:pTarget->asServFlag,
+				:pTarget->asFileName,
+				:pTarget->asGroupID;
+		if(CheckSqlResult("Dyn insert into TEMPLATE_STT_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+
+
+
+int GetSettBillStorSeq()
+{
+	int iSettBillStorSeq=0;
+	
+	EXEC SQL SELECT SETT_BILL_STOR_SEQ.nextval INTO :iSettBillStorSeq FROM DUAL ;
+	CheckSqlError("Get iSettBillStorSeq ERROR");
+	
+	return iSettBillStorSeq;
+	
+}
+
+int SDGetSettBillStorLogToStruct(struct SettBillStorLogStruct *p,char sTableName[],char sCondition[])
+{
+
+	/*这里不要控制变量*/
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(SETT_BILL_STOR_SEQ,0),\n\
+				nvl(FILE_NAME,' '),\n\
+				nvl(FILE_DATE,' '),\n\
+				to_char(nvl(DEAL_TIME,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(STATE,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SETT_BILL_STORSCR FROM :statement;
+		CheckSqlError(" PREPARE SETT_BILL_STORSCR SETT_BILL_STORCR");
+
+		EXEC SQL DECLARE SETT_BILL_STORCR CURSOR FOR SETT_BILL_STORSCR;
+		CheckSqlError("Declare SETT_BILL_STORCR");
+
+		EXEC SQL OPEN SETT_BILL_STORCR;
+		CheckSqlError("Open SETT_BILL_STORCR;");
+
+	/*这里不修改控制变量*/
+
+/* FETCH */
+		EXEC SQL FETCH SETT_BILL_STORCR INTO
+			:p->iSettBillStorSeq,
+			:p->sFileName,
+			:p->sFileDate,
+			:p->sDealTime,
+			:p->sState;
+		CheckSqlError("Fetch SETT_BILL_STORCR");
+
+	if(NoDataFetched){
+		EXEC SQL CLOSE SETT_BILL_STORCR;
+		return FALSE;
+	}
+		EXEC SQL CLOSE SETT_BILL_STORCR;
+
+/* 从缓冲区取数据*/
+/*------该部分不需要取数据,只要格式转换-----*/
+
+		AllTrim(p->sFileName);
+		AllTrim(p->sFileDate);
+		AllTrim(p->sDealTime);
+		AllTrim(p->sState);
+
+	return TRUE;
+}
+int SDInsertStructToSettBillStorLog(struct SettBillStorLogStruct *p,char sTableName[])
+{
+
+/*获取seq值*/
+		p->iSettBillStorSeq=GetSettBillStorSeq();
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				SETT_BILL_STOR_SEQ,\n\
+				FILE_NAME,\n\
+				FILE_DATE,\n\
+				DEAL_TIME,\n\
+				STATE)\n\
+			VALUES (\n\
+				:iSettBillStorSeq,\n\
+				:sFileName,\n\
+				:sFileDate,\n\
+				to_date(:sDealTime,'yyyymmddhh24miss'),\n\
+				:sState\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SETT_BILL_STORTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SETT_BILL_STOR")<0) return -1;
+
+		EXEC SQL EXECUTE SETT_BILL_STORTRG USING
+				:p->iSettBillStorSeq,
+				:p->sFileName,
+				:p->sFileDate,
+				:p->sDealTime,
+				:p->sState;
+		if(CheckSqlResult("Dyn insert into SETT_BILL_STOR")<0) return -1;
+
+	return 0;
+}
+
+
+/*批量数据动态从TEMPLATE_MID_STT_TICKET中用结构缓冲方式取数据*/
+int EGetTemplateMidSttTicketToStruct(struct TemplateMidSttTicketStruct *p,
+	struct TemplateMidSttTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(SETT_LATN_ID,' '),\n\
+				nvl(REPORT_ITEM_ID,0),\n\
+				nvl(PROD_ID,' '),\n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(OPP_AREA_CODE,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(SETT_DATE,' '),\n\
+				nvl(CNT,0),\n\
+				nvl(DURATION,0),\n\
+				nvl(SETT_DURATION,0),\n\
+				nvl(SETT_FEE,0),\n\
+				nvl(MY_DISTANCE_TYPE,' '),\n\
+				nvl(OPP_DISTANCE_TYPE,' '),\n\
+				nvl(MY_NBR_TYPE,' '),\n\
+				nvl(OPP_NBR_TYPE,' '),\n\
+				nvl(MY_3G_FLAG,' '),\n\
+				nvl(OPP_3G_FLAG,' '),\n\
+				nvl(MY_CARR_ID,' '),\n\
+				nvl(OPP_CARR_ID,' '),\n\
+				nvl(SERV_FLAG,' '),\n\
+				nvl(GROUP_ID,' '),\n\
+				nvl(OTHER_GROUP_ID,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE TEMPLATE_MID_STT_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE TEMPLATE_MID_STT_TICKETSCR TEMPLATE_MID_STT_TICKETCR");
+
+		EXEC SQL DECLARE TEMPLATE_MID_STT_TICKETCR CURSOR FOR TEMPLATE_MID_STT_TICKETSCR;
+		CheckSqlError("Declare TEMPLATE_MID_STT_TICKETCR");
+
+		EXEC SQL OPEN TEMPLATE_MID_STT_TICKETCR;
+		CheckSqlError("Open TEMPLATE_MID_STT_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE TEMPLATE_MID_STT_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH TEMPLATE_MID_STT_TICKETCR INTO
+			:pSource->asSettLatnID,
+			:pSource->aiReportItemID,
+			:pSource->asProdID,
+			:pSource->asCallType,
+			:pSource->asHomeAreaCode,
+			:pSource->asMsisdn,
+			:pSource->asOppAreaCode,
+			:pSource->asOtherParty,
+			:pSource->asSettDate,
+			:pSource->aiCnt,
+			:pSource->aiDuration,
+			:pSource->aiSettDuration,
+			:pSource->aiSettFee,
+			:pSource->asMyDistanceType,
+			:pSource->asOppDistanceType,
+			:pSource->asMyNbrType,
+			:pSource->asOppNbrType,
+			:pSource->asMy3gFlag,
+			:pSource->asOpp3gFlag,
+			:pSource->asMyCarrID,
+			:pSource->asOppCarrID,
+			:pSource->asServFlag,
+			:pSource->asGroupID,
+			:pSource->asOtherGroupID;
+		CheckSqlError("Fetch TEMPLATE_MID_STT_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE TEMPLATE_MID_STT_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=TEMPLATE_MID_STT_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sSettLatnID,		pSource->asSettLatnID[iCurPos]);
+
+		p->iReportItemID=		pSource->aiReportItemID[iCurPos];
+
+		strcpy(p->sProdID,		pSource->asProdID[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sOppAreaCode,		pSource->asOppAreaCode[iCurPos]);
+		strcpy(p->sOtherParty,		pSource->asOtherParty[iCurPos]);
+		strcpy(p->sSettDate,		pSource->asSettDate[iCurPos]);
+
+		p->iCnt=			pSource->aiCnt[iCurPos];
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iSettDuration=		pSource->aiSettDuration[iCurPos];
+		p->iSettFee=			pSource->aiSettFee[iCurPos];
+
+		strcpy(p->sMyDistanceType,	pSource->asMyDistanceType[iCurPos]);
+		strcpy(p->sOppDistanceType,	pSource->asOppDistanceType[iCurPos]);
+		strcpy(p->sMyNbrType,		pSource->asMyNbrType[iCurPos]);
+		strcpy(p->sOppNbrType,		pSource->asOppNbrType[iCurPos]);
+		strcpy(p->sMy3gFlag,		pSource->asMy3gFlag[iCurPos]);
+		strcpy(p->sOpp3gFlag,		pSource->asOpp3gFlag[iCurPos]);
+		strcpy(p->sMyCarrID,		pSource->asMyCarrID[iCurPos]);
+		strcpy(p->sOppCarrID,		pSource->asOppCarrID[iCurPos]);
+		strcpy(p->sServFlag,		pSource->asServFlag[iCurPos]);
+		strcpy(p->sGroupID,		pSource->asGroupID[iCurPos]);
+		strcpy(p->sOtherGroupID,	pSource->asOtherGroupID[iCurPos]);
+
+		AllTrim(p->sSettLatnID);
+		AllTrim(p->sProdID);
+		AllTrim(p->sCallType);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sOppAreaCode);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sSettDate);
+		AllTrim(p->sMyDistanceType);
+		AllTrim(p->sOppDistanceType);
+		AllTrim(p->sMyNbrType);
+		AllTrim(p->sOppNbrType);
+		AllTrim(p->sMy3gFlag);
+		AllTrim(p->sOpp3gFlag);
+		AllTrim(p->sMyCarrID);
+		AllTrim(p->sOppCarrID);
+		AllTrim(p->sServFlag);
+		AllTrim(p->sGroupID);
+		AllTrim(p->sOtherGroupID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据结构缓冲写入TEMPLATE_MID_STT_TICKET*/
+int EInsertStructToTemplateMidSttTicket(struct TemplateMidSttTicketStruct *p,
+	int iInsertFlag,struct TemplateMidSttTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asSettLatnID[iCurPos],		p->sSettLatnID);
+
+		pTarget->aiReportItemID[iCurPos]=		p->iReportItemID;
+
+		strcpy(pTarget->asProdID[iCurPos],		p->sProdID);
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asOppAreaCode[iCurPos],		p->sOppAreaCode);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asSettDate[iCurPos],		p->sSettDate);
+
+		pTarget->aiCnt[iCurPos]=			p->iCnt;
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+		pTarget->aiSettDuration[iCurPos]=		p->iSettDuration;
+		pTarget->aiSettFee[iCurPos]=			p->iSettFee;
+
+		strcpy(pTarget->asMyDistanceType[iCurPos],	p->sMyDistanceType);
+		strcpy(pTarget->asOppDistanceType[iCurPos],	p->sOppDistanceType);
+		strcpy(pTarget->asMyNbrType[iCurPos],		p->sMyNbrType);
+		strcpy(pTarget->asOppNbrType[iCurPos],		p->sOppNbrType);
+		strcpy(pTarget->asMy3gFlag[iCurPos],		p->sMy3gFlag);
+		strcpy(pTarget->asOpp3gFlag[iCurPos],		p->sOpp3gFlag);
+		strcpy(pTarget->asMyCarrID[iCurPos],		p->sMyCarrID);
+		strcpy(pTarget->asOppCarrID[iCurPos],		p->sOppCarrID);
+		strcpy(pTarget->asServFlag[iCurPos],		p->sServFlag);
+		strcpy(pTarget->asGroupID[iCurPos],		p->sGroupID);
+		strcpy(pTarget->asOtherGroupID[iCurPos],	p->sOtherGroupID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==TEMPLATE_MID_STT_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				SETT_LATN_ID,\n\
+				REPORT_ITEM_ID,\n\
+				PROD_ID,\n\
+				CALL_TYPE,\n\
+				HOME_AREA_CODE,\n\
+				MSISDN,\n\
+				OPP_AREA_CODE,\n\
+				OTHER_PARTY,\n\
+				SETT_DATE,\n\
+				CNT,\n\
+				DURATION,\n\
+				SETT_DURATION,\n\
+				SETT_FEE,\n\
+				MY_DISTANCE_TYPE,\n\
+				OPP_DISTANCE_TYPE,\n\
+				MY_NBR_TYPE,\n\
+				OPP_NBR_TYPE,\n\
+				MY_3G_FLAG,\n\
+				OPP_3G_FLAG,\n\
+				MY_CARR_ID,\n\
+				OPP_CARR_ID,\n\
+				SERV_FLAG,\n\
+				GROUP_ID,\n\
+				OTHER_GROUP_ID)\n\
+			VALUES (\n\
+				:asSettLatnID,\n\
+				:aiReportItemID,\n\
+				:asProdID,\n\
+				:asCallType,\n\
+				:asHomeAreaCode,\n\
+				:asMsisdn,\n\
+				:asOppAreaCode,\n\
+				:asOtherParty,\n\
+				:asSettDate,\n\
+				:aiCnt,\n\
+				:aiDuration,\n\
+				:aiSettDuration,\n\
+				:aiSettFee,\n\
+				:asMyDistanceType,\n\
+				:asOppDistanceType,\n\
+				:asMyNbrType,\n\
+				:asOppNbrType,\n\
+				:asMy3gFlag,\n\
+				:asOpp3gFlag,\n\
+				:asMyCarrID,\n\
+				:asOppCarrID,\n\
+				:asServFlag,\n\
+				:asGroupID,\n\
+				:asOtherGroupID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE TEMPLATE_MID_STT_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement TEMPLATE_MID_STT_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE TEMPLATE_MID_STT_TICKETTRG USING
+				:pTarget->asSettLatnID,
+				:pTarget->aiReportItemID,
+				:pTarget->asProdID,
+				:pTarget->asCallType,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asMsisdn,
+				:pTarget->asOppAreaCode,
+				:pTarget->asOtherParty,
+				:pTarget->asSettDate,
+				:pTarget->aiCnt,
+				:pTarget->aiDuration,
+				:pTarget->aiSettDuration,
+				:pTarget->aiSettFee,
+				:pTarget->asMyDistanceType,
+				:pTarget->asOppDistanceType,
+				:pTarget->asMyNbrType,
+				:pTarget->asOppNbrType,
+				:pTarget->asMy3gFlag,
+				:pTarget->asOpp3gFlag,
+				:pTarget->asMyCarrID,
+				:pTarget->asOppCarrID,
+				:pTarget->asServFlag,
+				:pTarget->asGroupID,
+				:pTarget->asOtherGroupID;
+		if(CheckSqlResult("Dyn insert into TEMPLATE_MID_STT_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据动态从AN_STAT_UNUNSAL_TICKET中用结构缓冲方式取数据*/
+int EGetAnStatUnunsalTicketToStruct(struct AnStatUnunsalTicketStruct *p,
+	struct AnStatUnunsalTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(SETT_DATE,' '),\n\
+				nvl(CNT,0),\n\
+				nvl(DURATION,0),\n\
+				nvl(SETT_DURATION,0),\n\
+				nvl(IN_FEE,0),\n\
+				nvl(OUT_FEE,0),\n\
+				nvl(MY_NBR_TYPE,' '),\n\
+				nvl(MY_3G_FLAG,' '),\n\
+				nvl(MY_CARR_ID,' '),\n\
+				nvl(SERV_FLAG,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE AN_STAT_UNUNSAL_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE AN_STAT_UNUNSAL_TICKETSCR AN_STAT_UNUNSAL_TICKETCR");
+
+		EXEC SQL DECLARE AN_STAT_UNUNSAL_TICKETCR CURSOR FOR AN_STAT_UNUNSAL_TICKETSCR;
+		CheckSqlError("Declare AN_STAT_UNUNSAL_TICKETCR");
+
+		EXEC SQL OPEN AN_STAT_UNUNSAL_TICKETCR;
+		CheckSqlError("Open AN_STAT_UNUNSAL_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE AN_STAT_UNUNSAL_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH AN_STAT_UNUNSAL_TICKETCR INTO
+			:pSource->asHomeAreaCode,
+			:pSource->asMsisdn,
+			:pSource->asSettDate,
+			:pSource->aiCnt,
+			:pSource->aiDuration,
+			:pSource->aiSettDuration,
+			:pSource->aiInFee,
+			:pSource->aiOutFee,
+			:pSource->asMyNbrType,
+			:pSource->asMy3gFlag,
+			:pSource->asMyCarrID,
+			:pSource->asServFlag;
+		CheckSqlError("Fetch AN_STAT_UNUNSAL_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE AN_STAT_UNUNSAL_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=AN_STAT_UNUNSAL_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sSettDate,		pSource->asSettDate[iCurPos]);
+
+		p->iCnt=			pSource->aiCnt[iCurPos];
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iSettDuration=		pSource->aiSettDuration[iCurPos];
+		p->iInFee=			pSource->aiInFee[iCurPos];
+		p->iOutFee=			pSource->aiOutFee[iCurPos];
+
+		strcpy(p->sMyNbrType,		pSource->asMyNbrType[iCurPos]);
+		strcpy(p->sMy3gFlag,		pSource->asMy3gFlag[iCurPos]);
+		strcpy(p->sMyCarrID,		pSource->asMyCarrID[iCurPos]);
+		strcpy(p->sServFlag,		pSource->asServFlag[iCurPos]);
+
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sSettDate);
+		AllTrim(p->sMyNbrType);
+		AllTrim(p->sMy3gFlag);
+		AllTrim(p->sMyCarrID);
+		AllTrim(p->sServFlag);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据结构缓冲写入AN_STAT_UNUNSAL_TICKET*/
+int EInsertStructToAnStatUnunsalTicket(struct AnStatUnunsalTicketStruct *p,
+	int iInsertFlag,struct AnStatUnunsalTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asSettDate[iCurPos],		p->sSettDate);
+
+		pTarget->aiCnt[iCurPos]=			p->iCnt;
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+		pTarget->aiSettDuration[iCurPos]=		p->iSettDuration;
+		pTarget->aiInFee[iCurPos]=			p->iInFee;
+		pTarget->aiOutFee[iCurPos]=			p->iOutFee;
+
+		strcpy(pTarget->asMyNbrType[iCurPos],		p->sMyNbrType);
+		strcpy(pTarget->asMy3gFlag[iCurPos],		p->sMy3gFlag);
+		strcpy(pTarget->asMyCarrID[iCurPos],		p->sMyCarrID);
+		strcpy(pTarget->asServFlag[iCurPos],		p->sServFlag);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==AN_STAT_UNUNSAL_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				HOME_AREA_CODE,\n\
+				MSISDN,\n\
+				SETT_DATE,\n\
+				CNT,\n\
+				DURATION,\n\
+				SETT_DURATION,\n\
+				IN_FEE,\n\
+				OUT_FEE,\n\
+				MY_NBR_TYPE,\n\
+				MY_3G_FLAG,\n\
+				MY_CARR_ID,\n\
+				SERV_FLAG)\n\
+			VALUES (\n\
+				:asHomeAreaCode,\n\
+				:asMsisdn,\n\
+				:asSettDate,\n\
+				:aiCnt,\n\
+				:aiDuration,\n\
+				:aiSettDuration,\n\
+				:aiInFee,\n\
+				:aiOutFee,\n\
+				:asMyNbrType,\n\
+				:asMy3gFlag,\n\
+				:asMyCarrID,\n\
+				:asServFlag\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE AN_STAT_UNUNSAL_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement AN_STAT_UNUNSAL_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE AN_STAT_UNUNSAL_TICKETTRG USING
+				:pTarget->asHomeAreaCode,
+				:pTarget->asMsisdn,
+				:pTarget->asSettDate,
+				:pTarget->aiCnt,
+				:pTarget->aiDuration,
+				:pTarget->aiSettDuration,
+				:pTarget->aiInFee,
+				:pTarget->aiOutFee,
+				:pTarget->asMyNbrType,
+				:pTarget->asMy3gFlag,
+				:pTarget->asMyCarrID,
+				:pTarget->asServFlag;
+		if(CheckSqlResult("Dyn insert into AN_STAT_UNUNSAL_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+
+/*批量数据动态从TEMPLATE_STT_TREND中用结构缓冲方式取数据*/
+int EGetTemplateSttTrendToStruct(struct TemplateSttTrendStruct *p,
+	struct TemplateSttTrendStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(SETT_LATN_ID,' '),\n\
+				nvl(REPORT_ITEM_ID,0),\n\
+				nvl(SETT_DATE,' '),\n\
+				nvl(CNT,0),\n\
+				to_char(nvl(DURATION,0)),\n\
+				to_char(nvl(SETT_DURATION,0)),\n\
+				to_char(nvl(IN_FEE,0)),\n\
+				to_char(nvl(OUT_FEE,0)),\n\
+				nvl(MY_NBR_TYPE,' '),\n\
+				nvl(MY_3G_FLAG,' '),\n\
+				nvl(OPP_CARR_ID,' '),\n\
+				nvl(OPP_3G_FLAG,' '),\n\
+				nvl(SERV_FLAG,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE TEMPLATE_STT_TRENDSCR FROM :statement;
+		CheckSqlError(" PREPARE TEMPLATE_STT_TRENDSCR TEMPLATE_STT_TRENDCR");
+
+		EXEC SQL DECLARE TEMPLATE_STT_TRENDCR CURSOR FOR TEMPLATE_STT_TRENDSCR;
+		CheckSqlError("Declare TEMPLATE_STT_TRENDCR");
+
+		EXEC SQL OPEN TEMPLATE_STT_TRENDCR;
+		CheckSqlError("Open TEMPLATE_STT_TRENDCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE TEMPLATE_STT_TRENDCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH TEMPLATE_STT_TRENDCR INTO
+			:pSource->asSettLatnID,
+			:pSource->aiReportItemID,
+			:pSource->asSettDate,
+			:pSource->aiCnt,
+			:pSource->asDuration,
+			:pSource->asSettDuration,
+			:pSource->asInFee,
+			:pSource->asOutFee,
+			:pSource->asMyNbrType,
+			:pSource->asMy3gFlag,
+			:pSource->asOppCarrID,
+			:pSource->asOpp3gFlag,
+			:pSource->asServFlag;
+		CheckSqlError("Fetch TEMPLATE_STT_TRENDCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE TEMPLATE_STT_TRENDCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=TEMPLATE_STT_TREND_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sSettLatnID,		pSource->asSettLatnID[iCurPos]);
+
+		p->iReportItemID=		pSource->aiReportItemID[iCurPos];
+
+		strcpy(p->sSettDate,		pSource->asSettDate[iCurPos]);
+
+		p->iCnt=			pSource->aiCnt[iCurPos];
+
+		strcpy(p->sDuration,		pSource->asDuration[iCurPos]);
+		strcpy(p->sSettDuration,	pSource->asSettDuration[iCurPos]);
+		strcpy(p->sInFee,		pSource->asInFee[iCurPos]);
+		strcpy(p->sOutFee,		pSource->asOutFee[iCurPos]);
+		strcpy(p->sMyNbrType,		pSource->asMyNbrType[iCurPos]);
+		strcpy(p->sMy3gFlag,		pSource->asMy3gFlag[iCurPos]);
+		strcpy(p->sOppCarrID,		pSource->asOppCarrID[iCurPos]);
+		strcpy(p->sOpp3gFlag,		pSource->asOpp3gFlag[iCurPos]);
+		strcpy(p->sServFlag,		pSource->asServFlag[iCurPos]);
+
+		AllTrim(p->sSettLatnID);
+		AllTrim(p->sSettDate);
+		AllTrim(p->sDuration);
+		AllTrim(p->sSettDuration);
+		AllTrim(p->sInFee);
+		AllTrim(p->sOutFee);
+		AllTrim(p->sMyNbrType);
+		AllTrim(p->sMy3gFlag);
+		AllTrim(p->sOppCarrID);
+		AllTrim(p->sOpp3gFlag);
+		AllTrim(p->sServFlag);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据结构缓冲写入TEMPLATE_STT_TREND*/
+int EInsertStructToTemplateSttTrend(struct TemplateSttTrendStruct *p,
+	int iInsertFlag,struct TemplateSttTrendStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asSettLatnID[iCurPos],		p->sSettLatnID);
+
+		pTarget->aiReportItemID[iCurPos]=		p->iReportItemID;
+
+		strcpy(pTarget->asSettDate[iCurPos],		p->sSettDate);
+
+		pTarget->aiCnt[iCurPos]=			p->iCnt;
+
+		strcpy(pTarget->asDuration[iCurPos],		p->sDuration);
+		strcpy(pTarget->asSettDuration[iCurPos],	p->sSettDuration);
+		strcpy(pTarget->asInFee[iCurPos],		p->sInFee);
+		strcpy(pTarget->asOutFee[iCurPos],		p->sOutFee);
+		strcpy(pTarget->asMyNbrType[iCurPos],		p->sMyNbrType);
+		strcpy(pTarget->asMy3gFlag[iCurPos],		p->sMy3gFlag);
+		strcpy(pTarget->asOppCarrID[iCurPos],		p->sOppCarrID);
+		strcpy(pTarget->asOpp3gFlag[iCurPos],		p->sOpp3gFlag);
+		strcpy(pTarget->asServFlag[iCurPos],		p->sServFlag);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==TEMPLATE_STT_TREND_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				SETT_LATN_ID,\n\
+				REPORT_ITEM_ID,\n\
+				SETT_DATE,\n\
+				CNT,\n\
+				DURATION,\n\
+				SETT_DURATION,\n\
+				IN_FEE,\n\
+				OUT_FEE,\n\
+				MY_NBR_TYPE,\n\
+				MY_3G_FLAG,\n\
+				OPP_CARR_ID,\n\
+				OPP_3G_FLAG,\n\
+				SERV_FLAG)\n\
+			VALUES (\n\
+				:asSettLatnID,\n\
+				:aiReportItemID,\n\
+				:asSettDate,\n\
+				:aiCnt,\n\
+				to_number(:asDuration),\n\
+				to_number(:asSettDuration),\n\
+				to_number(:asInFee),\n\
+				to_number(:asOutFee),\n\
+				:asMyNbrType,\n\
+				:asMy3gFlag,\n\
+				:asOppCarrID,\n\
+				:asOpp3gFlag,\n\
+				:asServFlag\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE TEMPLATE_STT_TRENDTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement TEMPLATE_STT_TREND")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE TEMPLATE_STT_TRENDTRG USING
+				:pTarget->asSettLatnID,
+				:pTarget->aiReportItemID,
+				:pTarget->asSettDate,
+				:pTarget->aiCnt,
+				:pTarget->asDuration,
+				:pTarget->asSettDuration,
+				:pTarget->asInFee,
+				:pTarget->asOutFee,
+				:pTarget->asMyNbrType,
+				:pTarget->asMy3gFlag,
+				:pTarget->asOppCarrID,
+				:pTarget->asOpp3gFlag,
+				:pTarget->asServFlag;
+		if(CheckSqlResult("Dyn insert into TEMPLATE_STT_TREND")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+
+
+/*批量数据动态从AN_SETT_TOP_500_TW中用结构缓冲方式取数据*/
+int EGetAnSettTop500TwToStruct(struct AnSettTop500TwStruct *p,
+	struct AnSettTop500TwStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(SETT_LATN_ID,' '),\n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(OPP_AREA_CODE,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(SETT_DATE,' '),\n\
+				nvl(CNT,0),\n\
+				nvl(DURATION,0),\n\
+				nvl(SETT_DURATION,0),\n\
+				nvl(SETT_FEE,0),\n\
+				nvl(OPP_NBR_TYPE,' '),\n\
+				nvl(MY_3G_FLAG,' '),\n\
+				nvl(OPP_3G_FLAG,' '),\n\
+				nvl(MY_CARR_ID,' '),\n\
+				nvl(OPP_CARR_ID,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE AN_SETT_TOP_500_TWSCR FROM :statement;
+		CheckSqlError(" PREPARE AN_SETT_TOP_500_TWSCR AN_SETT_TOP_500_TWCR");
+
+		EXEC SQL DECLARE AN_SETT_TOP_500_TWCR CURSOR FOR AN_SETT_TOP_500_TWSCR;
+		CheckSqlError("Declare AN_SETT_TOP_500_TWCR");
+
+		EXEC SQL OPEN AN_SETT_TOP_500_TWCR;
+		CheckSqlError("Open AN_SETT_TOP_500_TWCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE AN_SETT_TOP_500_TWCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH AN_SETT_TOP_500_TWCR INTO
+			:pSource->asSettLatnID,
+			:pSource->asCallType,
+			:pSource->asOppAreaCode,
+			:pSource->asOtherParty,
+			:pSource->asSettDate,
+			:pSource->aiCnt,
+			:pSource->aiDuration,
+			:pSource->aiSettDuration,
+			:pSource->aiSettFee,
+			:pSource->asOppNbrType,
+			:pSource->asMy3gFlag,
+			:pSource->asOpp3gFlag,
+			:pSource->asMyCarrID,
+			:pSource->asOppCarrID;
+		CheckSqlError("Fetch AN_SETT_TOP_500_TWCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE AN_SETT_TOP_500_TWCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=AN_SETT_TOP_500_TW_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sSettLatnID,	pSource->asSettLatnID[iCurPos]);
+		strcpy(p->sCallType,	pSource->asCallType[iCurPos]);
+		strcpy(p->sOppAreaCode,	pSource->asOppAreaCode[iCurPos]);
+		strcpy(p->sOtherParty,	pSource->asOtherParty[iCurPos]);
+		strcpy(p->sSettDate,	pSource->asSettDate[iCurPos]);
+
+		p->iCnt=		pSource->aiCnt[iCurPos];
+		p->iDuration=		pSource->aiDuration[iCurPos];
+		p->iSettDuration=	pSource->aiSettDuration[iCurPos];
+		p->iSettFee=		pSource->aiSettFee[iCurPos];
+
+		strcpy(p->sOppNbrType,	pSource->asOppNbrType[iCurPos]);
+		strcpy(p->sMy3gFlag,	pSource->asMy3gFlag[iCurPos]);
+		strcpy(p->sOpp3gFlag,	pSource->asOpp3gFlag[iCurPos]);
+		strcpy(p->sMyCarrID,	pSource->asMyCarrID[iCurPos]);
+		strcpy(p->sOppCarrID,	pSource->asOppCarrID[iCurPos]);
+
+		AllTrim(p->sSettLatnID);
+		AllTrim(p->sCallType);
+		AllTrim(p->sOppAreaCode);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sSettDate);
+		AllTrim(p->sOppNbrType);
+		AllTrim(p->sMy3gFlag);
+		AllTrim(p->sOpp3gFlag);
+		AllTrim(p->sMyCarrID);
+		AllTrim(p->sOppCarrID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据结构缓冲写入AN_SETT_TOP_500_TW*/
+int EInsertStructToAnSettTop500Tw(struct AnSettTop500TwStruct *p,
+	int iInsertFlag,struct AnSettTop500TwStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asSettLatnID[iCurPos],	p->sSettLatnID);
+		strcpy(pTarget->asCallType[iCurPos],	p->sCallType);
+		strcpy(pTarget->asOppAreaCode[iCurPos],	p->sOppAreaCode);
+		strcpy(pTarget->asOtherParty[iCurPos],	p->sOtherParty);
+		strcpy(pTarget->asSettDate[iCurPos],	p->sSettDate);
+
+		pTarget->aiCnt[iCurPos]=		p->iCnt;
+		pTarget->aiDuration[iCurPos]=		p->iDuration;
+		pTarget->aiSettDuration[iCurPos]=	p->iSettDuration;
+		pTarget->aiSettFee[iCurPos]=		p->iSettFee;
+
+		strcpy(pTarget->asOppNbrType[iCurPos],	p->sOppNbrType);
+		strcpy(pTarget->asMy3gFlag[iCurPos],	p->sMy3gFlag);
+		strcpy(pTarget->asOpp3gFlag[iCurPos],	p->sOpp3gFlag);
+		strcpy(pTarget->asMyCarrID[iCurPos],	p->sMyCarrID);
+		strcpy(pTarget->asOppCarrID[iCurPos],	p->sOppCarrID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==AN_SETT_TOP_500_TW_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				SETT_LATN_ID,\n\
+				CALL_TYPE,\n\
+				OPP_AREA_CODE,\n\
+				OTHER_PARTY,\n\
+				SETT_DATE,\n\
+				CNT,\n\
+				DURATION,\n\
+				SETT_DURATION,\n\
+				SETT_FEE,\n\
+				OPP_NBR_TYPE,\n\
+				MY_3G_FLAG,\n\
+				OPP_3G_FLAG,\n\
+				MY_CARR_ID,\n\
+				OPP_CARR_ID)\n\
+			VALUES (\n\
+				:asSettLatnID,\n\
+				:asCallType,\n\
+				:asOppAreaCode,\n\
+				:asOtherParty,\n\
+				:asSettDate,\n\
+				:aiCnt,\n\
+				:aiDuration,\n\
+				:aiSettDuration,\n\
+				:aiSettFee,\n\
+				:asOppNbrType,\n\
+				:asMy3gFlag,\n\
+				:asOpp3gFlag,\n\
+				:asMyCarrID,\n\
+				:asOppCarrID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE AN_SETT_TOP_500_TWTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement AN_SETT_TOP_500_TW")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE AN_SETT_TOP_500_TWTRG USING
+				:pTarget->asSettLatnID,
+				:pTarget->asCallType,
+				:pTarget->asOppAreaCode,
+				:pTarget->asOtherParty,
+				:pTarget->asSettDate,
+				:pTarget->aiCnt,
+				:pTarget->aiDuration,
+				:pTarget->aiSettDuration,
+				:pTarget->aiSettFee,
+				:pTarget->asOppNbrType,
+				:pTarget->asMy3gFlag,
+				:pTarget->asOpp3gFlag,
+				:pTarget->asMyCarrID,
+				:pTarget->asOppCarrID;
+		if(CheckSqlResult("Dyn insert into AN_SETT_TOP_500_TW")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据动态从AN_SETT_TOP_500_LT中用结构缓冲方式取数据*/
+int EGetAnSettTop500LtToStruct(struct AnSettTop500LtStruct *p,
+	struct AnSettTop500LtStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(SETT_LATN_ID,' '),\n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(SETT_DATE,' '),\n\
+				nvl(CNT,0),\n\
+				nvl(DURATION,0),\n\
+				nvl(SETT_DURATION,0),\n\
+				nvl(SETT_FEE,0),\n\
+				nvl(MY_NBR_TYPE,' '),\n\
+				nvl(MY_3G_FLAG,' '),\n\
+				nvl(MY_CARR_ID,' '),\n\
+				nvl(SERV_FLAG,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE AN_SETT_TOP_500_LTSCR FROM :statement;
+		CheckSqlError(" PREPARE AN_SETT_TOP_500_LTSCR AN_SETT_TOP_500_LTCR");
+
+		EXEC SQL DECLARE AN_SETT_TOP_500_LTCR CURSOR FOR AN_SETT_TOP_500_LTSCR;
+		CheckSqlError("Declare AN_SETT_TOP_500_LTCR");
+
+		EXEC SQL OPEN AN_SETT_TOP_500_LTCR;
+		CheckSqlError("Open AN_SETT_TOP_500_LTCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE AN_SETT_TOP_500_LTCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH AN_SETT_TOP_500_LTCR INTO
+			:pSource->asSettLatnID,
+			:pSource->asCallType,
+			:pSource->asHomeAreaCode,
+			:pSource->asMsisdn,
+			:pSource->asSettDate,
+			:pSource->aiCnt,
+			:pSource->aiDuration,
+			:pSource->aiSettDuration,
+			:pSource->aiSettFee,
+			:pSource->asMyNbrType,
+			:pSource->asMy3gFlag,
+			:pSource->asMyCarrID,
+			:pSource->asServFlag;
+		CheckSqlError("Fetch AN_SETT_TOP_500_LTCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE AN_SETT_TOP_500_LTCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=AN_SETT_TOP_500_LT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sSettLatnID,		pSource->asSettLatnID[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sSettDate,		pSource->asSettDate[iCurPos]);
+
+		p->iCnt=			pSource->aiCnt[iCurPos];
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iSettDuration=		pSource->aiSettDuration[iCurPos];
+		p->iSettFee=			pSource->aiSettFee[iCurPos];
+
+		strcpy(p->sMyNbrType,		pSource->asMyNbrType[iCurPos]);
+		strcpy(p->sMy3gFlag,		pSource->asMy3gFlag[iCurPos]);
+		strcpy(p->sMyCarrID,		pSource->asMyCarrID[iCurPos]);
+		strcpy(p->sServFlag,		pSource->asServFlag[iCurPos]);
+
+		AllTrim(p->sSettLatnID);
+		AllTrim(p->sCallType);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sSettDate);
+		AllTrim(p->sMyNbrType);
+		AllTrim(p->sMy3gFlag);
+		AllTrim(p->sMyCarrID);
+		AllTrim(p->sServFlag);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据结构缓冲写入AN_SETT_TOP_500_LT*/
+int EInsertStructToAnSettTop500Lt(struct AnSettTop500LtStruct *p,
+	int iInsertFlag,struct AnSettTop500LtStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asSettLatnID[iCurPos],		p->sSettLatnID);
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asSettDate[iCurPos],		p->sSettDate);
+
+		pTarget->aiCnt[iCurPos]=			p->iCnt;
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+		pTarget->aiSettDuration[iCurPos]=		p->iSettDuration;
+		pTarget->aiSettFee[iCurPos]=			p->iSettFee;
+
+		strcpy(pTarget->asMyNbrType[iCurPos],		p->sMyNbrType);
+		strcpy(pTarget->asMy3gFlag[iCurPos],		p->sMy3gFlag);
+		strcpy(pTarget->asMyCarrID[iCurPos],		p->sMyCarrID);
+		strcpy(pTarget->asServFlag[iCurPos],		p->sServFlag);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==AN_SETT_TOP_500_LT_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				SETT_LATN_ID,\n\
+				CALL_TYPE,\n\
+				HOME_AREA_CODE,\n\
+				MSISDN,\n\
+				SETT_DATE,\n\
+				CNT,\n\
+				DURATION,\n\
+				SETT_DURATION,\n\
+				SETT_FEE,\n\
+				MY_NBR_TYPE,\n\
+				MY_3G_FLAG,\n\
+				MY_CARR_ID,\n\
+				SERV_FLAG)\n\
+			VALUES (\n\
+				:asSettLatnID,\n\
+				:asCallType,\n\
+				:asHomeAreaCode,\n\
+				:asMsisdn,\n\
+				:asSettDate,\n\
+				:aiCnt,\n\
+				:aiDuration,\n\
+				:aiSettDuration,\n\
+				:aiSettFee,\n\
+				:asMyNbrType,\n\
+				:asMy3gFlag,\n\
+				:asMyCarrID,\n\
+				:asServFlag\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE AN_SETT_TOP_500_LTTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement AN_SETT_TOP_500_LT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE AN_SETT_TOP_500_LTTRG USING
+				:pTarget->asSettLatnID,
+				:pTarget->asCallType,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asMsisdn,
+				:pTarget->asSettDate,
+				:pTarget->aiCnt,
+				:pTarget->aiDuration,
+				:pTarget->aiSettDuration,
+				:pTarget->aiSettFee,
+				:pTarget->asMyNbrType,
+				:pTarget->asMy3gFlag,
+				:pTarget->asMyCarrID,
+				:pTarget->asServFlag;
+		if(CheckSqlResult("Dyn insert into AN_SETT_TOP_500_LT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*参数部分*/
+
+/*批量数据动态从T_ST_REPORT_GROUP_MEMBER中用结构缓冲方式取数据*/
+int EGetTStReportGroupMemberToStruct(struct TStReportGroupMemberStruct *p,
+	struct TStReportGroupMemberStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(PROVINCE_ID,0),\n\
+				nvl(GROUP_ID,0),\n\
+				nvl(MEMBER_TYPE,' '),\n\
+				nvl(MEMBER_VALUE,' '),\n\
+				nvl(MEMBER_ORDER,0),\n\
+				nvl(REPORT_SEQ,0),\n\
+				nvl(RATE_DESC,' '),\n\
+				nvl(SETTLE_DESC,' '),\n\
+				nvl(MEMBER_NAME,' '),\n\
+				nvl(NET_TYPE,' '),\n\
+				nvl(OPP_CARRIER_ID,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE T_ST_REPORT_GROUP_MEMBERSCR FROM :statement;
+		CheckSqlError(" PREPARE T_ST_REPORT_GROUP_MEMBERSCR T_ST_REPORT_GROUP_MEMBERCR");
+
+		EXEC SQL DECLARE T_ST_REPORT_GROUP_MEMBERCR CURSOR FOR T_ST_REPORT_GROUP_MEMBERSCR;
+		CheckSqlError("Declare T_ST_REPORT_GROUP_MEMBERCR");
+
+		EXEC SQL OPEN T_ST_REPORT_GROUP_MEMBERCR;
+		CheckSqlError("Open T_ST_REPORT_GROUP_MEMBERCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE T_ST_REPORT_GROUP_MEMBERCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH T_ST_REPORT_GROUP_MEMBERCR INTO
+			:pSource->aiProvinceID,
+			:pSource->aiGroupID,
+			:pSource->asMemberType,
+			:pSource->asMemberValue,
+			:pSource->aiMemberOrder,
+			:pSource->aiReportSeq,
+			:pSource->asRateDesc,
+			:pSource->asSettleDesc,
+			:pSource->asMemberName,
+			:pSource->asNetType,
+			:pSource->asOppCarrierID;
+		CheckSqlError("Fetch T_ST_REPORT_GROUP_MEMBERCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE T_ST_REPORT_GROUP_MEMBERCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=T_ST_REPORT_GROUP_MEMBER_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iProvinceID=			pSource->aiProvinceID[iCurPos];
+		p->iGroupID=			pSource->aiGroupID[iCurPos];
+
+		strcpy(p->sMemberType,		pSource->asMemberType[iCurPos]);
+		strcpy(p->sMemberValue,		pSource->asMemberValue[iCurPos]);
+
+		p->iMemberOrder=		pSource->aiMemberOrder[iCurPos];
+		p->iReportSeq=			pSource->aiReportSeq[iCurPos];
+
+		strcpy(p->sRateDesc,		pSource->asRateDesc[iCurPos]);
+		strcpy(p->sSettleDesc,		pSource->asSettleDesc[iCurPos]);
+		strcpy(p->sMemberName,		pSource->asMemberName[iCurPos]);
+		strcpy(p->sNetType,		pSource->asNetType[iCurPos]);
+		strcpy(p->sOppCarrierID,	pSource->asOppCarrierID[iCurPos]);
+
+		AllTrim(p->sMemberType);
+		AllTrim(p->sMemberValue);
+		AllTrim(p->sRateDesc);
+		AllTrim(p->sSettleDesc);
+		AllTrim(p->sMemberName);
+		AllTrim(p->sNetType);
+		AllTrim(p->sOppCarrierID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/**对表T_ST_REPORT_GROUP_MEMBER的链表释放函数**/
+void DestroyTStReportGroupMember(struct TStReportGroupMemberStruct *ptHead)
+{
+	struct TStReportGroupMemberStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+int InitTStReportGroupMember(struct TStReportGroupMemberStruct **pptHead)
+{
+	int iCnt=0;
+	static struct TStReportGroupMemberStruct *pTemp,*ptHead=NULL;
+	struct TStReportGroupMemberStruct Temp;
+	struct TStReportGroupMemberStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyTStReportGroupMember(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct TStReportGroupMemberStructIn));
+	sprintf(TempIn.sTableName,"param.T_ST_REPORT_GROUP_MEMBER");
+	sprintf(TempIn.sCondition," ");
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetTStReportGroupMemberToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct TStReportGroupMemberStruct*)
+			malloc(sizeof(struct TStReportGroupMemberStruct)))==NULL){
+
+			DestroyTStReportGroupMember(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct TStReportGroupMemberStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表T_ST_REPORT_GROUP_MEMBER记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表T_ST_REPORT_GROUP_MEMBER完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+
+/*批量数据动态从TICKET_TYPE_MAP中用结构缓冲方式取数据*/
+int EGetTicketTypeMapToStruct(struct TicketTypeMapStruct *p,
+	struct TicketTypeMapStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(REPORT_ITEM_ID,0),\n\
+				nvl(PROD_ID,' '),\n\
+				nvl(IN_TRUNK_CARR_ID,' '),\n\
+				nvl(OUT_TRUNK_CARR_ID,' '),\n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(FLAG,' '),\n\
+				nvl(FEE_TYPE,' '),\n\
+				nvl(PROD_TYPE,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE TICKET_TYPE_MAPSCR FROM :statement;
+		CheckSqlError(" PREPARE TICKET_TYPE_MAPSCR TICKET_TYPE_MAPCR");
+
+		EXEC SQL DECLARE TICKET_TYPE_MAPCR CURSOR FOR TICKET_TYPE_MAPSCR;
+		CheckSqlError("Declare TICKET_TYPE_MAPCR");
+
+		EXEC SQL OPEN TICKET_TYPE_MAPCR;
+		CheckSqlError("Open TICKET_TYPE_MAPCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE TICKET_TYPE_MAPCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH TICKET_TYPE_MAPCR INTO
+			:pSource->aiReportItemID,
+			:pSource->asProdID,
+			:pSource->asInTrunkCarrID,
+			:pSource->asOutTrunkCarrID,
+			:pSource->asCallType,
+			:pSource->asFlag,
+			:pSource->asFeeType,
+			:pSource->asProdType;
+		CheckSqlError("Fetch TICKET_TYPE_MAPCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE TICKET_TYPE_MAPCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=TICKET_TYPE_MAP_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iReportItemID=		pSource->aiReportItemID[iCurPos];
+
+		strcpy(p->sProdID,		pSource->asProdID[iCurPos]);
+		strcpy(p->sInTrunkCarrID,	pSource->asInTrunkCarrID[iCurPos]);
+		strcpy(p->sOutTrunkCarrID,	pSource->asOutTrunkCarrID[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sFlag,		pSource->asFlag[iCurPos]);
+		strcpy(p->sFeeType,		pSource->asFeeType[iCurPos]);
+		strcpy(p->sProdType,		pSource->asProdType[iCurPos]);
+
+		AllTrim(p->sProdID);
+		AllTrim(p->sInTrunkCarrID);
+		AllTrim(p->sOutTrunkCarrID);
+		AllTrim(p->sCallType);
+		AllTrim(p->sFlag);
+		AllTrim(p->sFeeType);
+		AllTrim(p->sProdType);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/**对表TICKET_TYPE_MAP的链表释放函数**/
+void DestroyTicketTypeMap(struct TicketTypeMapStruct *ptHead)
+{
+	struct TicketTypeMapStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+int InitTicketTypeMap(struct TicketTypeMapStruct **pptHead)
+{
+	int iCnt=0;
+	static struct TicketTypeMapStruct *pTemp,*ptHead=NULL;
+	struct TicketTypeMapStruct Temp;
+	struct TicketTypeMapStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyTicketTypeMap(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct TicketTypeMapStructIn));
+	sprintf(TempIn.sTableName,"param.TICKET_TYPE_MAP");
+	sprintf(TempIn.sCondition," ");
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetTicketTypeMapToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct TicketTypeMapStruct*)
+			malloc(sizeof(struct TicketTypeMapStruct)))==NULL){
+
+			DestroyTicketTypeMap(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct TicketTypeMapStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表TICKET_TYPE_MAP记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表TICKET_TYPE_MAP完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+
+
+/*批量数据动态从NBR_TYPE_FILTER_CFG中用结构缓冲方式取数据*/
+int EGetNbrTypeFilterCfgToStruct(struct NbrTypeFilterCfgStruct *p,
+	struct NbrTypeFilterCfgStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(NBR_TYPE,' '),\n\
+				nvl(TYPE_NAME,' '),\n\
+				nvl(REMARK,' '),\n\
+				nvl(CARRIER_ID,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE NBR_TYPE_FILTER_CFGSCR FROM :statement;
+		CheckSqlError(" PREPARE NBR_TYPE_FILTER_CFGSCR NBR_TYPE_FILTER_CFGCR");
+
+		EXEC SQL DECLARE NBR_TYPE_FILTER_CFGCR CURSOR FOR NBR_TYPE_FILTER_CFGSCR;
+		CheckSqlError("Declare NBR_TYPE_FILTER_CFGCR");
+
+		EXEC SQL OPEN NBR_TYPE_FILTER_CFGCR;
+		CheckSqlError("Open NBR_TYPE_FILTER_CFGCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE NBR_TYPE_FILTER_CFGCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH NBR_TYPE_FILTER_CFGCR INTO
+			:pSource->asNbrType,
+			:pSource->asTypeName,
+			:pSource->asRemark,
+			:pSource->asCarrierID;
+		CheckSqlError("Fetch NBR_TYPE_FILTER_CFGCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE NBR_TYPE_FILTER_CFGCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=NBR_TYPE_FILTER_CFG_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sNbrType,	pSource->asNbrType[iCurPos]);
+		strcpy(p->sTypeName,	pSource->asTypeName[iCurPos]);
+		strcpy(p->sRemark,	pSource->asRemark[iCurPos]);
+		strcpy(p->sCarrierID,	pSource->asCarrierID[iCurPos]);
+
+		AllTrim(p->sNbrType);
+		AllTrim(p->sTypeName);
+		AllTrim(p->sRemark);
+		AllTrim(p->sCarrierID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/**对表NBR_TYPE_FILTER_CFG的链表释放函数**/
+void DestroyNbrTypeFilterCfg(struct NbrTypeFilterCfgStruct *ptHead)
+{
+	struct NbrTypeFilterCfgStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+
+int InitNbrTypeFilterCfg(struct NbrTypeFilterCfgStruct **pptHead)
+{
+	int iCnt=0;
+	static struct NbrTypeFilterCfgStruct *pTemp,*ptHead=NULL;
+	struct NbrTypeFilterCfgStruct Temp;
+	struct NbrTypeFilterCfgStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyNbrTypeFilterCfg(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct NbrTypeFilterCfgStructIn));
+	sprintf(TempIn.sTableName,"param.NBR_TYPE_FILTER_CFG");
+	sprintf(TempIn.sCondition," ");
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetNbrTypeFilterCfgToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct NbrTypeFilterCfgStruct*)
+			malloc(sizeof(struct NbrTypeFilterCfgStruct)))==NULL){
+
+			DestroyNbrTypeFilterCfg(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct NbrTypeFilterCfgStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表NBR_TYPE_FILTER_CFG记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表NBR_TYPE_FILTER_CFG完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+void mvitem_fmttemplateydgwue(struct FTTemplateYdGwUeStruct *pi,struct TTemplateYdGwUeStruct *po)
+{/*数据文件移动到内存部分*/
+	char sTemp[128];
+
+	bzero((void*)po,sizeof(struct TTemplateYdGwUeStruct));
+
+		strncpy(po->sUsageEventID,		pi->sUsageEventID,18);
+		strncpy(po->sProdID,			pi->sProdID,10);
+		strncpy(po->sStartTime,			pi->sStartTime,14);
+		strncpy(po->sEndTime,			pi->sEndTime,14);
+		strncpy(po->sRateTime,			pi->sRateTime,14);
+		strncpy(po->sOperationTypeID,		pi->sOperationTypeID,8);
+		strncpy(po->sCallingNumber,		pi->sCallingNumber,30);
+		strncpy(po->sCalledNumber,		pi->sCalledNumber,30);
+		strncpy(po->sBilledNumber,		pi->sBilledNumber,30);
+		strncpy(po->sThirdNumber,		pi->sThirdNumber,30);
+
+		strncpy(sTemp,		pi->sCallingAreaID,8);sTemp[8]=0;
+		po->iCallingAreaID=atoi(sTemp);
+		strncpy(sTemp,		pi->sCalledAreaID,8);sTemp[8]=0;
+		po->iCalledAreaID=atoi(sTemp);
+
+		strncpy(po->sInTrunkNumber,		pi->sInTrunkNumber,20);
+		strncpy(po->sOutTrunkNumber,		pi->sOutTrunkNumber,20);
+
+		strncpy(sTemp,		pi->sRawUnitType,4);sTemp[4]=0;
+		po->iRawUnitType=atoi(sTemp);
+
+		strncpy(po->sRawUnits,			pi->sRawUnits,18);
+
+		strncpy(sTemp,		pi->sRateUnitType,4);sTemp[4]=0;
+		po->iRateUnitType=atoi(sTemp);
+
+		strncpy(po->sIsFree,			pi->sIsFree,20);
+
+		strncpy(sTemp,			pi->sRateUnits,8);sTemp[8]=0;
+		po->iRateUnits=atoi(sTemp);
+
+		strncpy(po->sCallingAreaCode,		pi->sCallingAreaCode,10);
+		strncpy(po->sCalledAreaCode,		pi->sCalledAreaCode,10);
+		strncpy(po->sCallingRoamNumber,		pi->sCallingRoamNumber,30);
+		strncpy(po->sCalledRoamNumber,		pi->sCalledRoamNumber,30);
+		strncpy(po->sCallingRoamAreaCode,	pi->sCallingRoamAreaCode,10);
+		strncpy(po->sCalledRoamAreaCode,	pi->sCalledRoamAreaCode,10);
+		strncpy(po->sTotalDueAmount,		pi->sTotalDueAmount,18);
+
+		strncpy(sTemp,		pi->sProdInstID,8);sTemp[8]=0;
+		po->iProdInstID=atoi(sTemp);
+		strncpy(sTemp,			pi->sRateID,8);sTemp[8]=0;
+		po->iRateID=atoi(sTemp);
+
+		strncpy(po->sUpFlux,			pi->sUpFlux,18);
+		strncpy(po->sDuration,			pi->sDuration,18);
+
+		strncpy(sTemp,			pi->sCityID,8);sTemp[8]=0;
+		po->iCityID=atoi(sTemp);
+
+		strncpy(po->sDownFlux,			pi->sDownFlux,18);
+		strncpy(po->sFileName,			pi->sFileName,60);
+		strncpy(po->sTotalFlux,			pi->sTotalFlux,18);
+		strncpy(po->sStatus,			pi->sStatus,3);
+
+		strncpy(sTemp,		pi->sBillCycleSeq,8);sTemp[8]=0;
+		po->iBillCycleSeq=atoi(sTemp);
+
+		strncpy(po->sCurrBalance,		pi->sCurrBalance,18);
+
+		strncpy(sTemp,		pi->sCreateCycleSeq,8);sTemp[8]=0;
+		po->iCreateCycleSeq=atoi(sTemp);
+
+		strncpy(po->sRateKey1,			pi->sRateKey1,30);
+		strncpy(po->sRateKey2,			pi->sRateKey2,30);
+		strncpy(po->sRateKey3,			pi->sRateKey3,30);
+
+		strncpy(sTemp,		pi->sPureCycleSeq,8);sTemp[8]=0;
+		po->iPureCycleSeq=atoi(sTemp);
+		strncpy(sTemp,			pi->sDirection,1);sTemp[1]=0;
+		po->iDirection=atoi(sTemp);
+		strncpy(sTemp,		pi->sFileClassID,8);sTemp[8]=0;
+		po->iFileClassID=atoi(sTemp);
+
+		strncpy(po->sExceptionType,		pi->sExceptionType,5);
+		strncpy(po->sOrigUsageTypeID,		pi->sOrigUsageTypeID,12);
+
+		strncpy(sTemp,		pi->sTotalDueUnits,8);sTemp[8]=0;
+		po->iTotalDueUnits=atoi(sTemp);
+
+		strncpy(po->sStlAmount,			pi->sStlAmount,18);
+		strncpy(po->sPostFlag,			pi->sPostFlag,4);
+
+		strncpy(sTemp,			pi->sIsPrepay,1);sTemp[1]=0;
+		po->iIsPrepay=atoi(sTemp);
+		strncpy(sTemp,			pi->sFileID,9);sTemp[9]=0;
+		po->iFileID=atoi(sTemp);
+		strncpy(sTemp,		pi->sParentFileID,9);sTemp[9]=0;
+		po->iParentFileID=atoi(sTemp);
+
+		strncpy(po->sTableName,			pi->sTableName,30);
+		strncpy(po->sCallingCompanyID,		pi->sCallingCompanyID,18);
+		strncpy(po->sCalledCompanyID,		pi->sCalledCompanyID,18);
+		strncpy(po->sSwitchCompanyID,		pi->sSwitchCompanyID,18);
+		strncpy(po->sProvinceID,		pi->sProvinceID,20);
+		strncpy(po->sDurationMinnum,		pi->sDurationMinnum,18);
+		strncpy(po->sDurationSec6,		pi->sDurationSec6,18);
+		strncpy(po->sInTrunkGroup,		pi->sInTrunkGroup,15);
+		strncpy(po->sOutTrunkGroup,		pi->sOutTrunkGroup,15);
+		strncpy(po->sCallingNumberCompanyID,	pi->sCallingNumberCompanyID,18);
+		strncpy(po->sCalledNumberCompanyID,	pi->sCalledNumberCompanyID,18);
+		strncpy(po->sCallingGroupID,		pi->sCallingGroupID,15);
+		strncpy(po->sCalledGroupID,		pi->sCalledGroupID,15);
+		strncpy(po->sStlObject,			pi->sStlObject,18);
+		strncpy(po->sProdPropID,		pi->sProdPropID,18);
+		strncpy(po->sCallingSubType,		pi->sCallingSubType,18);
+		strncpy(po->sCalledSubType,		pi->sCalledSubType,18);
+
+		strncpy(sTemp,		pi->sStlDirection,1);sTemp[1]=0;
+		po->iStlDirection=atoi(sTemp);
+
+		strncpy(po->sPreCallType,		pi->sPreCallType,30);
+		strncpy(po->sTurnCode,			pi->sTurnCode,50);
+		strncpy(po->sTurnCodeCompanyID,		pi->sTurnCodeCompanyID,10);
+		strncpy(po->sTurnCodeProvinceID,	pi->sTurnCodeProvinceID,20);
+
+		strncpy(sTemp,		pi->sTurnCodeCityID,8);sTemp[8]=0;
+		po->iTurnCodeCityID=atoi(sTemp);
+
+		strncpy(po->sTurnCodeOperationTypeGrade,pi->sTurnCodeOperationTypeGrade,30);
+		strncpy(po->sTurnType,			pi->sTurnType,30);
+		strncpy(po->sTurnCdrID,			pi->sTurnCdrID,4);
+		strncpy(po->sSecondCallingNumber,	pi->sSecondCallingNumber,30);
+		strncpy(po->sSecondCallingAreaCode,	pi->sSecondCallingAreaCode,10);
+		strncpy(po->sSecondCallingGroupID,	pi->sSecondCallingGroupID,30);
+		strncpy(po->sSecondCallingCompanyID,	pi->sSecondCallingCompanyID,10);
+		strncpy(po->sPreCallParentCdrID,	pi->sPreCallParentCdrID,20);
+		strncpy(po->sPreCallSubCdrID,		pi->sPreCallSubCdrID,20);
+		strncpy(po->sPreCallSubCdrNum,		pi->sPreCallSubCdrNum,4);
+		strncpy(po->sPreCallSubCdrSeq,		pi->sPreCallSubCdrSeq,10);
+		strncpy(po->sPreCallUsageEventID,	pi->sPreCallUsageEventID,18);
+		strncpy(po->sTurnParentCdrID,		pi->sTurnParentCdrID,20);
+		strncpy(po->sTurnSubCdrID,		pi->sTurnSubCdrID,20);
+		strncpy(po->sTurnSubCdrNum,		pi->sTurnSubCdrNum,4);
+		strncpy(po->sTurnSubCdrSeq,		pi->sTurnSubCdrSeq,10);
+		strncpy(po->sTurnUsageEventID,		pi->sTurnUsageEventID,18);
+		strncpy(po->sInTrunkGenre,		pi->sInTrunkGenre,20);
+		strncpy(po->sOutTrunkGenre,		pi->sOutTrunkGenre,20);
+		strncpy(po->sInTrunkNetType,		pi->sInTrunkNetType,20);
+		strncpy(po->sOutTrunkNetType,		pi->sOutTrunkNetType,20);
+		strncpy(po->sCallingNumberType,		pi->sCallingNumberType,20);
+		strncpy(po->sCalledNumberType,		pi->sCalledNumberType,20);
+		strncpy(po->sCallingDomainID,		pi->sCallingDomainID,20);
+		strncpy(po->sCalledDomainID,		pi->sCalledDomainID,20);
+		strncpy(po->sSecondSubType,		pi->sSecondSubType,20);
+		strncpy(po->sSecondCallingRoamnumber,	pi->sSecondCallingRoamnumber,30);
+		strncpy(po->sViewCall,			pi->sViewCall,10);
+
+		AllTrim(po->sUsageEventID);
+		AllTrim(po->sProdID);
+		AllTrim(po->sStartTime);
+		AllTrim(po->sEndTime);
+		AllTrim(po->sRateTime);
+		AllTrim(po->sOperationTypeID);
+		AllTrim(po->sCallingNumber);
+		AllTrim(po->sCalledNumber);
+		AllTrim(po->sBilledNumber);
+		AllTrim(po->sThirdNumber);
+		AllTrim(po->sInTrunkNumber);
+		AllTrim(po->sOutTrunkNumber);
+		AllTrim(po->sRawUnits);
+		AllTrim(po->sIsFree);
+		AllTrim(po->sCallingAreaCode);
+		AllTrim(po->sCalledAreaCode);
+		AllTrim(po->sCallingRoamNumber);
+		AllTrim(po->sCalledRoamNumber);
+		AllTrim(po->sCallingRoamAreaCode);
+		AllTrim(po->sCalledRoamAreaCode);
+		AllTrim(po->sTotalDueAmount);
+		AllTrim(po->sUpFlux);
+		AllTrim(po->sDuration);
+		AllTrim(po->sDownFlux);
+		AllTrim(po->sFileName);
+		AllTrim(po->sTotalFlux);
+		AllTrim(po->sStatus);
+		AllTrim(po->sCurrBalance);
+		AllTrim(po->sRateKey1);
+		AllTrim(po->sRateKey2);
+		AllTrim(po->sRateKey3);
+		AllTrim(po->sExceptionType);
+		AllTrim(po->sOrigUsageTypeID);
+		AllTrim(po->sStlAmount);
+		AllTrim(po->sPostFlag);
+		AllTrim(po->sTableName);
+		AllTrim(po->sCallingCompanyID);
+		AllTrim(po->sCalledCompanyID);
+		AllTrim(po->sSwitchCompanyID);
+		AllTrim(po->sProvinceID);
+		AllTrim(po->sDurationMinnum);
+		AllTrim(po->sDurationSec6);
+		AllTrim(po->sInTrunkGroup);
+		AllTrim(po->sOutTrunkGroup);
+		AllTrim(po->sCallingNumberCompanyID);
+		AllTrim(po->sCalledNumberCompanyID);
+		AllTrim(po->sCallingGroupID);
+		AllTrim(po->sCalledGroupID);
+		AllTrim(po->sStlObject);
+		AllTrim(po->sProdPropID);
+		AllTrim(po->sCallingSubType);
+		AllTrim(po->sCalledSubType);
+		AllTrim(po->sPreCallType);
+		AllTrim(po->sTurnCode);
+		AllTrim(po->sTurnCodeCompanyID);
+		AllTrim(po->sTurnCodeProvinceID);
+		AllTrim(po->sTurnCodeOperationTypeGrade);
+		AllTrim(po->sTurnType);
+		AllTrim(po->sTurnCdrID);
+		AllTrim(po->sSecondCallingNumber);
+		AllTrim(po->sSecondCallingAreaCode);
+		AllTrim(po->sSecondCallingGroupID);
+		AllTrim(po->sSecondCallingCompanyID);
+		AllTrim(po->sPreCallParentCdrID);
+		AllTrim(po->sPreCallSubCdrID);
+		AllTrim(po->sPreCallSubCdrNum);
+		AllTrim(po->sPreCallSubCdrSeq);
+		AllTrim(po->sPreCallUsageEventID);
+		AllTrim(po->sTurnParentCdrID);
+		AllTrim(po->sTurnSubCdrID);
+		AllTrim(po->sTurnSubCdrNum);
+		AllTrim(po->sTurnSubCdrSeq);
+		AllTrim(po->sTurnUsageEventID);
+		AllTrim(po->sInTrunkGenre);
+		AllTrim(po->sOutTrunkGenre);
+		AllTrim(po->sInTrunkNetType);
+		AllTrim(po->sOutTrunkNetType);
+		AllTrim(po->sCallingNumberType);
+		AllTrim(po->sCalledNumberType);
+		AllTrim(po->sCallingDomainID);
+		AllTrim(po->sCalledDomainID);
+		AllTrim(po->sSecondSubType);
+		AllTrim(po->sSecondCallingRoamnumber);
+		AllTrim(po->sViewCall);
+}
+
+/*批量数据动态从T_TEMPLATE_YD_GW_UE中用结构缓冲方式取数据*/
+int EGetTTemplateYdGwUeToStruct(struct TTemplateYdGwUeStruct *p,
+	struct TTemplateYdGwUeStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(USAGE_EVENT_ID,' '),\n\
+				nvl(PROD_ID,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(END_TIME,' '),\n\
+				nvl(RATE_TIME,' '),\n\
+				nvl(OPERATION_TYPE_ID,' '),\n\
+				nvl(CALLING_NUMBER,' '),\n\
+				nvl(CALLED_NUMBER,' '),\n\
+				nvl(BILLED_NUMBER,' '),\n\
+				nvl(THIRD_NUMBER,' '),\n\
+				nvl(CALLING_AREA_ID,0),\n\
+				nvl(CALLED_AREA_ID,0),\n\
+				nvl(IN_TRUNK_NUMBER,' '),\n\
+				nvl(OUT_TRUNK_NUMBER,' '),\n\
+				nvl(RAW_UNIT_TYPE,0),\n\
+				to_char(nvl(RAW_UNITS,0)),\n\
+				nvl(RATE_UNIT_TYPE,0),\n\
+				nvl(IS_FREE,' '),\n\
+				nvl(RATE_UNITS,0),\n\
+				nvl(CALLING_AREA_CODE,' '),\n\
+				nvl(CALLED_AREA_CODE,' '),\n\
+				nvl(CALLING_ROAM_NUMBER,' '),\n\
+				nvl(CALLED_ROAM_NUMBER,' '),\n\
+				nvl(CALLING_ROAM_AREA_CODE,' '),\n\
+				nvl(CALLED_ROAM_AREA_CODE,' '),\n\
+				to_char(nvl(TOTAL_DUE_AMOUNT,0)),\n\
+				nvl(PROD_INST_ID,0),\n\
+				nvl(RATE_ID,0),\n\
+				to_char(nvl(UP_FLUX,0)),\n\
+				to_char(nvl(DURATION,0)),\n\
+				nvl(CITY_ID,0),\n\
+				to_char(nvl(DOWN_FLUX,0)),\n\
+				nvl(FILE_NAME,' '),\n\
+				to_char(nvl(TOTAL_FLUX,0)),\n\
+				nvl(STATUS,' '),\n\
+				nvl(BILL_CYCLE_SEQ,0),\n\
+				to_char(nvl(CURR_BALANCE,0)),\n\
+				nvl(CREATE_CYCLE_SEQ,0),\n\
+				nvl(RATE_KEY1,' '),\n\
+				nvl(RATE_KEY2,' '),\n\
+				nvl(RATE_KEY3,' '),\n\
+				nvl(PURE_CYCLE_SEQ,0),\n\
+				nvl(DIRECTION,0),\n\
+				nvl(FILE_CLASS_ID,0),\n\
+				nvl(EXCEPTION_TYPE,' '),\n\
+				nvl(ORIG_USAGE_TYPE_ID,' '),\n\
+				nvl(TOTAL_DUE_UNITS,0),\n\
+				to_char(nvl(STL_AMOUNT,0)),\n\
+				nvl(POST_FLAG,' '),\n\
+				nvl(IS_PREPAY,0),\n\
+				nvl(FILE_ID,0),\n\
+				nvl(PARENT_FILE_ID,0),\n\
+				nvl(TABLE_NAME,' '),\n\
+				to_char(nvl(CALLING_COMPANY_ID,0)),\n\
+				to_char(nvl(CALLED_COMPANY_ID,0)),\n\
+				to_char(nvl(SWITCH_COMPANY_ID,0)),\n\
+				nvl(PROVINCE_ID,' '),\n\
+				to_char(nvl(DURATION_MINNUM,0)),\n\
+				to_char(nvl(DURATION_SEC6,0)),\n\
+				nvl(IN_TRUNK_GROUP,' '),\n\
+				nvl(OUT_TRUNK_GROUP,' '),\n\
+				to_char(nvl(CALLING_NUMBER_COMPANY_ID,0)),\n\
+				to_char(nvl(CALLED_NUMBER_COMPANY_ID,0)),\n\
+				nvl(CALLING_GROUP_ID,' '),\n\
+				nvl(CALLED_GROUP_ID,' '),\n\
+				nvl(STL_OBJECT,' '),\n\
+				to_char(nvl(PROD_PROP_ID,0)),\n\
+				nvl(CALLING_SUB_TYPE,' '),\n\
+				nvl(CALLED_SUB_TYPE,' '),\n\
+				nvl(STL_DIRECTION,0),\n\
+				nvl(PRE_CALL_TYPE,' '),\n\
+				nvl(TURN_CODE,' '),\n\
+				nvl(TURN_CODE_COMPANY_ID,' '),\n\
+				nvl(TURN_CODE_PROVINCE_ID,' '),\n\
+				nvl(TURN_CODE_CITY_ID,0),\n\
+				nvl(TURN_CODE_OPERATION_TYPE_GRADE,' '),\n\
+				nvl(TURN_TYPE,' '),\n\
+				nvl(TURN_CDR_ID,' '),\n\
+				nvl(SECOND_CALLING_NUMBER,' '),\n\
+				nvl(SECOND_CALLING_AREA_CODE,' '),\n\
+				nvl(SECOND_CALLING_GROUP_ID,' '),\n\
+				nvl(SECOND_CALLING_COMPANY_ID,' '),\n\
+				nvl(PRE_CALL_PARENT_CDR_ID,' '),\n\
+				nvl(PRE_CALL_SUB_CDR_ID,' '),\n\
+				nvl(PRE_CALL_SUB_CDR_NUM,' '),\n\
+				nvl(PRE_CALL_SUB_CDR_SEQ,' '),\n\
+				to_char(nvl(PRE_CALL_USAGE_EVENT_ID,0)),\n\
+				nvl(TURN_PARENT_CDR_ID,' '),\n\
+				nvl(TURN_SUB_CDR_ID,' '),\n\
+				nvl(TURN_SUB_CDR_NUM,' '),\n\
+				nvl(TURN_SUB_CDR_SEQ,' '),\n\
+				nvl(TURN_USAGE_EVENT_ID,' '),\n\
+				nvl(IN_TRUNK_GENRE,' '),\n\
+				nvl(OUT_TRUNK_GENRE,' '),\n\
+				nvl(IN_TRUNK_NET_TYPE,' '),\n\
+				nvl(OUT_TRUNK_NET_TYPE,' '),\n\
+				nvl(CALLING_NUMBER_TYPE,' '),\n\
+				nvl(CALLED_NUMBER_TYPE,' '),\n\
+				nvl(CALLING_DOMAIN_ID,' '),\n\
+				nvl(CALLED_DOMAIN_ID,' '),\n\
+				nvl(SECOND_SUB_TYPE,' '),\n\
+				nvl(SECOND_CALLING_ROAMNUMBER,' '),\n\
+				nvl(VIEW_CALL,' '),\n\
+				nvl(GROUP_ID,'0')\n\
+			FROM %s %s",sTableName,sCondition);
+			
+		EXEC SQL PREPARE T_TEMPLATE_YD_GW_UESCR FROM :statement;
+		CheckSqlError(" PREPARE T_TEMPLATE_YD_GW_UESCR T_TEMPLATE_YD_GW_UECR");
+
+		EXEC SQL DECLARE T_TEMPLATE_YD_GW_UECR CURSOR FOR T_TEMPLATE_YD_GW_UESCR;
+		CheckSqlError("Declare T_TEMPLATE_YD_GW_UECR");
+
+		EXEC SQL OPEN T_TEMPLATE_YD_GW_UECR;
+		CheckSqlError("Open T_TEMPLATE_YD_GW_UECR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE T_TEMPLATE_YD_GW_UECR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH T_TEMPLATE_YD_GW_UECR INTO
+			:pSource->asUsageEventID,
+			:pSource->asProdID,
+			:pSource->asStartTime,
+			:pSource->asEndTime,
+			:pSource->asRateTime,
+			:pSource->asOperationTypeID,
+			:pSource->asCallingNumber,
+			:pSource->asCalledNumber,
+			:pSource->asBilledNumber,
+			:pSource->asThirdNumber,
+			:pSource->aiCallingAreaID,
+			:pSource->aiCalledAreaID,
+			:pSource->asInTrunkNumber,
+			:pSource->asOutTrunkNumber,
+			:pSource->aiRawUnitType,
+			:pSource->asRawUnits,
+			:pSource->aiRateUnitType,
+			:pSource->asIsFree,
+			:pSource->aiRateUnits,
+			:pSource->asCallingAreaCode,
+			:pSource->asCalledAreaCode,
+			:pSource->asCallingRoamNumber,
+			:pSource->asCalledRoamNumber,
+			:pSource->asCallingRoamAreaCode,
+			:pSource->asCalledRoamAreaCode,
+			:pSource->asTotalDueAmount,
+			:pSource->aiProdInstID,
+			:pSource->aiRateID,
+			:pSource->asUpFlux,
+			:pSource->asDuration,
+			:pSource->aiCityID,
+			:pSource->asDownFlux,
+			:pSource->asFileName,
+			:pSource->asTotalFlux,
+			:pSource->asStatus,
+			:pSource->aiBillCycleSeq,
+			:pSource->asCurrBalance,
+			:pSource->aiCreateCycleSeq,
+			:pSource->asRateKey1,
+			:pSource->asRateKey2,
+			:pSource->asRateKey3,
+			:pSource->aiPureCycleSeq,
+			:pSource->aiDirection,
+			:pSource->aiFileClassID,
+			:pSource->asExceptionType,
+			:pSource->asOrigUsageTypeID,
+			:pSource->aiTotalDueUnits,
+			:pSource->asStlAmount,
+			:pSource->asPostFlag,
+			:pSource->aiIsPrepay,
+			:pSource->aiFileID,
+			:pSource->aiParentFileID,
+			:pSource->asTableName,
+			:pSource->asCallingCompanyID,
+			:pSource->asCalledCompanyID,
+			:pSource->asSwitchCompanyID,
+			:pSource->asProvinceID,
+			:pSource->asDurationMinnum,
+			:pSource->asDurationSec6,
+			:pSource->asInTrunkGroup,
+			:pSource->asOutTrunkGroup,
+			:pSource->asCallingNumberCompanyID,
+			:pSource->asCalledNumberCompanyID,
+			:pSource->asCallingGroupID,
+			:pSource->asCalledGroupID,
+			:pSource->asStlObject,
+			:pSource->asProdPropID,
+			:pSource->asCallingSubType,
+			:pSource->asCalledSubType,
+			:pSource->aiStlDirection,
+			:pSource->asPreCallType,
+			:pSource->asTurnCode,
+			:pSource->asTurnCodeCompanyID,
+			:pSource->asTurnCodeProvinceID,
+			:pSource->aiTurnCodeCityID,
+			:pSource->asTurnCodeOperationTypeGrade,
+			:pSource->asTurnType,
+			:pSource->asTurnCdrID,
+			:pSource->asSecondCallingNumber,
+			:pSource->asSecondCallingAreaCode,
+			:pSource->asSecondCallingGroupID,
+			:pSource->asSecondCallingCompanyID,
+			:pSource->asPreCallParentCdrID,
+			:pSource->asPreCallSubCdrID,
+			:pSource->asPreCallSubCdrNum,
+			:pSource->asPreCallSubCdrSeq,
+			:pSource->asPreCallUsageEventID,
+			:pSource->asTurnParentCdrID,
+			:pSource->asTurnSubCdrID,
+			:pSource->asTurnSubCdrNum,
+			:pSource->asTurnSubCdrSeq,
+			:pSource->asTurnUsageEventID,
+			:pSource->asInTrunkGenre,
+			:pSource->asOutTrunkGenre,
+			:pSource->asInTrunkNetType,
+			:pSource->asOutTrunkNetType,
+			:pSource->asCallingNumberType,
+			:pSource->asCalledNumberType,
+			:pSource->asCallingDomainID,
+			:pSource->asCalledDomainID,
+			:pSource->asSecondSubType,
+			:pSource->asSecondCallingRoamnumber,
+			:pSource->asViewCall,
+			:pSource->asGroupID;
+		CheckSqlError("Fetch T_TEMPLATE_YD_GW_UECR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE T_TEMPLATE_YD_GW_UECR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=T_TEMPLATE_YD_GW_UE_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sUsageEventID,		pSource->asUsageEventID[iCurPos]);
+		strcpy(p->sProdID,			pSource->asProdID[iCurPos]);
+		strcpy(p->sStartTime,			pSource->asStartTime[iCurPos]);
+		strcpy(p->sEndTime,			pSource->asEndTime[iCurPos]);
+		strcpy(p->sRateTime,			pSource->asRateTime[iCurPos]);
+		strcpy(p->sOperationTypeID,		pSource->asOperationTypeID[iCurPos]);
+		strcpy(p->sCallingNumber,		pSource->asCallingNumber[iCurPos]);
+		strcpy(p->sCalledNumber,		pSource->asCalledNumber[iCurPos]);
+		strcpy(p->sBilledNumber,		pSource->asBilledNumber[iCurPos]);
+		strcpy(p->sThirdNumber,			pSource->asThirdNumber[iCurPos]);
+
+		p->iCallingAreaID=			pSource->aiCallingAreaID[iCurPos];
+		p->iCalledAreaID=			pSource->aiCalledAreaID[iCurPos];
+
+		strcpy(p->sInTrunkNumber,		pSource->asInTrunkNumber[iCurPos]);
+		strcpy(p->sOutTrunkNumber,		pSource->asOutTrunkNumber[iCurPos]);
+
+		p->iRawUnitType=			pSource->aiRawUnitType[iCurPos];
+
+		strcpy(p->sRawUnits,			pSource->asRawUnits[iCurPos]);
+
+		p->iRateUnitType=			pSource->aiRateUnitType[iCurPos];
+
+		strcpy(p->sIsFree,			pSource->asIsFree[iCurPos]);
+
+		p->iRateUnits=				pSource->aiRateUnits[iCurPos];
+
+		strcpy(p->sCallingAreaCode,		pSource->asCallingAreaCode[iCurPos]);
+		strcpy(p->sCalledAreaCode,		pSource->asCalledAreaCode[iCurPos]);
+		strcpy(p->sCallingRoamNumber,		pSource->asCallingRoamNumber[iCurPos]);
+		strcpy(p->sCalledRoamNumber,		pSource->asCalledRoamNumber[iCurPos]);
+		strcpy(p->sCallingRoamAreaCode,		pSource->asCallingRoamAreaCode[iCurPos]);
+		strcpy(p->sCalledRoamAreaCode,		pSource->asCalledRoamAreaCode[iCurPos]);
+		strcpy(p->sTotalDueAmount,		pSource->asTotalDueAmount[iCurPos]);
+
+		p->iProdInstID=				pSource->aiProdInstID[iCurPos];
+		p->iRateID=				pSource->aiRateID[iCurPos];
+
+		strcpy(p->sUpFlux,			pSource->asUpFlux[iCurPos]);
+		strcpy(p->sDuration,			pSource->asDuration[iCurPos]);
+
+		p->iCityID=				pSource->aiCityID[iCurPos];
+
+		strcpy(p->sDownFlux,			pSource->asDownFlux[iCurPos]);
+		strcpy(p->sFileName,			pSource->asFileName[iCurPos]);
+		strcpy(p->sTotalFlux,			pSource->asTotalFlux[iCurPos]);
+		strcpy(p->sStatus,			pSource->asStatus[iCurPos]);
+
+		p->iBillCycleSeq=			pSource->aiBillCycleSeq[iCurPos];
+
+		strcpy(p->sCurrBalance,			pSource->asCurrBalance[iCurPos]);
+
+		p->iCreateCycleSeq=			pSource->aiCreateCycleSeq[iCurPos];
+
+		strcpy(p->sRateKey1,			pSource->asRateKey1[iCurPos]);
+		strcpy(p->sRateKey2,			pSource->asRateKey2[iCurPos]);
+		strcpy(p->sRateKey3,			pSource->asRateKey3[iCurPos]);
+
+		p->iPureCycleSeq=			pSource->aiPureCycleSeq[iCurPos];
+		p->iDirection=				pSource->aiDirection[iCurPos];
+		p->iFileClassID=			pSource->aiFileClassID[iCurPos];
+
+		strcpy(p->sExceptionType,		pSource->asExceptionType[iCurPos]);
+		strcpy(p->sOrigUsageTypeID,		pSource->asOrigUsageTypeID[iCurPos]);
+
+		p->iTotalDueUnits=			pSource->aiTotalDueUnits[iCurPos];
+
+		strcpy(p->sStlAmount,			pSource->asStlAmount[iCurPos]);
+		strcpy(p->sPostFlag,			pSource->asPostFlag[iCurPos]);
+
+		p->iIsPrepay=				pSource->aiIsPrepay[iCurPos];
+		p->iFileID=				pSource->aiFileID[iCurPos];
+		p->iParentFileID=			pSource->aiParentFileID[iCurPos];
+
+		strcpy(p->sTableName,			pSource->asTableName[iCurPos]);
+		strcpy(p->sCallingCompanyID,		pSource->asCallingCompanyID[iCurPos]);
+		strcpy(p->sCalledCompanyID,		pSource->asCalledCompanyID[iCurPos]);
+		strcpy(p->sSwitchCompanyID,		pSource->asSwitchCompanyID[iCurPos]);
+		strcpy(p->sProvinceID,			pSource->asProvinceID[iCurPos]);
+		strcpy(p->sDurationMinnum,		pSource->asDurationMinnum[iCurPos]);
+		strcpy(p->sDurationSec6,		pSource->asDurationSec6[iCurPos]);
+		strcpy(p->sInTrunkGroup,		pSource->asInTrunkGroup[iCurPos]);
+		strcpy(p->sOutTrunkGroup,		pSource->asOutTrunkGroup[iCurPos]);
+		strcpy(p->sCallingNumberCompanyID,	pSource->asCallingNumberCompanyID[iCurPos]);
+		strcpy(p->sCalledNumberCompanyID,	pSource->asCalledNumberCompanyID[iCurPos]);
+		strcpy(p->sCallingGroupID,		pSource->asCallingGroupID[iCurPos]);
+		strcpy(p->sCalledGroupID,		pSource->asCalledGroupID[iCurPos]);
+		strcpy(p->sStlObject,			pSource->asStlObject[iCurPos]);
+		strcpy(p->sProdPropID,			pSource->asProdPropID[iCurPos]);
+		strcpy(p->sCallingSubType,		pSource->asCallingSubType[iCurPos]);
+		strcpy(p->sCalledSubType,		pSource->asCalledSubType[iCurPos]);
+
+		p->iStlDirection=			pSource->aiStlDirection[iCurPos];
+
+		strcpy(p->sPreCallType,			pSource->asPreCallType[iCurPos]);
+		strcpy(p->sTurnCode,			pSource->asTurnCode[iCurPos]);
+		strcpy(p->sTurnCodeCompanyID,		pSource->asTurnCodeCompanyID[iCurPos]);
+		strcpy(p->sTurnCodeProvinceID,		pSource->asTurnCodeProvinceID[iCurPos]);
+
+		p->iTurnCodeCityID=			pSource->aiTurnCodeCityID[iCurPos];
+
+		strcpy(p->sTurnCodeOperationTypeGrade,	pSource->asTurnCodeOperationTypeGrade[iCurPos]);
+		strcpy(p->sTurnType,			pSource->asTurnType[iCurPos]);
+		strcpy(p->sTurnCdrID,			pSource->asTurnCdrID[iCurPos]);
+		strcpy(p->sSecondCallingNumber,		pSource->asSecondCallingNumber[iCurPos]);
+		strcpy(p->sSecondCallingAreaCode,	pSource->asSecondCallingAreaCode[iCurPos]);
+		strcpy(p->sSecondCallingGroupID,	pSource->asSecondCallingGroupID[iCurPos]);
+		strcpy(p->sSecondCallingCompanyID,	pSource->asSecondCallingCompanyID[iCurPos]);
+		strcpy(p->sPreCallParentCdrID,		pSource->asPreCallParentCdrID[iCurPos]);
+		strcpy(p->sPreCallSubCdrID,		pSource->asPreCallSubCdrID[iCurPos]);
+		strcpy(p->sPreCallSubCdrNum,		pSource->asPreCallSubCdrNum[iCurPos]);
+		strcpy(p->sPreCallSubCdrSeq,		pSource->asPreCallSubCdrSeq[iCurPos]);
+		strcpy(p->sPreCallUsageEventID,		pSource->asPreCallUsageEventID[iCurPos]);
+		strcpy(p->sTurnParentCdrID,		pSource->asTurnParentCdrID[iCurPos]);
+		strcpy(p->sTurnSubCdrID,		pSource->asTurnSubCdrID[iCurPos]);
+		strcpy(p->sTurnSubCdrNum,		pSource->asTurnSubCdrNum[iCurPos]);
+		strcpy(p->sTurnSubCdrSeq,		pSource->asTurnSubCdrSeq[iCurPos]);
+		strcpy(p->sTurnUsageEventID,		pSource->asTurnUsageEventID[iCurPos]);
+		strcpy(p->sInTrunkGenre,		pSource->asInTrunkGenre[iCurPos]);
+		strcpy(p->sOutTrunkGenre,		pSource->asOutTrunkGenre[iCurPos]);
+		strcpy(p->sInTrunkNetType,		pSource->asInTrunkNetType[iCurPos]);
+		strcpy(p->sOutTrunkNetType,		pSource->asOutTrunkNetType[iCurPos]);
+		strcpy(p->sCallingNumberType,		pSource->asCallingNumberType[iCurPos]);
+		strcpy(p->sCalledNumberType,		pSource->asCalledNumberType[iCurPos]);
+		strcpy(p->sCallingDomainID,		pSource->asCallingDomainID[iCurPos]);
+		strcpy(p->sCalledDomainID,		pSource->asCalledDomainID[iCurPos]);
+		strcpy(p->sSecondSubType,		pSource->asSecondSubType[iCurPos]);
+		strcpy(p->sSecondCallingRoamnumber,	pSource->asSecondCallingRoamnumber[iCurPos]);
+		strcpy(p->sViewCall,			pSource->asViewCall[iCurPos]);
+		strcpy(p->sGroupID,			pSource->asGroupID[iCurPos]);
+
+		AllTrim(p->sUsageEventID);
+		AllTrim(p->sProdID);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sEndTime);
+		AllTrim(p->sRateTime);
+		AllTrim(p->sOperationTypeID);
+		AllTrim(p->sCallingNumber);
+		AllTrim(p->sCalledNumber);
+		AllTrim(p->sBilledNumber);
+		AllTrim(p->sThirdNumber);
+		AllTrim(p->sInTrunkNumber);
+		AllTrim(p->sOutTrunkNumber);
+		AllTrim(p->sRawUnits);
+		AllTrim(p->sIsFree);
+		AllTrim(p->sCallingAreaCode);
+		AllTrim(p->sCalledAreaCode);
+		AllTrim(p->sCallingRoamNumber);
+		AllTrim(p->sCalledRoamNumber);
+		AllTrim(p->sCallingRoamAreaCode);
+		AllTrim(p->sCalledRoamAreaCode);
+		AllTrim(p->sTotalDueAmount);
+		AllTrim(p->sUpFlux);
+		AllTrim(p->sDuration);
+		AllTrim(p->sDownFlux);
+		AllTrim(p->sFileName);
+		AllTrim(p->sTotalFlux);
+		AllTrim(p->sStatus);
+		AllTrim(p->sCurrBalance);
+		AllTrim(p->sRateKey1);
+		AllTrim(p->sRateKey2);
+		AllTrim(p->sRateKey3);
+		AllTrim(p->sExceptionType);
+		AllTrim(p->sOrigUsageTypeID);
+		AllTrim(p->sStlAmount);
+		AllTrim(p->sPostFlag);
+		AllTrim(p->sTableName);
+		AllTrim(p->sCallingCompanyID);
+		AllTrim(p->sCalledCompanyID);
+		AllTrim(p->sSwitchCompanyID);
+		AllTrim(p->sProvinceID);
+		AllTrim(p->sDurationMinnum);
+		AllTrim(p->sDurationSec6);
+		AllTrim(p->sInTrunkGroup);
+		AllTrim(p->sOutTrunkGroup);
+		AllTrim(p->sCallingNumberCompanyID);
+		AllTrim(p->sCalledNumberCompanyID);
+		AllTrim(p->sCallingGroupID);
+		AllTrim(p->sCalledGroupID);
+		AllTrim(p->sStlObject);
+		AllTrim(p->sProdPropID);
+		AllTrim(p->sCallingSubType);
+		AllTrim(p->sCalledSubType);
+		AllTrim(p->sPreCallType);
+		AllTrim(p->sTurnCode);
+		AllTrim(p->sTurnCodeCompanyID);
+		AllTrim(p->sTurnCodeProvinceID);
+		AllTrim(p->sTurnCodeOperationTypeGrade);
+		AllTrim(p->sTurnType);
+		AllTrim(p->sTurnCdrID);
+		AllTrim(p->sSecondCallingNumber);
+		AllTrim(p->sSecondCallingAreaCode);
+		AllTrim(p->sSecondCallingGroupID);
+		AllTrim(p->sSecondCallingCompanyID);
+		AllTrim(p->sPreCallParentCdrID);
+		AllTrim(p->sPreCallSubCdrID);
+		AllTrim(p->sPreCallSubCdrNum);
+		AllTrim(p->sPreCallSubCdrSeq);
+		AllTrim(p->sPreCallUsageEventID);
+		AllTrim(p->sTurnParentCdrID);
+		AllTrim(p->sTurnSubCdrID);
+		AllTrim(p->sTurnSubCdrNum);
+		AllTrim(p->sTurnSubCdrSeq);
+		AllTrim(p->sTurnUsageEventID);
+		AllTrim(p->sInTrunkGenre);
+		AllTrim(p->sOutTrunkGenre);
+		AllTrim(p->sInTrunkNetType);
+		AllTrim(p->sOutTrunkNetType);
+		AllTrim(p->sCallingNumberType);
+		AllTrim(p->sCalledNumberType);
+		AllTrim(p->sCallingDomainID);
+		AllTrim(p->sCalledDomainID);
+		AllTrim(p->sSecondSubType);
+		AllTrim(p->sSecondCallingRoamnumber);
+		AllTrim(p->sViewCall);
+		AllTrim(p->sGroupID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+

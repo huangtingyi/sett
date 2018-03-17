@@ -1,0 +1,350 @@
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdir.h>
+#include <list.h>
+#include <wwfile.h>
+#include <wwdb.h>
+#include <bintree.h>
+#include <dbsupp.h>
+#include <stt_ticket.h>
+#include "toll_voip193_supp.h"
+
+/*批量数据动态从DATA_CALLING_STAT中用结构缓冲方式取数据*/
+int EGetDataCallingStatToStruct(struct DataCallingStatStruct *p,
+	struct DataCallingStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(CALLING_AREA_CODE,' '),\n\
+				nvl(CALLED_AREA_CODE,' '),\n\
+				nvl(CALLING_TYPE,' '),\n\
+				nvl(CALLED_TYPE,' '),\n\
+				nvl(CALLING_NET_TYPE,' '),\n\
+				nvl(SERVICE_TYPE,' '),\n\
+				to_char(nvl(TOLL_FEE,0)),\n\
+				to_char(nvl(TOLL_SEC,0)),\n\
+				nvl(CNT,0),\n\
+				nvl(SETT_MONTH,' '),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE DATA_CALLING_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE DATA_CALLING_STATSCR DATA_CALLING_STATCR");
+
+		EXEC SQL DECLARE DATA_CALLING_STATCR CURSOR FOR DATA_CALLING_STATSCR;
+		CheckSqlError("Declare DATA_CALLING_STATCR");
+
+		EXEC SQL OPEN DATA_CALLING_STATCR;
+		CheckSqlError("Open DATA_CALLING_STATCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE DATA_CALLING_STATCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH DATA_CALLING_STATCR INTO
+			:pSource->asCallingAreaCode,
+			:pSource->asCalledAreaCode,
+			:pSource->asCallingType,
+			:pSource->asCalledType,
+			:pSource->asCallingNetType,
+			:pSource->asServiceType,
+			:pSource->asTollFee,
+			:pSource->asTollSec,
+			:pSource->aiCnt,
+			:pSource->asSettMonth,
+			:pSource->asDealDate;
+		CheckSqlError("Fetch DATA_CALLING_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE DATA_CALLING_STATCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=DATA_CALLING_STAT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sCallingAreaCode,	pSource->asCallingAreaCode[iCurPos]);
+		strcpy(p->sCalledAreaCode,	pSource->asCalledAreaCode[iCurPos]);
+		strcpy(p->sCallingType,		pSource->asCallingType[iCurPos]);
+		strcpy(p->sCalledType,		pSource->asCalledType[iCurPos]);
+		strcpy(p->sCallingNetType,	pSource->asCallingNetType[iCurPos]);
+		strcpy(p->sServiceType,		pSource->asServiceType[iCurPos]);
+		strcpy(p->sTollFee,		pSource->asTollFee[iCurPos]);
+		strcpy(p->sTollSec,		pSource->asTollSec[iCurPos]);
+
+		p->iCnt=			pSource->aiCnt[iCurPos];
+
+		strcpy(p->sSettMonth,		pSource->asSettMonth[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+
+		AllTrim(p->sCallingAreaCode);
+		AllTrim(p->sCalledAreaCode);
+		AllTrim(p->sCallingType);
+		AllTrim(p->sCalledType);
+		AllTrim(p->sCallingNetType);
+		AllTrim(p->sServiceType);
+		AllTrim(p->sTollFee);
+		AllTrim(p->sTollSec);
+		AllTrim(p->sSettMonth);
+		AllTrim(p->sDealDate);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从MOB_CALLED_STAT中用结构缓冲方式取数据*/
+int EGetMobCalledStatToStruct(struct MobCalledStatStruct *p,
+	struct MobCalledStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(CALLING_AREA_CODE,' '),\n\
+				nvl(CALLED_AREA_CODE,' '),\n\
+				nvl(CALLING_TYPE,' '),\n\
+				nvl(CALLED_TYPE,' '),\n\
+				to_char(nvl(TOLL_FEE,0)),\n\
+				to_char(nvl(TOLL_SEC,0)),\n\
+				nvl(CNT,0),\n\
+				nvl(SETT_MONTH,' '),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE MOB_CALLED_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE MOB_CALLED_STATSCR MOB_CALLED_STATCR");
+
+		EXEC SQL DECLARE MOB_CALLED_STATCR CURSOR FOR MOB_CALLED_STATSCR;
+		CheckSqlError("Declare MOB_CALLED_STATCR");
+
+		EXEC SQL OPEN MOB_CALLED_STATCR;
+		CheckSqlError("Open MOB_CALLED_STATCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE MOB_CALLED_STATCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH MOB_CALLED_STATCR INTO
+			:pSource->asCallingAreaCode,
+			:pSource->asCalledAreaCode,
+			:pSource->asCallingType,
+			:pSource->asCalledType,
+			:pSource->asTollFee,
+			:pSource->asTollSec,
+			:pSource->aiCnt,
+			:pSource->asSettMonth,
+			:pSource->asDealDate;
+		CheckSqlError("Fetch MOB_CALLED_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE MOB_CALLED_STATCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=MOB_CALLED_STAT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sCallingAreaCode,	pSource->asCallingAreaCode[iCurPos]);
+		strcpy(p->sCalledAreaCode,	pSource->asCalledAreaCode[iCurPos]);
+		strcpy(p->sCallingType,		pSource->asCallingType[iCurPos]);
+		strcpy(p->sCalledType,		pSource->asCalledType[iCurPos]);
+		strcpy(p->sTollFee,		pSource->asTollFee[iCurPos]);
+		strcpy(p->sTollSec,		pSource->asTollSec[iCurPos]);
+
+		p->iCnt=			pSource->aiCnt[iCurPos];
+
+		strcpy(p->sSettMonth,		pSource->asSettMonth[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+
+		AllTrim(p->sCallingAreaCode);
+		AllTrim(p->sCalledAreaCode);
+		AllTrim(p->sCallingType);
+		AllTrim(p->sCalledType);
+		AllTrim(p->sTollFee);
+		AllTrim(p->sTollSec);
+		AllTrim(p->sSettMonth);
+		AllTrim(p->sDealDate);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+void mvitem_voip193recordstruct(struct DataCallingStatStruct *pi,
+	struct Voip193RecordStruct *po)
+{/*数据移动部分*/
+
+	char sCityCode[9];
+	bzero((void*)po,sizeof(struct Voip193RecordStruct));
+
+	GenCityCode(pi->sCallingAreaCode,sCityCode);
+	strncpy(po->sInCityCode,	sCityCode,3);
+	po->sInCityCode[3]=0;
+	GenCityCode(pi->sCalledAreaCode,sCityCode);
+	strncpy(po->sOutCityCode,	sCityCode,3);
+	po->sOutCityCode[3]=0;
+	if(strncmp(pi->sServiceType,"CARD",4)==0){
+		if(strcmp(pi->sCalledType,"G")==0){
+			po->iTollFee1	=atoi(pi->sTollFee);
+			po->iDuration1	=atoi(pi->sTollSec)*6;
+			po->iCnt1	=pi->iCnt;
+		}
+		else if(strcmp(pi->sCalledType,"C")==0){
+			po->iTollFee2	=atoi(pi->sTollFee);
+        	        po->iDuration2	=atoi(pi->sTollSec)*6;
+		        po->iCnt2	=pi->iCnt;
+		}
+		else if(strcmp(pi->sCalledType,"X")==0){
+		        po->iTollFee3	=atoi(pi->sTollFee);
+			po->iDuration3	=atoi(pi->sTollSec)*6;
+			po->iCnt3	=pi->iCnt;
+		}
+	}
+	else if(strncmp(pi->sServiceType,"LINE",4)==0){
+		if(strcmp(pi->sCalledType,"G")==0){
+			po->iTollFee4	=atoi(pi->sTollFee);
+			po->iDuration4	=atoi(pi->sTollSec)*6;
+			po->iCnt4	=pi->iCnt;
+		}
+		else if(strcmp(pi->sCalledType,"C")==0){
+			po->iTollFee5	=atoi(pi->sTollFee);
+        	        po->iDuration5	=atoi(pi->sTollSec)*6;
+		        po->iCnt5	=pi->iCnt;
+		}
+		else if(strcmp(pi->sCalledType,"X")==0){
+		        po->iTollFee6	=atoi(pi->sTollFee);
+			po->iDuration6	=atoi(pi->sTollSec)*6;
+			po->iCnt6	=pi->iCnt;
+		}
+	}
+}
+void mvitem_tollrecordstruct(struct MobCalledStatStruct *pi,
+	struct TollRecordStruct *po)
+{/*数据移动部分*/
+
+	char sCityCode[9];
+	bzero((void*)po,sizeof(struct TollRecordStruct));
+
+	GenCityCode(pi->sCallingAreaCode,sCityCode);
+	strncpy(po->sInCityCode,	sCityCode,3);
+	po->sInCityCode[3]=0;
+	GenCityCode(pi->sCalledAreaCode,sCityCode);
+	strncpy(po->sOutCityCode,	sCityCode,3);
+	po->sOutCityCode[3]=0;
+
+	if(strcmp(pi->sCalledType,"G")==0){
+		po->iTollFee1	=atoi(pi->sTollFee);
+		po->iDuration1	=atoi(pi->sTollSec)*6;
+		po->iCnt1	=pi->iCnt;
+	}
+	else if(strcmp(pi->sCalledType,"C")==0){
+		po->iTollFee2	=atoi(pi->sTollFee);
+                po->iDuration2	=atoi(pi->sTollSec)*6;
+	        po->iCnt2	=pi->iCnt;
+	}
+	else if(strcmp(pi->sCalledType,"X")==0){
+	        po->iTollFee3	=atoi(pi->sTollFee);
+		po->iDuration3	=atoi(pi->sTollSec)*6;
+		po->iCnt3	=pi->iCnt;
+	}
+}

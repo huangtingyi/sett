@@ -1,0 +1,119 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <wwdb.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <param_intf.h>
+#include <simple_serv.h>
+
+
+/*批量数据动态从SIMPLE_SERV中用结构缓冲方式取数据*/
+int EGetSimpleServToStruct(struct SimpleServStruct *p,
+	struct SimpleServStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				MSISDN,\n\
+				nvl(IMSI,'000000000000000'),\n\
+				STATE,\n\
+				BILLING_TYPE_ID,\n\
+				nvl(RESERVE,' '),\n\
+				to_char(nvl(CREATED_DATE,SYSDATE+3000),'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SIMPLE_SERVSCR FROM :statement;
+		CheckSqlError(" PREPARE SIMPLE_SERVSCR SIMPLE_SERVCR");
+
+		EXEC SQL DECLARE SIMPLE_SERVCR CURSOR FOR SIMPLE_SERVSCR;
+		CheckSqlError("Declare SIMPLE_SERVCR");
+
+		EXEC SQL OPEN SIMPLE_SERVCR;
+		CheckSqlError("Open SIMPLE_SERVCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SIMPLE_SERVCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SIMPLE_SERVCR INTO
+			:pSource->asMsisdn,
+			:pSource->asImsi,
+			:pSource->asState,
+			:pSource->asBillingTypeID,
+			:pSource->asReserve,
+			:pSource->asCreatedDate;
+		CheckSqlError("Fetch SIMPLE_SERVCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SIMPLE_SERVCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SIMPLE_SERV_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sImsi,		pSource->asImsi[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sBillingTypeID,	pSource->asBillingTypeID[iCurPos]);
+		strcpy(p->sReserve,		pSource->asReserve[iCurPos]);
+		strcpy(p->sCreatedDate,		pSource->asCreatedDate[iCurPos]);
+
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sImsi);
+		AllTrim(p->sState);
+		AllTrim(p->sBillingTypeID);
+		AllTrim(p->sReserve);
+		AllTrim(p->sCreatedDate);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}

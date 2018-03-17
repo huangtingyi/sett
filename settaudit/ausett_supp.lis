@@ -1,0 +1,10 @@
+
+Pro*C/C++: Release 11.2.0.3.0 - Production on Tue Oct 8 15:17:46 2013
+
+Copyright (c) 1982, 2011, Oracle and/or its affiliates.  All rights reserved.
+
+Error at line 1753, column 20 in file ausett_supp.pc
+  1753                  EXEC SQL DECLARE AU_SETT_STATCR CURSOR FOR AU_SETT_STAT
+        SCR;
+  1753  ...................1
+  1753  PCC-W-02332, attempted to redefine SQL identifier

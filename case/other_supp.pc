@@ -1,0 +1,279 @@
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdb.h>
+
+#include <other_supp.h>
+
+/*批量数据动态从CHK_STT_TICKET中用结构缓冲方式取数据*/
+int EGetChkSttTicketToStruct(struct ChkSttTicketStruct *p,
+	struct ChkSttTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				to_char(nvl(TICKET_TYPE_ID,0)),\n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(DURATION,0),\n\
+				nvl(MSC,' '),\n\
+				nvl(TRUNK_IN,' '),\n\
+				nvl(TRUNK_OUT,' '),\n\
+				nvl(TYPE,' '),\n\
+				nvl(SERIAL_NBR,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE CHK_STT_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE CHK_STT_TICKETSCR CHK_STT_TICKETCR");
+
+		EXEC SQL DECLARE CHK_STT_TICKETCR CURSOR FOR CHK_STT_TICKETSCR;
+		CheckSqlError("Declare CHK_STT_TICKETCR");
+
+		EXEC SQL OPEN CHK_STT_TICKETCR;
+		CheckSqlError("Open CHK_STT_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE CHK_STT_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH CHK_STT_TICKETCR INTO
+			:pSource->asTicketTypeID,
+			:pSource->asCallType,
+			:pSource->asMsisdn,
+			:pSource->asOtherParty,
+			:pSource->asStartTime,
+			:pSource->aiDuration,
+			:pSource->asMsc,
+			:pSource->asTrunkIn,
+			:pSource->asTrunkOut,
+			:pSource->asType,
+			:pSource->asSerialNbr,
+			:pSource->asRowID;
+		CheckSqlError("Fetch CHK_STT_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE CHK_STT_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=CHK_STT_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sTicketTypeID,	pSource->asTicketTypeID[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sOtherParty,		pSource->asOtherParty[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+
+		p->iDuration=			pSource->aiDuration[iCurPos];
+
+		strcpy(p->sMsc,			pSource->asMsc[iCurPos]);
+		strcpy(p->sTrunkIn,		pSource->asTrunkIn[iCurPos]);
+		strcpy(p->sTrunkOut,		pSource->asTrunkOut[iCurPos]);
+		strcpy(p->sType,		pSource->asType[iCurPos]);
+		strcpy(p->sSerialNbr,		pSource->asSerialNbr[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+
+		AllTrim(p->sTicketTypeID);
+		AllTrim(p->sCallType);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sMsc);
+		AllTrim(p->sTrunkIn);
+		AllTrim(p->sTrunkOut);
+		AllTrim(p->sType);
+		AllTrim(p->sSerialNbr);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据结构缓冲写入CHK_STT_TICKET*/
+int EInsertStructToChkSttTicket(struct ChkSttTicketStruct *p,
+	int iInsertFlag,struct ChkSttTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asTicketTypeID[iCurPos],	p->sTicketTypeID);
+		strcpy(pTarget->asCallType[iCurPos],		p->sCallType);
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asOtherParty[iCurPos],		p->sOtherParty);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+
+		strcpy(pTarget->asMsc[iCurPos],			p->sMsc);
+		strcpy(pTarget->asTrunkIn[iCurPos],		p->sTrunkIn);
+		strcpy(pTarget->asTrunkOut[iCurPos],		p->sTrunkOut);
+		strcpy(pTarget->asType[iCurPos],		p->sType);
+		strcpy(pTarget->asSerialNbr[iCurPos],		p->sSerialNbr);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==CHK_STT_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				TICKET_TYPE_ID,\n\
+				CALL_TYPE,\n\
+				MSISDN,\n\
+				OTHER_PARTY,\n\
+				START_TIME,\n\
+				DURATION,\n\
+				MSC,\n\
+				TRUNK_IN,\n\
+				TRUNK_OUT,\n\
+				TYPE,\n\
+				SERIAL_NBR)\n\
+			VALUES (\n\
+				to_number(:asTicketTypeID),\n\
+				:asCallType,\n\
+				:asMsisdn,\n\
+				:asOtherParty,\n\
+				:asStartTime,\n\
+				:aiDuration,\n\
+				:asMsc,\n\
+				:asTrunkIn,\n\
+				:asTrunkOut,\n\
+				:asType,\n\
+				:asSerialNbr\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE CHK_STT_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement CHK_STT_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE CHK_STT_TICKETTRG USING
+				:pTarget->asTicketTypeID,
+				:pTarget->asCallType,
+				:pTarget->asMsisdn,
+				:pTarget->asOtherParty,
+				:pTarget->asStartTime,
+				:pTarget->aiDuration,
+				:pTarget->asMsc,
+				:pTarget->asTrunkIn,
+				:pTarget->asTrunkOut,
+				:pTarget->asType,
+				:pTarget->asSerialNbr;
+		if(CheckSqlResult("Dyn insert into CHK_STT_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+int EUpdateStructToChkSttTicket(struct ChkSttTicketStruct *p,
+	int iUpdateFlag,struct ChkSttTicketStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asType[iCurPos],		p->sType);
+		strcpy(pTarget->asSerialNbr[iCurPos],		p->sSerialNbr);
+		strcpy(pTarget->asRowID[iCurPos],		p->sRowID);
+
+		iCurPos++;
+	}
+
+	if(iUpdateFlag==TRUE||iCurPos==CHK_STT_TICKET_BUFLEN_UP){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE  %s \n\
+			SET \n\
+				TYPE=		:asType,\n\
+				SERIAL_NBR=	:asSerialNbr\n\
+			WHERE \n\
+				ROWID = chartorowid(:asRowID)\n\
+			",sTableName);
+
+		EXEC SQL PREPARE UCHK_STT_TICKETRG FROM :statement;
+		if(CheckSqlResult("Prepare update statement CHK_STT_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE UCHK_STT_TICKETRG USING
+				:pTarget->asType,
+				:pTarget->asSerialNbr,
+				:pTarget->asRowID;
+		if(CheckSqlResult("Dyn update CHK_STT_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+

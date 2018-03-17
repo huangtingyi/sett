@@ -1,0 +1,642 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <list.h>
+#include <bintree.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwcoding.h>
+#include <expr.h>
+#include <expr_fun.h>
+#include <expr_var.h>
+#include <expr_supp.h>
+#include <wwdb.h>
+
+#include <param_intf.h>
+#include <settbid_supp.h>
+
+/*批量数据动态从sp_contact_rule中用结构缓冲方式取数据*/
+int EGetSpContactRuleToStruct(struct SpContactRuleStruct *p,
+	struct SpContactRuleStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				RULE_ID,\n\
+				CONTACT_ID,\n\
+				SEQ,\n\
+				FEE_TYPE,\n\
+				TYPE,\n\
+				MIN_TOTAL_FEE,\n\
+				MAX_TOTAL_FEE,\n\
+				BAL_COMM_RATE,\n\
+				INFO_DISCT_RATIO,\n\
+				INFO_SETT_RATIO,\n\
+				nvl(VALUE,-1),\n\
+				nvl(P1,-1),\n\
+				nvl(P2,-1),\n\
+				to_char(EFF_DATE,'yyyymmddhh24miss'),\n\
+				to_char(EXP_DATE,'yyyymmddhh24miss'),\n\
+				STATE,\n\
+				to_char(nvl(STATE_DATE,SYSDATE+3000),'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE sp_contact_ruleSCR FROM :statement;
+		CheckSqlError(" PREPARE sp_contact_ruleSCR sp_contact_ruleCR");
+
+		EXEC SQL DECLARE sp_contact_ruleCR CURSOR FOR sp_contact_ruleSCR;
+		CheckSqlError("Declare sp_contact_ruleCR");
+
+		EXEC SQL OPEN sp_contact_ruleCR;
+		CheckSqlError("Open sp_contact_ruleCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE sp_contact_ruleCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH sp_contact_ruleCR INTO
+			:pSource->aiRuleID,
+			:pSource->aiContactID,
+			:pSource->aiSeq,
+			:pSource->asFeeType,
+			:pSource->asType,
+			:pSource->aiMinTotalFee,
+			:pSource->aiMaxTotalFee,
+			:pSource->aiBalCommRate,
+			:pSource->aiInfoDisctRatio,
+			:pSource->aiInfoSettRatio,
+			:pSource->aiValue,
+			:pSource->aiP1,
+			:pSource->aiP2,
+			:pSource->asEffDate,
+			:pSource->asExpDate,
+			:pSource->asState,
+			:pSource->asStateDate;
+		CheckSqlError("Fetch sp_contact_ruleCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE sp_contact_ruleCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SP_CONTACT_RULE_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iRuleID=			pSource->aiRuleID[iCurPos];
+
+		p->iContactID=			pSource->aiContactID[iCurPos];
+		p->iSeq=			pSource->aiSeq[iCurPos];
+
+		strcpy(p->sFeeType,		pSource->asFeeType[iCurPos]);
+		strcpy(p->sType,		pSource->asType[iCurPos]);
+
+		p->iMinTotalFee=		pSource->aiMinTotalFee[iCurPos];
+		p->iMaxTotalFee=		pSource->aiMaxTotalFee[iCurPos];
+		p->iBalCommRate=		pSource->aiBalCommRate[iCurPos];
+		p->iInfoDisctRatio=		pSource->aiInfoDisctRatio[iCurPos];
+		p->iInfoSettRatio=		pSource->aiInfoSettRatio[iCurPos];
+		p->iValue=			pSource->aiValue[iCurPos];
+		p->iP1=				pSource->aiP1[iCurPos];
+		p->iP2=				pSource->aiP2[iCurPos];
+
+		strcpy(p->sEffDate,		pSource->asEffDate[iCurPos]);
+		strcpy(p->sExpDate,		pSource->asExpDate[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sStateDate,		pSource->asStateDate[iCurPos]);
+
+
+		AllTrim(p->sFeeType);
+		AllTrim(p->sType);
+		AllTrim(p->sEffDate);
+		AllTrim(p->sExpDate);
+		AllTrim(p->sState);
+		AllTrim(p->sStateDate);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+void mvitem_spcontactrule(struct SpContactRuleStruct *pi,struct SpContactRuleStruct *po)
+{/*数据移动部分*/
+
+	bzero((void*)po,sizeof(struct SpContactRuleStruct));
+
+		po->iRuleID=			pi->iRuleID;
+		po->iContactID=			pi->iContactID;
+		po->iSeq=			pi->iSeq;
+
+		strncpy(po->sFeeType,		pi->sFeeType,1);
+		strncpy(po->sType,		pi->sType,1);
+
+		po->iMinTotalFee=		pi->iMinTotalFee;
+		po->iMaxTotalFee=		pi->iMaxTotalFee;
+		po->iBalCommRate=		pi->iBalCommRate;
+		po->iInfoDisctRatio=		pi->iInfoDisctRatio;
+		po->iInfoSettRatio=		pi->iInfoSettRatio;
+		po->iValue=			pi->iValue;
+		po->iP1=			pi->iP1;
+		po->iP2=			pi->iP2;
+
+		strncpy(po->sEffDate,		pi->sEffDate,14);
+		strncpy(po->sExpDate,		pi->sExpDate,14);
+		strncpy(po->sState,		pi->sState,3);
+		strncpy(po->sStateDate,		pi->sStateDate,14);
+}
+
+int data_search_bintree_sp_contact_rule_e(void *pValue,void*pData)
+{
+	struct SpContactRuleStruct *pSource=(struct SpContactRuleStruct *)pValue;
+	struct SpContactRuleStruct *pTarget=(struct SpContactRuleStruct *)pData;
+
+	return pSource->iContactID-pTarget->iContactID;
+}
+int SearchBalCommRate(BINTREE **ppRoot,int iContactID,int iCnt,
+	char sStartTime[],struct SpContactRuleStruct *ptOut)
+{
+	int zcnt=0,y=0;
+	
+	struct SpContactRuleStruct *pTemp=NULL,*ptHead=NULL;
+	struct SpContactRuleStruct Temp;
+	
+	
+	Temp.iContactID=	iContactID;
+	ptOut->iBalCommRate=0;
+	ptOut->iValue=0;
+	
+
+	if(SearchBin(*ppRoot,(void*)&Temp,
+		data_search_bintree_sp_contact_rule_e,
+		(void*)&ptHead)==NOTFOUND) return NOTFOUND;
+
+	while(ptHead!=NULL){
+
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+
+		zcnt=iCnt;
+		if(strcmp(pTemp->sType,"9")!=0){
+			if(zcnt>=pTemp->iMinTotalFee&&
+				zcnt<pTemp->iMaxTotalFee&&
+				strcmp(sStartTime,pTemp->sEffDate)>=0&&
+				strcmp(sStartTime,pTemp->sExpDate)<0){
+				ptOut->iBalCommRate=pTemp->iBalCommRate;	
+				ptOut->iValue=pTemp->iValue;
+				return FOUND;					
+			}
+		}
+		
+		if(zcnt>=pTemp->iMinTotalFee&&
+			strcmp(sStartTime,pTemp->sEffDate)>=0&&
+			strcmp(sStartTime,pTemp->sExpDate)<0){
+
+			if(zcnt<pTemp->iMaxTotalFee){
+				ptOut->iBalCommRate+=(zcnt-pTemp->iMinTotalFee+1)*
+						pTemp->iBalCommRate;
+			}
+			else{
+				if(pTemp->iMinTotalFee<=0)y=1;
+				ptOut->iBalCommRate+=(pTemp->iMaxTotalFee-
+					pTemp->iMinTotalFee-y)*pTemp->iBalCommRate;
+			}
+			if(pTemp->iValue>0)ptOut->iValue=pTemp->iValue;
+		}
+	}
+	
+	return FOUND;	
+	
+}
+
+int SearchSpContactRule(int iContactID,int t,int x,int iCnt,
+	char sStartTime[],struct SpContactRuleStruct **pptCur)
+{
+	static BINTREE *pRoot=NULL;
+	static int iFirstFlag=true,z=0,zcnt=0;
+	
+	int iBalCommRate=0,iValue=0;
+	struct SpContactRuleStruct *pTemp=NULL,*ptHead=NULL;
+	struct SpContactRuleStruct *ptOut=NULL;
+	struct SpContactRuleStruct Temp,Tempi;
+	
+	*pptCur=NULL;
+	if(iFirstFlag==true){
+
+		struct SpContactRuleStructIn TempIn;
+		
+		iFirstFlag=false;
+		TempIn.iFirstFlag=true;
+		strcpy(TempIn.sTableName,"PARAM.SP_CONTACT_RULE");
+		strcpy(TempIn.sCondition," WHERE STATE='A0A' ");
+		
+		/*加载到平衡二叉树,根据 sp_code建索引;*/
+		/*注意表名为PARAM.sp_contact_rule表,数据直接加到后面;*/
+		
+		while(EGetSpContactRuleToStruct(&Temp,&TempIn)==true){
+	                if((pTemp=malloc(sizeof(struct SpContactRuleStruct)))==NULL){
+	                        printf("分配内存失败sp_contact_rule.\n");
+	                        return -1;
+	                }
+			memcpy((void*)pTemp,(void*)&Temp,sizeof(struct SpContactRuleStruct));
+			
+			if(InsertBin(&pRoot,(void*)pTemp,
+				data_search_bintree_sp_contact_rule_e,
+				assign_insert_bintree)<0) return NOTFOUND;
+		}
+	}
+	bzero((void*)&Temp,sizeof(struct SpContactRuleStruct));
+	
+	Temp.iContactID=	iContactID;
+
+	if(SearchBin(pRoot,(void*)&Temp,
+		data_search_bintree_sp_contact_rule_e,
+		(void*)&ptHead)==NOTFOUND) return NOTFOUND;
+
+	while(ptHead!=NULL){
+
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+
+		zcnt=iCnt;
+		if(strcmp(pTemp->sFeeType,"0")==0)	z=t+x;
+		else	if(strcmp(pTemp->sFeeType,"1")==0)	z=x;
+		
+		
+		if(z>=pTemp->iMinTotalFee&&z<pTemp->iMaxTotalFee&&
+			strcmp(sStartTime,pTemp->sEffDate)>=0&&
+			strcmp(sStartTime,pTemp->sExpDate)<0){
+			/*处理不均衡通信费率>9000情况,重新查找iBalCommRate*/
+			iBalCommRate=pTemp->iBalCommRate;
+			iValue=pTemp->iValue;
+			
+			if(pTemp->iBalCommRate>=9000){
+				bzero((void*)&Tempi,sizeof(struct SpContactRuleStruct));
+				if(SearchBalCommRate(&pRoot,pTemp->iBalCommRate,zcnt,
+					sStartTime,&Tempi)==FOUND)
+				iBalCommRate=Tempi.iBalCommRate;
+				iValue=Tempi.iValue;
+			}
+			 if((ptOut=malloc(sizeof(struct SpContactRuleStruct)))==NULL){
+				printf("分配内存失败sp_contact_rule.\n");
+				return -1;
+			}			
+			mvitem_spcontactrule(pTemp,ptOut);
+			ptOut->iBalCommRate=iBalCommRate;
+			ptOut->iValue=iValue;
+			
+			*pptCur=ptOut;
+			return FOUND;
+		}
+	}
+	return NOTFOUND;
+}
+int CalcSpSettFee(int t,int x,int br,int xs,int mt,int mo,int iContactID,
+	char sStartTime[])
+{
+	int y,a,b,c,iCnt,iBalCommFee,p1,p2;
+	double d;
+	char	sType[2];
+	struct SpContactRuleStruct *pSpContactRule=NULL;
+
+	iCnt=mt-mo;
+	if(SearchSpContactRule(iContactID,t,x,iCnt,sStartTime,&pSpContactRule)
+		==NOTFOUND) return -1;
+
+	y=pSpContactRule->iBalCommRate;
+        a=pSpContactRule->iInfoDisctRatio;
+
+	if(br>0) a=br;
+	else if(br<0&&br!=-1) a=0;/*如果取实际坏帐的sp坏帐率小于0,坏帐率为0*/
+
+
+        b=pSpContactRule->iInfoSettRatio;
+        c=pSpContactRule->iValue;
+        p1=pSpContactRule->iP1;
+	p2=pSpContactRule->iP2;
+
+        strcpy(sType,pSpContactRule->sType);
+
+/*原河北网通
+        if(strcmp(sType,"0")==0)
+                d=x*(1.0-a/1000.0)*b/1000.0 - (mt-mo)*y*1.0 + c;
+        else if(strcmp(sType,"1")==0)
+                d=x*(1.0-a/1000.0)*b/1000.0 - (mt-mo)*y*1.0 + c;
+        else if(strcmp(sType,"2")==0)
+                d=mt*y*1.0;
+	else if(strcmp(sType,"3")==0){
+		if(c>0&&y<c)iBalCommFee=c;
+		else iBalCommFee=y;
+		d=x*(1.0-a/1000.0)*(1.0-p2/1000.0) +
+			t*(1.0-a/1000.0)*(1.0-p1/1000.0);
+	}                
+        else
+                d=x*(1.0-a/1000.0)*b/1000.0 - (mt-mo)*y*1.0 + c;
+*/
+	mt_mo=(mt-mo)*y*1.0;
+	if(mt_mo<0) mt_mo=0;
+        if(strcmp(sType,"0")==0)
+                d=xs*(1.0-a/1000.0)*(b/1000.0) - mt_mo + c;
+        else if(strcmp(sType,"1")==0)
+                d=xs*(1.0-a/1000.0)*(b/1000.0) - mt_mo + c;
+        else if(strcmp(sType,"2")==0)
+                d=mt*y*1.0;
+	else if(strcmp(sType,"3")==0)
+		d=xs*(1.0-a/1000.0)*(b/1000.0) - x*(97/1000.0);
+        else
+                d=xs*(1.0-a/1000.0)*(b/1000.0) - mt_mo + c;
+
+        return (int)(d+0.5);
+}
+int CalcBalCommFee(int t,int x,int mt,int mo,int iContactID,
+	char sStartTime[])
+{
+	int y,a,b,c,p1,p2,iCnt;
+	double d;
+	char	sType[2];
+	struct SpContactRuleStruct *pSpContactRule=NULL;
+
+	iCnt=mt-mo;
+	if(iCnt<=0)return 0;
+	
+	if(SearchSpContactRule(iContactID,t,x,iCnt,sStartTime,&pSpContactRule)
+		==NOTFOUND) return -1;
+
+	y=pSpContactRule->iBalCommRate;
+	a=pSpContactRule->iInfoDisctRatio;
+	b=pSpContactRule->iInfoSettRatio;
+	c=pSpContactRule->iValue;
+	p1=pSpContactRule->iP1;
+	p2=pSpContactRule->iP2;
+	strcpy(sType,pSpContactRule->sType);
+
+	if(strcmp(sType,"3")==0){
+		if(c>0&&y<c)d=c*1.0;
+		else d=y*1.0;
+	}
+	else{
+		d=(mt-mo)*y*1.0 + c;
+	}
+	
+	return (int)(d+0.5);
+}
+int CalcSpDisctFee(int t,int x,int mt,int mo,int iContactID,
+	char sStartTime[])
+{
+	int y,a,b,c,p1,p2,iCnt;
+	double d;
+	char	sType[2];
+	struct SpContactRuleStruct *pSpContactRule=NULL;
+	
+	iCnt=mt-mo;
+	if(SearchSpContactRule(iContactID,t,x,iCnt,sStartTime,&pSpContactRule)
+		==NOTFOUND) return -1;
+
+	y=pSpContactRule->iBalCommRate;
+	a=pSpContactRule->iInfoDisctRatio;
+	b=pSpContactRule->iInfoSettRatio;
+	c=pSpContactRule->iValue;
+	p1=pSpContactRule->iP1;
+	p2=pSpContactRule->iP2;
+	strcpy(sType,pSpContactRule->sType);
+	
+	d=x*(a/1000.0)+t*(a/1000.0);
+
+	return (int)(d+0.5);
+}
+int CalcSpAgencyP1Fee(int t,int x,int mt,int mo,int iContactID,
+	char sStartTime[])
+{
+	int y,a,b,c,p1,p2,iCnt;
+	double d;
+	char	sType[2];
+	struct SpContactRuleStruct *pSpContactRule=NULL;
+	
+	iCnt=mt-mo;
+	if(SearchSpContactRule(iContactID,t,x,iCnt,sStartTime,&pSpContactRule)
+		==NOTFOUND) return -1;
+
+	y=pSpContactRule->iBalCommRate;
+	a=pSpContactRule->iInfoDisctRatio;
+	b=pSpContactRule->iInfoSettRatio;
+	c=pSpContactRule->iValue;
+	p1=pSpContactRule->iP1;
+	p2=pSpContactRule->iP2;
+	strcpy(sType,pSpContactRule->sType);
+
+	d=x*(1.0-a/1000.0)*(p1/1000.0) + t*(1.0-a/1000.0)*(p1/1000.0);
+
+	return (int)(d+0.5);
+}
+int CalcSpAgencyP2Fee(int t,int x,int mt,int mo,int iContactID,
+	char sStartTime[])
+{
+	int y,a,b,c,p1,p2,iCnt;
+	double d;
+	char	sType[2];
+	struct SpContactRuleStruct *pSpContactRule=NULL;
+	
+	iCnt=mt-mo;
+	if(SearchSpContactRule(iContactID,t,x,iCnt,sStartTime,&pSpContactRule)
+		==NOTFOUND) return -1;
+
+	y=pSpContactRule->iBalCommRate;
+	a=pSpContactRule->iInfoDisctRatio;
+	b=pSpContactRule->iInfoSettRatio;
+	c=pSpContactRule->iValue;
+	p1=pSpContactRule->iP1;
+	p2=pSpContactRule->iP2;
+	strcpy(sType,pSpContactRule->sType);
+
+	d=x*(1.0-a/1000.0)*(p2/1000.0) + t*(1.0-a/1000.0)*(p2/1000.0);
+
+	return (int)(d+0.5);
+}
+
+int i_calcspsettfee(int d1,int r)
+{
+	int t=GetIntVariant(CODE_VARBUF,d1);
+	int x=GetIntVariant(CODE_VARBUF,d1+1);
+	int br=GetIntVariant(CODE_VARBUF,d1+2);
+	int xs=GetIntVariant(CODE_VARBUF,d1+3);
+	int mo=GetIntVariant(CODE_VARBUF,d1+4);
+	int mt=GetIntVariant(CODE_VARBUF,d1+5);
+	int cd=GetIntVariant(CODE_VARBUF,d1+6);
+	char *st=GetStrVariant(CODE_VARBUF,d1+7);
+	
+	CODE_VARBUF[r].cType=VARTYPE_INT;
+
+	CODE_VARBUF[r].u.iValue=CalcSpSettFee(t,x,br,xs,mo,mt,cd,st);
+
+	return 0;
+}
+int i_calcspdisctfee(int d1,int r)
+{
+	int t=GetIntVariant(CODE_VARBUF,d1);
+	int x=GetIntVariant(CODE_VARBUF,d1+1);
+	int mt=GetIntVariant(CODE_VARBUF,d1+2);
+	int mo=GetIntVariant(CODE_VARBUF,d1+3);
+	int ss=GetIntVariant(CODE_VARBUF,d1+4);
+	char *st=GetStrVariant(CODE_VARBUF,d1+5);
+	
+	CODE_VARBUF[r].cType=VARTYPE_INT;
+
+	CODE_VARBUF[r].u.iValue=CalcSpDisctFee(t,x,mt,mo,ss,st);
+
+	return 0;
+}
+int i_calcspagencyp1fee(int d1,int r)
+{
+	int t=GetIntVariant(CODE_VARBUF,d1);
+	int x=GetIntVariant(CODE_VARBUF,d1+1);
+	int mt=GetIntVariant(CODE_VARBUF,d1+2);
+	int mo=GetIntVariant(CODE_VARBUF,d1+3);
+	int ss=GetIntVariant(CODE_VARBUF,d1+4);
+	char *st=GetStrVariant(CODE_VARBUF,d1+5);
+	
+	CODE_VARBUF[r].cType=VARTYPE_INT;
+
+	CODE_VARBUF[r].u.iValue=CalcSpAgencyP1Fee(t,x,mt,mo,ss,st);
+
+	return 0;
+}
+
+int i_calcspagencyp2fee(int d1,int r)
+{
+	int t=GetIntVariant(CODE_VARBUF,d1);
+	int x=GetIntVariant(CODE_VARBUF,d1+1);
+	int mt=GetIntVariant(CODE_VARBUF,d1+2);
+	int mo=GetIntVariant(CODE_VARBUF,d1+3);
+	int ss=GetIntVariant(CODE_VARBUF,d1+4);
+	char *st=GetStrVariant(CODE_VARBUF,d1+5);
+	
+	CODE_VARBUF[r].cType=VARTYPE_INT;
+
+	CODE_VARBUF[r].u.iValue=CalcSpAgencyP2Fee(t,x,mt,mo,ss,st);
+
+	return 0;
+}
+int i_calcbalcommfee(int d1,int r)
+{
+	int t=GetIntVariant(CODE_VARBUF,d1);
+	int x=GetIntVariant(CODE_VARBUF,d1+1);
+	int mt=GetIntVariant(CODE_VARBUF,d1+2);
+	int mo=GetIntVariant(CODE_VARBUF,d1+3);
+	int ss=GetIntVariant(CODE_VARBUF,d1+4);
+	char *st=GetStrVariant(CODE_VARBUF,d1+5);
+	
+	CODE_VARBUF[r].cType=VARTYPE_INT;
+
+	CODE_VARBUF[r].u.iValue=CalcBalCommFee(t,x,mt,mo,ss,st);
+
+	return 0;
+}
+
+void RegSpSettExprFun()
+{
+RegFunItem("calcspsettfee",	i_calcspsettfee,	"11111112",'1','f');
+RegFunItem("calcspdisctfee",	i_calcspdisctfee,	"111112",'1','f');
+RegFunItem("calcspagencyp1fee",	i_calcspagencyp1fee,	"111112",'1','f');
+RegFunItem("calcspagencyp2fee",	i_calcspagencyp2fee,	"111112",'1','f');
+RegFunItem("calcbalcommfee",	i_calcbalcommfee,	"111112",'1','f');
+
+}
+#ifdef __MY_MAIN_
+int main(int argc,char *argv[])
+{
+	int t,x,a,mt,mo,iOppCarrierID,iFee=0;
+	char sStartTime[14];	
+
+	if(argc!=7){
+		printf("Usage %s t,x,a,mt,mo,iOppCarrierID sStartTime.\n",argv[0]);
+		return -1;
+	}
+	
+	t=atoi(argv[1]);
+	x=atoi(argv[2]);
+	a=atoi(argv[3]);
+	mt=atoi(argv[4]);
+	mo=atoi(argv[5]);
+	iOppCarrierID=atoi(argv[6]);
+	strcpy(sStartTime,argv[7]);
+	sStartTime[14]=0;
+
+
+	InitAppRes(argv[0]);
+	IniConnect("paramconnstr");
+
+	if((iFee=CalcSpSettFee(t,x,a,mt,mo,iOppCarrierID,sStartTime))<0){
+		printf("出错.\n");
+		return -1;
+	}
+	printf("iFee=%d.\n",iFee);
+	if((iFee=CalcSpDisctFee(t,x,mt,mo,iOppCarrierID,sStartTime))<0){
+		printf("出错.\n");
+		return -1;
+	}
+	printf("iFee=%d.\n",iFee);
+	if((iFee=CalcSpAgencyP1Fee(t,x,mt,mo,iOppCarrierID,sStartTime))<0){
+		printf("出错.\n");
+		return -1;
+	}
+	printf("iFee=%d.\n",iFee);
+	if((iFee=CalcSpAgencyP2Fee(t,x,mt,mo,iOppCarrierID,sStartTime))<0){
+		printf("出错.\n");
+		return -1;
+	}
+	printf("iFee=%d.\n",iFee);
+	if((iFee=CalcBalCommFee(t,x,mt,mo,iOppCarrierID,sStartTime))<0){
+		printf("出错.\n");
+		return -1;
+	}
+	printf("iFee=%d.\n",iFee);
+	
+	DisconnectDatabase();
+	
+	return 0;
+}
+#endif

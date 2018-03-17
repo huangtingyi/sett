@@ -1,0 +1,7 @@
+{
+	call_type=	trimcut(chk_ori,0,2);
+	msisdn=		trimcut(chk_ori,17,15);
+	other_party=	trimcut(chk_ori,32,20);
+	start_time=	trimcut(chk_ori,56,14);
+	duration=	trimcut(chk_ori,70,6);
+}

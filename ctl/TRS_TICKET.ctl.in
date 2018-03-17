@@ -1,0 +1,26 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+RECORD_TYPE      position(1  :2  ),    
+IN_CITY_CODE     position(3  :5  ),    
+OUT_CITY_CODE    position(6  :8  ),   
+LINK_REF         position(9  :14 ), 
+RESERVE1         position(15 :15 ),  
+IMSI             position(16 :30 ),  
+THIRD_PARTY      position(31 :45 ),  
+MSISDN           position(46 :60 ),  
+OTHER_PARTY      position(61 :75 ), 
+SERVICE_TYPE     position(76 :76 ),
+SERVICE_CODE     position(77 :78 ),
+RESERVE2         position(79 :87 ),
+MSC              position(88 :102),
+LAC              position(103:107),
+CELL_ID          position(108:112),
+SERV_TYPE        position(113:113),
+START_DATE       position(114:121),
+START_TIME       position(122:127),
+PAY_UNIT         position(128:133),
+RESERVE3         position(134:164)
+)
+

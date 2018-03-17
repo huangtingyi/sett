@@ -1,0 +1,198 @@
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdir.h>
+#include <list.h>
+#include <wwfile.h>
+#include <wwdb.h>
+#include <bintree.h>
+#include <dbsupp.h>
+#include <stt_ticket.h>
+#include "imsiesn.h"
+
+/*批量数据动态从MSISDN_IMSI_ESN中用结构缓冲方式取数据*/
+int EGetMsisdnImsiEsnToStruct(struct MsisdnImsiEsnStruct *p,
+	struct MsisdnImsiEsnStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				MSISDN,\n\
+				nvl(IMSI,'X'),\n\
+				nvl(ESN,'X'),\n\
+				YEAR,\n\
+				Y_MAP,\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE MSISDN_IMSI_ESNSCR FROM :statement;
+		CheckSqlError(" PREPARE MSISDN_IMSI_ESNSCR MSISDN_IMSI_ESNCR");
+
+		EXEC SQL DECLARE MSISDN_IMSI_ESNCR CURSOR FOR MSISDN_IMSI_ESNSCR;
+		CheckSqlError("Declare MSISDN_IMSI_ESNCR");
+
+		EXEC SQL OPEN MSISDN_IMSI_ESNCR;
+		CheckSqlError("Open MSISDN_IMSI_ESNCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE MSISDN_IMSI_ESNCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH MSISDN_IMSI_ESNCR INTO
+			:pSource->asMsisdn,
+			:pSource->asImsi,
+			:pSource->asEsn,
+			:pSource->asYear,
+			:pSource->asYMap,
+			:pSource->asRowID;
+				
+		CheckSqlError("Fetch MSISDN_IMSI_ESNCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE MSISDN_IMSI_ESNCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=MSISDN_IMSI_ESN_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sMsisdn,	pSource->asMsisdn[iCurPos]);
+		strcpy(p->sImsi,	pSource->asImsi[iCurPos]);
+		strcpy(p->sEsn,		pSource->asEsn[iCurPos]);
+		strcpy(p->sYear,	pSource->asYear[iCurPos]);
+		strcpy(p->sYMap,	pSource->asYMap[iCurPos]);
+		strcpy(p->sRowID,	pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sImsi);
+		AllTrim(p->sEsn);
+		AllTrim(p->sYear);
+		AllTrim(p->sYMap);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+int EUpdateStructToMsisdnImsiEsn(struct UMsisdnImsiEsnStruct *p,
+        int iUpdateFlag,struct UMsisdnImsiEsnStructUp *pTarget)
+{
+
+        int  iCurPos=pTarget->iCurPos;
+        char *sTableName=pTarget->sTableName;
+
+
+        if(iUpdateFlag!=TRUE){
+
+
+                strcpy(pTarget->asYMap[iCurPos],		p->sYMap);
+                strcpy(pTarget->asRowID[iCurPos],               p->sRowID);
+
+                iCurPos++;
+        }
+
+        if(iUpdateFlag==TRUE||iCurPos==MSISDN_IMSI_ESN_BUFLEN_UP){
+
+/* INSERT */
+                char statement[4096];
+
+                if(iCurPos==0) return 0;
+
+                sprintf(statement,"\n\
+                        UPDATE %s\n\
+                        SET \n\
+                                Y_MAP=                  :asYMap\n\
+                        WHERE \n\
+                                ROWID = chartorowid(:asRowID)\n\
+                        ",sTableName);
+
+                EXEC SQL PREPARE RU_IMSIESN_TICKETUCR FROM :statement;
+                if(CheckSqlResult("Prepare update statement U_MSISDN_IMSI_ESN")<0)
+                        return -1;
+
+                EXEC SQL FOR :iCurPos EXECUTE RU_IMSIESN_TICKETUCR USING
+                                :pTarget->asYMap,
+                                :pTarget->asRowID;
+                if(CheckSqlResult("Dyn update U_MSISDN_IMSI_ESN")<0) return -1;
+
+                iCurPos=0;
+        }
+
+        pTarget->iCurPos=iCurPos;
+        return 0;
+}
+int GetMsisdnImsiEsnRowID(struct MsisdnImsiEsnStruct *p,char sRowID[])
+{
+	char sTempRowID[19];
+	char sYear[5],sMsisdn[16],sImsi[16],sEsn[16];
+	
+	strcpy(sYear,p->sYear);
+	strcpy(sMsisdn,p->sMsisdn);
+	strcpy(sImsi,p->sImsi);
+	strcpy(sEsn,p->sEsn);
+	
+	strcpy(sRowID,"");
+	
+	EXEC SQL SELECT rowidtochar(ROWID) INTO :sTempRowID
+		FROM MSISDN_IMSI_ESN
+		WHERE MSISDN=:sMsisdn AND IMSI=:sImsi AND
+			ESN=:sEsn AND YEAR=:sYear AND ROWNUM<2;
+	if(CheckSqlResult("GET MSISDN_IMSI_ESN ROWID")<0) return -1;
+	
+	strcpy(sRowID,sTempRowID);
+
+	return 0;
+	
+}
+

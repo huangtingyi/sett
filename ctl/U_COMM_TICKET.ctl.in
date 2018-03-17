@@ -1,0 +1,10 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+FILE_NAME      position(1 :19),    
+MODULE         position(20:22),    
+AREA_CODE      position(23:27),   
+STATE          position(28:28)
+)
+

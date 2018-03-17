@@ -1,0 +1,12 @@
+y=1;
+y=test1(100,"abc");
+int test1(int x,string y)
+{
+	if(x>1){
+		z=test1(x-1,y);
+		return x+z;
+	}
+	return strlen(y);
+}
+printf("the y=%d.\n",y);
+

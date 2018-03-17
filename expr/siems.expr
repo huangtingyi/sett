@@ -1,0 +1,173 @@
+{
+/*声明输出部分*/
+goto aa;
+	setfilefmt("asn");
+	initdate(300);
+	setfmt(t_call_type,	"00","%02d",posp("0:2"));
+	setfmt(t_imsi,		" ","%-15s",posp("2:15"));
+	setfmt(t_calling_nbr,	" ","%-15s",posp("17:15"));
+	setfmt(t_called_nbr,	" ","%-24s",posp("32:24"));
+	setfmt(t_start_date,	" ","%-8s",posp("56:8"));
+	setfmt(t_start_time,	" ","%-6s",posp("64:6"));
+	setfmt(t_duration,	" ","%06d",posp("70:6"));
+	setfmt(t_msc,		" ","%-10s",posp("76:10"));
+	setfmt(t_trunk_in,	" ","%-8s",posp("86:8"));
+	setfmt(t_trunk_out,	" ","%-8s",posp("94:8"));
+	setfmt(t_lac,		" ","%-4s",posp("102:4"));
+	setfmt(t_cell_id,	" ","%-4s",posp("106:4"));
+	setfmt(t_other_lac,	" ","%-4s",posp("110:4"));
+	setfmt(t_other_cell_id,	" ","%-4s",posp("114:4"));
+	setfmt(t_service_type,	" ","%-3s",posp("118:3"));
+	setfmt(t_service_code,	" ","%-4s",posp("121:4"));
+	setfmt(t_third_party,	" ","%-15s",posp("125:15"));
+	setfmt(t_msrn,		" ","%-15s",posp("140:15"));
+	setfmt(st_esn,		" ","%-15s",posp("155:15" ));
+	setfmt(st_scp_flag,	"0","%-1s", posp("170:1"));
+	setfmt(st_deform_flag,	"0","%-1s", posp("171:1"));
+	setfmt(st_last_lac,	" ","%-4s",posp("172:4"));
+	setfmt(st_last_cell_id,	" ","%-4s",posp("176:4"));
+aa:
+	ticketvalid=1;
+	
+/*智能网标识*/
+	st_scp_flag="0";
+	st_deform_flag="0";
+/*字段解码部分*/
+	t_call_type=	ENUMERATED(getasnpos(t_ori,asnp("E1:C3")));
+/*西门子CALL_TYPE标准化*/
+	t_call_type=di2i(t_call_type,pi2i(
+"0x01:01:0x02:02:0x08:01:0x09:02:0x1A:05:0x1B:06:0x1D:03:0x1E:08:0x1F:07:0x03:01:00"));
+
+	t_imsi=		TBCD_STRING(getasnpos(t_ori,asnp("E1:FF27:C6")));
+	st_esn=		TBCD_STRING(getasnpos(t_ori,asnp("E1:FF27:C8")));
+	
+	a=TBCD_STRING(getasnpos(t_ori,asnp("E1:FF27:C7")));
+
+/*西门子CALL_TYPE标准化*/	
+	b=ADDRESS_STRING(getasnpos(t_ori,asnp("E1:FF5D:DF5E")));
+	typeb=	ENUMERATED(getasnpos(t_ori,asnp("E1:FF5D:DF5E")));
+	if(strlen(b)==0){
+		b=ADDRESS_STRING(getasnpos(t_ori,asnp("E1:FF5D:DF5F")));
+		typeb=	ENUMERATED(getasnpos(t_ori,asnp("E1:FF5D:DF5F")));
+		if(strlen(b)==0){/*西门子6.0支持*/
+			b=ADDRESS_STRING(getasnpos(t_ori,asnp("E1:DF2C")));
+			typeb=	ENUMERATED(getasnpos(t_ori,asnp("E1:DF2C")));
+		}
+	}
+/*0x81:不转换号码,0x91国际长途号码,0xA1:国内长途号码*/
+	typeb=di2i(typeb,pi2i("0x81:0:0x91:2:0xA1:0:0"));
+	b=	fmtnbr(b,typeb);
+
+	if(t_call_type==05){
+		t_calling_nbr=b;
+		t_called_nbr=a;
+	}
+	else if(t_call_type==06){
+		a=ADDRESS_STRING(getasnpos(t_ori,asnp("E1:DF28")));
+		typea=	ENUMERATED(getasnpos(t_ori,asnp("E1:DF28")));
+		typea=	di2i(typeb,pi2i("0x81:0:0x91:2:0xA1:0:0"));
+		t_calling_nbr=fmtnbr(a,typea);
+		t_called_nbr=b;
+	}
+	else if(t_call_type==07||t_call_type==08){
+		t_calling_nbr=a;
+		/*如果是短信，则取短信中心号码*/
+		b=ADDRESS_STRING(getasnpos(t_ori,asnp("E1:DF26")));
+		typeb=	ENUMERATED(getasnpos(t_ori,asnp("E1:DF26")));
+		typeb=di2i(typeb,pi2i("0x81:0:0x91:2:0xA1:0:0"));
+		t_called_nbr=	fmtnbr(b,typeb);
+		
+	}
+	else{
+		t_calling_nbr=a;
+		t_called_nbr=b;
+	}
+
+	t_start_date=	STARTDATE_OCTET_STRING(getasnpos(t_ori,asnp("E1:ED:D3")));
+	t_start_time=	STARTTIME_OCTET_STRING(getasnpos(t_ori,asnp("E1:ED:F4:DC")));
+
+	if(t_call_type==07||t_call_type==08) t_duration=0;
+	else {
+		t_duration=	HEX_OCTET_INT4B(getasnpos(t_ori,asnp("E1:ED:D1")));
+		if(t_duration<0) t_duration=0;
+	}
+	if(t_call_type==02||t_call_type==05||t_call_type==03)
+		t_msrn=ADDRESS_STRING(getasnpos(t_ori,asnp("E1:FF27:DD")));
+	else
+		t_msrn=ADDRESS_STRING(getasnpos(t_ori,asnp("E1:DF3C")));
+	t_msc=		HEX_OCTET_STRING(getasnpos(t_ori,asnp("E1:CA")));
+	t_trunk_in=	IA5STRING(getasnpos(t_ori,asnp("E1:FF21:16")));
+	t_trunk_out=	IA5STRING(getasnpos(t_ori,asnp("E1:FB:16")));
+
+	temp=HEX_OCTET_STRING(getasnpos(t_ori,asnp("E1:D6")));
+	t_lac=		substr(temp,8,2)+substr(temp,6,2);
+	t_cell_id=	substr(temp,12,2)+substr(temp,10,2);
+	
+	t_third_party=ADDRESS_STRING(getasnpos(t_ori,asnp("E1:DF20")));
+	
+	if(t_call_type==03)
+		t_service_type="002";
+	else
+		t_service_type="000";
+/*ASN_ITEM("E1:F7:FF2B",HEX_OCTET_STRING,"C90111",SERVICE_CODE_ERR)*/
+	temp=HEX_OCTET_STRING(getasnpos(t_ori,asnp("E1:F7:FF2B")));
+	if(strlen(temp)>6){
+		if(substr(temp,6,4)=="C901")
+			t_service_code="00"+substr(temp,10,2);
+		else
+			t_service_code="0011";
+	}
+	else{
+		if(llike(temp,"C901"))
+			t_service_code="00"+substr(temp,4,2);
+		else
+			t_service_code="0011";
+	}
+	
+	if(maxdatadate(t_start_date)<0)
+		ticketvalid=0;		
+//if(t_call_type==07||t_call_type==08){/*国内短信删除*/
+//	if(llike(t_imsi,"4600")||llike(t_imsi,"4610")){ ticketvalid=-7; return;}
+//}
+
+if(t_call_type==00){/*call_type为0删除*/
+	ticketvalid=-1; 
+	return;
+}
+if(length(t_imsi)!=0){/*如果是国际号码，则加0*/
+	if(substr(t_imsi,0,4)!="4600"&&substr(t_imsi,0,4)!="4610"){
+		t_calling_nbr=fmtnbr(t_calling_nbr,2);
+	}
+}	
+
+/*龙岩特殊号码处理*/
+	if(t_msc=="LY"&&substr(t_other_party,0,7)=="9986597")
+		t_other_party=substr(t_other_party,4,15);
+/*字段校正部分*/
+	t_msc=$MSC;
+	t_msrn=fmt86a13(t_msrn);
+	t_called_nbr=fmt86a13(t_called_nbr);
+	l=length($AREACODE);
+	if(length(t_called_nbr)>12&&l!=0){
+		if(llike(t_called_nbr,$AREACODE+"0"))
+			t_called_nbr=substr(t_called_nbr,l,20);
+		else if(llike(t_called_nbr,"0"+$AREACODE+"0"))
+			t_called_nbr=substr(t_called_nbr,l+1,20);
+	}
+	t_calling_nbr=fmt86a13(t_calling_nbr);
+	t_third_party=fmt86a13(t_third_party);
+	/*去掉7786*/	
+	if(llike(t_called_nbr,"778613")&&strlen(t_called_nbr)>9)
+		t_called_nbr=substr(t_called_nbr,4,20);
+	if(llike(t_called_nbr,"778659")&&strlen(t_called_nbr)>9)
+		t_called_nbr=substr(t_called_nbr,4,20);			
+	if(llike(t_called_nbr,"7786")&&strlen(t_called_nbr)>13)
+		t_called_nbr=substr(t_called_nbr,4,20);	
+	/*去掉7686*/	
+	if(llike(t_called_nbr,"768613")&&strlen(t_called_nbr)>9)
+		t_called_nbr=substr(t_called_nbr,4,20);
+	if(llike(t_called_nbr,"768659")&&strlen(t_called_nbr)>9)
+		t_called_nbr=substr(t_called_nbr,4,20);			
+	if(llike(t_called_nbr,"7686")&&strlen(t_called_nbr)>13)
+		t_called_nbr=substr(t_called_nbr,4,20);			
+}

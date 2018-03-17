@@ -1,0 +1,35 @@
+{
+goto aa;
+setfmt(st_usage_event_id        	," ","%-18s",posp("0:18"));
+setfmt(st_source_id        			," ","%-6s",posp("18:6"));
+setfmt(st_home_area_code        	," ","%-6s",posp("24:6"));
+setfmt(st_msisdn        			," ","%-30s",posp("30:30"));
+setfmt(st_sett_city        			," ","%-6s",posp("60:6"));
+setfmt(st_opp_area_code      	  	," ","%-6s",posp("66:6"));
+setfmt(st_other_party        		," ","%-30s",posp("72:30"));
+setfmt(st_call_type        			," ","%-2s",posp("102:2"));
+setfmt(st_start_time        		," ","%-14s",posp("104:14"));
+setfmt(st_end_time        			," ","%-14s",posp("118:14"));
+setfmt(st_duration       			," ","%-8s",posp("132:8"));
+setfmt(st_audit_type        		," ","%-2s",posp("140:2"));
+
+aa:
+	ticketvalid=1;/*设置为有效话单*/
+	tariffflag=0; /*设置为不要批价*/
+/*取原始记录到中间变量*/
+	st_usage_event_id        	=trimcut(t_ori,0,18);
+	st_source_id        		=trimcut(t_ori,18,6);
+	st_home_area_code        	=trimcut(t_ori,24,6);
+	st_msisdn        			=trimcut(t_ori,30,30);
+	st_sett_city        		=trimcut(t_ori,60,6);
+	st_opp_area_code      	  	=trimcut(t_ori,66,6);
+	st_other_party        		=trimcut(t_ori,72,30);
+	st_call_type        		=trimcut(t_ori,102,2);
+	st_start_time        		=trimcut(t_ori,104,14);
+	st_end_time        			=trimcut(t_ori,118,14);
+	st_duration       			=trimcut(t_ori,132,8);
+	st_audit_type        		=trimcut(t_ori,140,2);
+
+	printf("st_audit_type:%s\n",st_audit_type);
+	
+}

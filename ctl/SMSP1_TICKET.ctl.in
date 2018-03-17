@@ -1,0 +1,31 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+REG_NO             position(1  :30 ),    
+CALL_TYPE          position(31 :32 ),    
+USER_TYPE          position(33 :33 ),   
+MSISDN             position(34 :46 ), 
+SP_CODE            position(47 :51 ),  
+SP_HOME_SMG        position(52 :56 ),  
+OTHER_PARTY        position(57 :69 ),  
+SP_ACC_NBR         position(70 :78 ),  
+SERVICE_CODE       position(79 :88 ), 
+BILLING_TYPE       position(89 :89 ),
+INFO_FEE           position(90 :95 ),
+RENT_FEE           position(96 :101),
+RETURN_FEE         position(102:107),
+BILL_TYPE          position(108:108),
+MO_FLAG            position(109:109),
+LAST_STATUS        position(110:113),
+PRIORITY           position(114:114),
+MSG_CNT            position(115:116),
+HOME_AREA_CODE     position(117:120),
+SMG                position(121:125),
+TSMG               position(126:130),
+SMSC               position(131:143),
+REGISTER_TIME      position(144:157),
+SEND_TIME          position(158:171),
+RESERVE            position(172:198)
+)
+

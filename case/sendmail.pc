@@ -1,0 +1,365 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <hnixs.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdir.h>
+#include <wwdb.h>
+#include <list.h>
+
+
+/* 输入结构缓冲申明*/
+struct SendMailOrdStructIn{
+
+#ifndef SEND_MAIL_ORD_BUFLEN_IN
+#define SEND_MAIL_ORD_BUFLEN_IN		300
+#endif
+
+	struct SendMailOrdStructIn *pNext;
+
+	int iBufEmpty;
+	int iCurPos;
+	int iFetchRecNum;
+	int iEndFlag;
+	int iRecCnt;
+	int iFirstFlag;
+	char sTableName[31];
+	char sCondition[1024];
+		/* 邮件ID */
+	int     aiMailID[SEND_MAIL_ORD_BUFLEN_IN];
+		/* 决定者发送源的地址、账号、密码、smtp服务器等 */
+	char    asOriType[SEND_MAIL_ORD_BUFLEN_IN][3];
+		/* 目的地址 */
+	char    asTargetAddr[SEND_MAIL_ORD_BUFLEN_IN][61];
+		/* 失败次数 */
+	int     aiFailTimes[SEND_MAIL_ORD_BUFLEN_IN];
+		/* 邮件生成时间 */
+	char    asCreatedDate[SEND_MAIL_ORD_BUFLEN_IN][15];
+		/* A0C ->已生成未发邮件,A0X ->发送失败, A0H 发送成功 */
+	char    asState[SEND_MAIL_ORD_BUFLEN_IN][4];
+		/* 最后发送日期 */
+	char    asLastSendDate[SEND_MAIL_ORD_BUFLEN_IN][15];
+		/* 邮件主题 */
+	char    asSubj[SEND_MAIL_ORD_BUFLEN_IN][81];
+		/* 邮件消息 */
+	char    asMsg[SEND_MAIL_ORD_BUFLEN_IN][4001];
+};
+
+
+/*单个结构申明*/
+struct SendMailOrdStruct{
+
+	struct SendMailOrdStruct *pNext;
+	int     iMailID;		/* 邮件ID */
+	char    sOriType[3];		/* 决定者发送源的地址、账号、密码、smtp服务器等 */
+	char    sTargetAddr[61];		/* 目的地址 */
+	int     iFailTimes;		/* 失败次数 */
+	char    sCreatedDate[15];		/* 邮件生成时间 */
+	char    sState[4];		/* A0C ->已生成未发邮件,A0X ->发送失败, A0H 发送成功 */
+	char    sLastSendDate[15];		/* 最后发送日期 */
+	char    sSubj[81];		/* 邮件主题 */
+	char    sMsg[4001];		/* 邮件消息 */
+	struct SendMailOrdStruct *pLoadNext;
+};
+
+/*批量数据动态从SEND_MAIL_ORD中用结构缓冲方式取数据*/
+int EGetSendMailOrdToStruct(struct SendMailOrdStruct *p,
+	struct SendMailOrdStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				MAIL_ID,\n\
+				ORI_TYPE,\n\
+				TARGET_ADDR,\n\
+				nvl(FAIL_TIMES,0),\n\
+				to_char(nvl(CREATED_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(STATE,' '),\n\
+				to_char(nvl(LAST_SEND_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SUBJ,' '),\n\
+				nvl(MSG,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SEND_MAIL_ORDSCR FROM :statement;
+		CheckSqlError(" PREPARE SEND_MAIL_ORDSCR SEND_MAIL_ORDCR");
+
+		EXEC SQL DECLARE SEND_MAIL_ORDCR CURSOR FOR SEND_MAIL_ORDSCR;
+		CheckSqlError("Declare SEND_MAIL_ORDCR");
+
+		EXEC SQL OPEN SEND_MAIL_ORDCR;
+		CheckSqlError("Open SEND_MAIL_ORDCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SEND_MAIL_ORDCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SEND_MAIL_ORDCR INTO
+			:pSource->aiMailID,
+			:pSource->asOriType,
+			:pSource->asTargetAddr,
+			:pSource->aiFailTimes,
+			:pSource->asCreatedDate,
+			:pSource->asState,
+			:pSource->asLastSendDate,
+			:pSource->asSubj,
+			:pSource->asMsg;
+		CheckSqlError("Fetch SEND_MAIL_ORDCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SEND_MAIL_ORDCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SEND_MAIL_ORD_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iMailID=			pSource->aiMailID[iCurPos];
+
+		strcpy(p->sOriType,		pSource->asOriType[iCurPos]);
+		strcpy(p->sTargetAddr,		pSource->asTargetAddr[iCurPos]);
+
+		p->iFailTimes=			pSource->aiFailTimes[iCurPos];
+
+		strcpy(p->sCreatedDate,		pSource->asCreatedDate[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sLastSendDate,	pSource->asLastSendDate[iCurPos]);
+		strcpy(p->sSubj,		pSource->asSubj[iCurPos]);
+		strcpy(p->sMsg,			pSource->asMsg[iCurPos]);
+
+		AllTrim(p->sOriType);
+		AllTrim(p->sTargetAddr);
+		AllTrim(p->sCreatedDate);
+		AllTrim(p->sState);
+		AllTrim(p->sLastSendDate);
+		AllTrim(p->sSubj);
+		AllTrim(p->sMsg);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/**对表SEND_MAIL_ORD的链表释放函数**/
+void DestroySendMailOrd(struct SendMailOrdStruct *ptHead)
+{
+	struct SendMailOrdStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+int InitSendMailOrd(struct SendMailOrdStruct **pptHead)
+{
+	int iCnt=0;
+	static struct SendMailOrdStruct *pTemp,*ptHead=NULL;
+	struct SendMailOrdStruct Temp;
+	struct SendMailOrdStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroySendMailOrd(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct SendMailOrdStructIn));
+	sprintf(TempIn.sTableName,"SEND_MAIL_ORD");
+	sprintf(TempIn.sCondition," WHERE STATE='A0C' OR ( STATE='A0X' AND LAST_SEND_DATE<(SYSDATE-1/48) AND FAIL_TIMES<3 ) ");
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetSendMailOrdToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct SendMailOrdStruct*)
+			malloc(sizeof(struct SendMailOrdStruct)))==NULL){
+
+			DestroySendMailOrd(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct SendMailOrdStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表SEND_MAIL_ORD记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表SEND_MAIL_ORD完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+/*
+iState :0  成功,非0  失败
+*/
+int UpdateSendMailOrd(int iMailID,int iState)
+{
+	if(iState==0){
+		EXEC SQL UPDATE SEND_MAIL_ORD
+			SET	STATE='A0H',
+				LAST_SEND_DATE=SYSDATE
+			WHERE MAIL_ID=:iMailID;
+	}
+	else{
+		EXEC SQL UPDATE SEND_MAIL_ORD
+			SET	STATE='A0X',
+				LAST_SEND_DATE=SYSDATE,
+				FAIL_TIMES=nvl(FAIL_TIMES,0)+1
+			WHERE MAIL_ID=:iMailID;
+	}
+	return CheckSqlResult("UPDATE SEND MAIL ORD");
+}
+int Str2File(char sStr[],char sFileName[])
+{
+	FILE *fp;
+	
+	if((fp=fopen(sFileName,"w"))==NULL) return -1;
+
+	if(sStr[0]==0){
+		fclose(fp);
+		return 0;
+	}
+	
+	fwrite(sStr,strlen(sStr),1,fp);
+	
+	fclose(fp);
+
+	return 0;
+}
+int main(int argc, char **argv)
+{
+	int iState=0,iNormalCnt=0,iErrCnt=0;
+	char sCommand[1024],sResult[1024];
+	char sTmpFile[256],sUserId[100],sOriType[40];
+	
+	struct SendMailOrdStruct *ptHead=NULL,*pTemp=NULL;
+
+	if(argc!=3&&argc!=2){
+		printf("Usage %s userid [1|2].\n",argv[0]);
+		return -1;
+	}
+	InitAppRes(argv[0]);
+	strcpy(sUserId,argv[1]);
+	
+	if(argc==2)
+		strcpy(sOriType,"1");
+	else	strcpy(sOriType,argv[2]);
+
+	sprintf(sTmpFile,"mailinfo%d.txt",getpid());
+	
+	if(FastConnect(sUserId)<0){
+		WriteAlertPrint("链接数据库%s失败",sUserId);
+		return -1;
+	}
+
+	if(InitSendMailOrd(&ptHead)<0){
+		WriteAlertPrint("获取工单列表失败");
+		return -1;
+	}
+	
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		if(Str2File(pTemp->sMsg,sTmpFile)<0){
+			WriteAlertPrint("写文件 %s 失败",sTmpFile);
+			execcmd("rm -f %s",sTmpFile);
+			return -1;
+		}
+		
+		sprintf(sCommand,"java MailTo %s \"%s\" \"%s\" %s",
+			sOriType,pTemp->sTargetAddr,pTemp->sSubj,sTmpFile);
+		
+		exec2str(sCommand,sResult);
+		
+		if(strstr(sResult,"发送邮件成功")!=NULL) iState=0;
+		else iState=-1;
+		
+		if(UpdateSendMailOrd(pTemp->iMailID,iState)<0){
+			WriteAlertPrint("对 SEND_MAIL_ORD 更新失败");
+			execcmd("rm -f %s",sTmpFile);
+			return -1;
+		}
+
+		CommitWork();
+		
+		if(iState==0){
+			WriteProcPrint("成功对 %s 发送邮件 %s",
+				pTemp->sTargetAddr,pTemp->sSubj);
+			iNormalCnt++;
+		}
+		else{
+			WriteAlertPrint("对 %s 发送邮件 %s　失败",
+				pTemp->sTargetAddr,pTemp->sSubj);
+			iErrCnt++;
+		}
+		
+		sleep(2);
+	}
+
+	execcmd("rm -f %s",sTmpFile);
+
+	if((iNormalCnt+iErrCnt)==0)
+		WriteProcPrint("没有待发送的邮件");
+	else
+		WriteProcPrint("成功发送邮件%d条,发送失败%d条",
+			iNormalCnt,iErrCnt);
+
+	DisconnectDatabase();
+
+	return 0;
+}

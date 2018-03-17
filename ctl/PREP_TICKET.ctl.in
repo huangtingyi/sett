@@ -1,0 +1,28 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+CALL_TYPE    	      position(1:2),    
+IMSI                  position(3:17),    
+MSISDN                position(18:32),   
+OTHER_PARTY           position(33:56), 
+START_TIME            position(57:70),  
+DURATION              position(71:76),  
+MSC                   position(77:86),  
+TRUNK_IN              position(87:94),  
+TRUNK_OUT             position(95:102), 
+LAC                   position(103:106),
+CELL_ID               position(107:110),
+OTHER_LAC             position(111:114),
+OTHER_CELL_ID         position(115:118),
+SERVICE_TYPE          position(119:121),
+SERVICE_CODE          position(122:125),
+THIRD_PARTY           position(126:140),
+MSRN                  position(141:155),
+ESN                   position(156:170),
+SCP_FLAG              position(171:171),
+DEFORM_FLAG           position(172:172),
+RESERVE               position(173:180)
+)
+
+

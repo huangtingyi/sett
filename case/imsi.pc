@@ -1,0 +1,65 @@
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdir.h>
+#include <list.h>
+#include <wwfile.h>
+#include <wwdb.h>
+#include <bintree.h>
+#include <dbsupp.h>
+#include <stt_ticket.h>
+#include "imsiesn.h"
+
+int EUpdateStructToMsisdnImsiEsn(struct UMsisdnImsiEsnStruct *p,
+        int iUpdateFlag,struct UMsisdnImsiEsnStructUp *pTarget)
+{
+
+        int  iCurPos=pTarget->iCurPos;
+        char *sTableName=pTarget->sTableName;
+
+
+        if(iUpdateFlag!=TRUE){
+
+
+                strcpy(pTarget->asYMap[iCurPos],		p->sYMap);
+                strcpy(pTarget->asRowID[iCurPos],               p->sRowID);
+
+                iCurPos++;
+        }
+
+        if(iUpdateFlag==TRUE||iCurPos==MSISDN_IMSI_ESN_BUFLEN_UP){
+
+/* INSERT */
+                char statement[4096];
+
+                if(iCurPos==0) return 0;
+
+                sprintf(statement,"\n\
+                        UPDATE %s\n\
+                        SET \n\
+                                Y_MAP=                  :asYMap\n\
+                        WHERE \n\
+                                ROWID = chartorowid(:asRowID)\n\
+                        ",sTableName);
+
+                EXEC SQL PREPARE RU_IMSIESN_TICKETUCRxx FROM :statement;
+                if(CheckSqlResult("Prepare update statement U_MSISDN_IMSI_ESN")<0)
+                        return -1;
+
+                EXEC SQL FOR :iCurPos EXECUTE RU_IMSIESN_TICKETUCR_1xx USING
+                                :pTarget->asYMap,
+                                :pTarget->asRowID,
+                                :pTarget->asYMap;
+                if(CheckSqlResult("Dyn update U_MSISDN_IMSI_ESN")<0) return -1;
+
+                iCurPos=0;
+        }
+
+        pTarget->iCurPos=iCurPos;
+        return 0;
+}
+

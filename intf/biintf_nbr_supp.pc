@@ -1,0 +1,347 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <wwdb.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <bintree.h>
+#include <list.h>
+#include <wwfile.h>
+#include <stt_ticket.h>
+#include "param_intf.h"
+#include "biintf_nbr_supp.h"
+
+
+/*批量数据动态从SETT_NBR_INTF_FJBI中用结构缓冲方式取数据*/
+int EGetSettNbrIntfFjbiToStruct(struct SettNbrIntfFjbiStruct *p,
+	struct SettNbrIntfFjbiStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(BILLING_CYCLE_ID,' '),\n\
+				nvl(VISIT_AREA_CODE,' '),\n\
+				nvl(ACC_NBR,' '),\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(OPP_AREA_CODE,' '),\n\
+				nvl(ROAM_AREA_CODE,' '),\n\
+				nvl(HOME_CARR_ID,0),\n\
+				nvl(OPP_CARR_ID,0),\n\
+				nvl(CALL_DIRECTION,0),\n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				nvl(CNT,0),\n\
+				nvl(DURATION,0),\n\
+				nvl(FEE_DURATION,0),\n\
+				nvl(IN_FEE,0),\n\
+				nvl(OUT_FEE,0),\n\
+				nvl(SERVICE_TYPE,' '),\n\
+				nvl(NBR_TYPE,' '),\n\
+				nvl(OPP_NBR_TYPE,' '),\n\
+				nvl(SETT_FLAG,0),\n\
+				nvl(RESERVE1,' '),\n\
+				nvl(RESERVE2,' '),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SETT_NBR_INTF_FJBISCR FROM :statement;
+		CheckSqlError(" PREPARE SETT_NBR_INTF_FJBISCR SETT_NBR_INTF_FJBICR");
+
+		EXEC SQL DECLARE SETT_NBR_INTF_FJBICR CURSOR FOR SETT_NBR_INTF_FJBISCR;
+		CheckSqlError("Declare SETT_NBR_INTF_FJBICR");
+
+		EXEC SQL OPEN SETT_NBR_INTF_FJBICR;
+		CheckSqlError("Open SETT_NBR_INTF_FJBICR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SETT_NBR_INTF_FJBICR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SETT_NBR_INTF_FJBICR INTO
+			:pSource->asBillingCycleID,
+			:pSource->asVisitAreaCode,
+			:pSource->asAccNbr,
+			:pSource->asHomeAreaCode,
+			:pSource->asOppAreaCode,
+			:pSource->asRoamAreaCode,
+			:pSource->aiHomeCarrID,
+			:pSource->aiOppCarrID,
+			:pSource->aiCallDirection,
+			:pSource->aiTicketTypeID,
+			:pSource->aiCnt,
+			:pSource->aiDuration,
+			:pSource->aiFeeDuration,
+			:pSource->aiInFee,
+			:pSource->aiOutFee,
+			:pSource->asServiceType,
+			:pSource->asNbrType,
+			:pSource->asOppNbrType,
+			:pSource->aiSettFlag,
+			:pSource->asReserve1,
+			:pSource->asReserve2,
+			:pSource->asDealDate;
+		CheckSqlError("Fetch SETT_NBR_INTF_FJBICR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SETT_NBR_INTF_FJBICR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SETT_NBR_INTF_FJBI_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sBillingCycleID,	pSource->asBillingCycleID[iCurPos]);
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+		strcpy(p->sAccNbr,		pSource->asAccNbr[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sOppAreaCode,		pSource->asOppAreaCode[iCurPos]);
+		strcpy(p->sRoamAreaCode,	pSource->asRoamAreaCode[iCurPos]);
+
+		p->iHomeCarrID=			pSource->aiHomeCarrID[iCurPos];
+		p->iOppCarrID=			pSource->aiOppCarrID[iCurPos];
+		p->iCallDirection=		pSource->aiCallDirection[iCurPos];
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+		p->iCnt=			pSource->aiCnt[iCurPos];
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iFeeDuration=		pSource->aiFeeDuration[iCurPos];
+		p->iInFee=			pSource->aiInFee[iCurPos];
+		p->iOutFee=			pSource->aiOutFee[iCurPos];
+
+		strcpy(p->sServiceType,		pSource->asServiceType[iCurPos]);
+		strcpy(p->sNbrType,		pSource->asNbrType[iCurPos]);
+		strcpy(p->sOppNbrType,		pSource->asOppNbrType[iCurPos]);
+
+		p->iSettFlag=			pSource->aiSettFlag[iCurPos];
+
+		strcpy(p->sReserve1,		pSource->asReserve1[iCurPos]);
+		strcpy(p->sReserve2,		pSource->asReserve2[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+
+		AllTrim(p->sBillingCycleID);
+		AllTrim(p->sVisitAreaCode);
+		AllTrim(p->sAccNbr);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sOppAreaCode);
+		AllTrim(p->sRoamAreaCode);
+		AllTrim(p->sServiceType);
+		AllTrim(p->sNbrType);
+		AllTrim(p->sOppNbrType);
+		AllTrim(p->sReserve1);
+		AllTrim(p->sReserve2);
+		AllTrim(p->sDealDate);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+
+/*批量数据结构缓冲写入SETT_NBR_INTF_FJBI*/
+int EInsertStructToSettNbrIntfFjbi(struct SettNbrIntfFjbiStruct *p,
+	int iInsertFlag,struct SettNbrIntfFjbiStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asBillingCycleID[iCurPos],	p->sBillingCycleID);
+		strcpy(pTarget->asVisitAreaCode[iCurPos],	p->sVisitAreaCode);
+		strcpy(pTarget->asAccNbr[iCurPos],		p->sAccNbr);
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asOppAreaCode[iCurPos],		p->sOppAreaCode);
+		strcpy(pTarget->asRoamAreaCode[iCurPos],	p->sRoamAreaCode);
+
+		pTarget->aiHomeCarrID[iCurPos]=			p->iHomeCarrID;
+		pTarget->aiOppCarrID[iCurPos]=			p->iOppCarrID;
+		pTarget->aiCallDirection[iCurPos]=		p->iCallDirection;
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+		pTarget->aiCnt[iCurPos]=			p->iCnt;
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+		pTarget->aiFeeDuration[iCurPos]=		p->iFeeDuration;
+		pTarget->aiInFee[iCurPos]=			p->iInFee;
+		pTarget->aiOutFee[iCurPos]=			p->iOutFee;
+
+		strcpy(pTarget->asServiceType[iCurPos],		p->sServiceType);
+		strcpy(pTarget->asNbrType[iCurPos],		p->sNbrType);
+		strcpy(pTarget->asOppNbrType[iCurPos],		p->sOppNbrType);
+
+		pTarget->aiSettFlag[iCurPos]=			p->iSettFlag;
+
+		strcpy(pTarget->asReserve1[iCurPos],		p->sReserve1);
+		strcpy(pTarget->asReserve2[iCurPos],		p->sReserve2);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SETT_NBR_INTF_FJBI_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				BILLING_CYCLE_ID,\n\
+				VISIT_AREA_CODE,\n\
+				ACC_NBR,\n\
+				HOME_AREA_CODE,\n\
+				OPP_AREA_CODE,\n\
+				ROAM_AREA_CODE,\n\
+				HOME_CARR_ID,\n\
+				OPP_CARR_ID,\n\
+				CALL_DIRECTION,\n\
+				TICKET_TYPE_ID,\n\
+				CNT,\n\
+				DURATION,\n\
+				FEE_DURATION,\n\
+				IN_FEE,\n\
+				OUT_FEE,\n\
+				SERVICE_TYPE,\n\
+				NBR_TYPE,\n\
+				OPP_NBR_TYPE,\n\
+				SETT_FLAG,\n\
+				RESERVE1,\n\
+				RESERVE2,\n\
+				DEAL_DATE)\n\
+			VALUES (\n\
+				:asBillingCycleID,\n\
+				:asVisitAreaCode,\n\
+				:asAccNbr,\n\
+				:asHomeAreaCode,\n\
+				:asOppAreaCode,\n\
+				:asRoamAreaCode,\n\
+				:aiHomeCarrID,\n\
+				:aiOppCarrID,\n\
+				:aiCallDirection,\n\
+				:aiTicketTypeID,\n\
+				:aiCnt,\n\
+				:aiDuration,\n\
+				:aiFeeDuration,\n\
+				:aiInFee,\n\
+				:aiOutFee,\n\
+				:asServiceType,\n\
+				:asNbrType,\n\
+				:asOppNbrType,\n\
+				:aiSettFlag,\n\
+				:asReserve1,\n\
+				:asReserve2,\n\
+				to_date(:asDealDate,'yyyymmddhh24miss')\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SETT_NBR_INTF_FJBITRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SETT_NBR_INTF_FJBI")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SETT_NBR_INTF_FJBITRG USING
+				:pTarget->asBillingCycleID,
+				:pTarget->asVisitAreaCode,
+				:pTarget->asAccNbr,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asOppAreaCode,
+				:pTarget->asRoamAreaCode,
+				:pTarget->aiHomeCarrID,
+				:pTarget->aiOppCarrID,
+				:pTarget->aiCallDirection,
+				:pTarget->aiTicketTypeID,
+				:pTarget->aiCnt,
+				:pTarget->aiDuration,
+				:pTarget->aiFeeDuration,
+				:pTarget->aiInFee,
+				:pTarget->aiOutFee,
+				:pTarget->asServiceType,
+				:pTarget->asNbrType,
+				:pTarget->asOppNbrType,
+				:pTarget->aiSettFlag,
+				:pTarget->asReserve1,
+				:pTarget->asReserve2,
+				:pTarget->asDealDate;
+		if(CheckSqlResult("Dyn insert into SETT_NBR_INTF_FJBI")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+void mvitem_settnbrintffjbi(struct SettNbrIntfFjbiStruct *pi,struct SettNbrIntfFjbiStruct *po)
+{/*数据移动部分*/
+
+	bzero((void*)po,sizeof(struct SettNbrIntfFjbiStruct));
+
+		strncpy(po->sBillingCycleID,	pi->sBillingCycleID,6);
+		strncpy(po->sVisitAreaCode,	pi->sVisitAreaCode,5);
+		strncpy(po->sAccNbr,		pi->sAccNbr,24);
+		strncpy(po->sHomeAreaCode,	pi->sHomeAreaCode,5);
+		strncpy(po->sOppAreaCode,	pi->sOppAreaCode,5);
+		strncpy(po->sRoamAreaCode,	pi->sRoamAreaCode,5);
+
+		po->iHomeCarrID=		pi->iHomeCarrID;
+		po->iOppCarrID=			pi->iOppCarrID;
+		po->iCallDirection=		pi->iCallDirection;
+		po->iTicketTypeID=		pi->iTicketTypeID;
+		po->iCnt=			pi->iCnt;
+		po->iDuration=			pi->iDuration;
+		po->iFeeDuration=		pi->iFeeDuration;
+		po->iInFee=			pi->iInFee;
+		po->iOutFee=			pi->iOutFee;
+
+		strncpy(po->sServiceType,	pi->sServiceType,3);
+		strncpy(po->sNbrType,		pi->sNbrType,4);
+		strncpy(po->sOppNbrType,	pi->sOppNbrType,4);
+
+		po->iSettFlag=			pi->iSettFlag;
+
+		strncpy(po->sReserve1,		pi->sReserve1,10);
+		strncpy(po->sReserve2,		pi->sReserve2,10);
+		strncpy(po->sDealDate,		pi->sDealDate,14);
+}

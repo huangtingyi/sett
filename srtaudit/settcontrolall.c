@@ -1,0 +1,634 @@
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdir.h>
+#include <list.h>
+#include <wwfile.h>
+#include<math.h>
+#include <wwdb.h>
+#include <bintree.h>
+#include <dbsupp.h>
+
+#include "../include/extend_intf.h"
+#include "../include/stt_ticket.h"
+
+#include "srt_info.h"
+
+struct SettItemControlAllStruct *gStatList=NULL;
+
+int  giNumdays=0,giNumMon=0;
+char sYesMonth[9],sYesterday[9];
+char sConMonth[9],sConLMonth[9];
+char sConLYMonth[9],sConFMonth[9],sConLDMonth[9];
+char sCondition1[512],sCondition2[512],sCondition3[512];
+
+int data_search_bintree_stat(void *pValue,void *pData)
+{
+	int iRes=0;
+
+	struct SettItemControlAllStruct *pSource=(struct SettItemControlAllStruct*)pValue;
+	struct SettItemControlAllStruct *pTarget=(struct SettItemControlAllStruct*)pData;
+
+	if((iRes=strcmp(pSource->sSettType,pTarget->sSettType))!=0) return iRes;
+	if((iRes=strcmp(pSource->sCallType,pTarget->sCallType))!=0) return iRes;
+	if((iRes=strcmp(pSource->sUserType,pTarget->sUserType))!=0) return iRes;
+	if((iRes=strcmp(pSource->sRoamType,pTarget->sRoamType))!=0) return iRes;
+	if((iRes=strcmp(pSource->sDistanceType,pTarget->sDistanceType))!=0) return iRes;
+	if((iRes=strcmp(pSource->sCalledCode,pTarget->sCalledCode))!=0) return iRes;
+	if((iRes=strcmp(pSource->sVisitAreaCode,pTarget->sVisitAreaCode))!=0) return iRes;
+	if((iRes=strcmp(pSource->sHomeAreaCode,pTarget->sHomeAreaCode))!=0) return iRes;
+	if((iRes=strcmp(pSource->sCalledUserType,pTarget->sCalledUserType))!=0) return iRes;
+	
+
+	return 0;
+
+}
+void assign_insert_bintree_day_stat(void **ppData,void *pData)
+{
+	InsertList((LIST **)ppData,(LIST *)pData);
+}
+
+int append_bintree_to_list_day_stat(void **ppData)
+{
+	struct SettItemControlAllStruct *pTemp=(struct SettItemControlAllStruct*)(*ppData);
+
+	pTemp->pLoadNext=gStatList;
+	gStatList=pTemp;
+
+	return 0;
+}
+int GetConditionTime(char sYearMonthDay[],char sCondition1[],
+				char sCondition2[],char sCondition3[])
+{
+	int iLen1=0,iLen2=0,iLen3=0;
+	char sMonth[3],sFirstDay[16],sTemp[9];
+	char sLastYear[16],sTime[16],sLastTime[16];
+	char sYearMonth[7],sLastMonthDay[16],sLastDay[16];
+	
+	strncpy(sYearMonth,sYearMonthDay,6);
+	sYearMonth[6]=0;
+	sprintf(sFirstDay,"%s01000000",sYearMonth);
+	
+	strcpy(sTime,sYearMonthDay);
+	strcat(sTime,"000000");
+	
+	strcpy(sLastYear,sYearMonthDay);
+	strcat(sLastYear,"000000");
+	
+	strcpy(sLastMonthDay,sFirstDay);
+	strcpy(sLastDay,sFirstDay);
+	
+	AddMonths(sLastMonthDay,-1);
+	if(giNumMon==1 || giNumMon==5 || giNumMon==7
+		|| giNumMon==10 || giNumMon==12){
+		if(giNumdays==31){
+			AddMonths(sTime,-1);
+			AddDays(sTime,-1);
+		}else{
+			AddMonths(sTime,-1);
+		}
+	}else if(giNumMon==4 || giNumMon==6 || giNumMon==9 
+		|| giNumMon==11 || giNumMon==8){
+		AddMonths(sTime,-1);
+	}else if(giNumMon==3){
+		if(LeapYear(sTime)==true){
+			AddMonths(sTime,-1);
+			AddDays(sTime,-2);
+		}else{
+			AddMonths(sTime,-1);
+			AddDays(sTime,-3);
+		}
+	}
+	
+	AddYears(sLastYear,-1);
+	AddYears(sLastDay,-1);
+	
+	strcpy(sLastTime,sYearMonthDay);
+	strcat(sLastTime,"000000");
+	AddDays(sLastTime,-1);
+	
+	strncpy(sTemp,sLastTime,8);
+	sTemp[8]=0;
+	strcpy(sYesterday,sTemp);
+	
+	strncpy(sConLMonth,sLastMonthDay,8);
+	sConLMonth[8]=0;
+	strncpy(sConMonth,sFirstDay,8);
+	sConMonth[8]=0;
+	strncpy(sConLDMonth,sTime,8);
+	sConLDMonth[8]=0;
+	strcpy(sYesMonth,sConLDMonth);
+	
+	
+	strncpy(sConFMonth,sLastYear,8);
+	sConFMonth[8]=0;
+	strncpy(sConLYMonth,sLastDay,8);
+	sConLYMonth[8]=0;
+	
+	iLen1=sprintf(sCondition1,
+		"WHERE STAT_DATE BETWEEN '%s' AND '%s' ",
+		sConLMonth,sConLDMonth);
+	sCondition1[iLen1]=0;
+	
+	iLen2=sprintf(sCondition2,
+		"WHERE STAT_DATE BETWEEN '%s' AND '%s' ",
+		sConMonth,sYearMonthDay);
+	sCondition2[iLen2]=0;
+	
+	iLen3=sprintf(sCondition3,
+		"WHERE STAT_DATE BETWEEN '%s' AND '%s' ",
+		sConLYMonth,sConFMonth);
+	sCondition1[iLen3]=0;
+
+	return 0;
+}
+int GenSttStatistics2Bin(BINTREE **pptRoot,
+	struct SettItemControlDayStruct *pTemp)
+{
+	struct SettItemControlAllStruct *po;
+	
+	if((po=malloc(sizeof(struct SettItemControlAllStruct)))==NULL){
+		WriteProcMsg("malloc SettItemControlAllStruct failed.");
+		return -1;
+	}
+			
+	bzero((void*)po,sizeof(struct SettItemControlAllStruct));
+	
+	strcpy(po->sStatDate,pTemp->sStatDate);
+	strcpy(po->sSettType,pTemp->sSettType);
+	strcpy(po->sCallType,pTemp->sCallType);
+	strcpy(po->sUserType,pTemp->sUserType);
+	strcpy(po->sRoamType,pTemp->sRomeType);
+	strcpy(po->sDistanceType,pTemp->sDistanceType);
+	strcpy(po->sCalledCode,pTemp->sCalledCode);
+	strcpy(po->sVisitAreaCode,pTemp->sVisitAreaCode);
+	strcpy(po->sHomeAreaCode,pTemp->sHomeAreaCode);
+	po->iCallingCarrierID=pTemp->iCallingCarrierID;
+	po->iCalledCarrierID=pTemp->iCalledCarrierID;
+	strcpy(po->sCalledUserType,pTemp->sCalledUserType);
+	po->iCnt=pTemp->iCnt;
+	strcpy(po->sDuration,pTemp->sDuration);
+	strcpy(po->sSettDuration,pTemp->sSettDuration);
+	strcpy(po->sInFee,pTemp->sInFee);
+	strcpy(po->sOutFee,pTemp->sOutFee);
+	po->iCnt1=0;
+	strcpy(po->sDuration1,"0");
+	strcpy(po->sSettDuration1,"0");
+	strcpy(po->sInFee1,"0");
+	strcpy(po->sOutFee1,"0");
+	po->iCnt2=0;
+	strcpy(po->sDuration2,"0");
+	strcpy(po->sSettDuration2,"0");
+	strcpy(po->sInFee2,"0");
+	strcpy(po->sOutFee2,"0");
+	po->iCnt3=0;
+	strcpy(po->sDuration3,"0");
+	strcpy(po->sSettDuration3,"0");
+	strcpy(po->sInFee3,"0");
+	strcpy(po->sOutFee3,"0");
+	po->iCnt4=0;
+	strcpy(po->sDuration4,"0");
+	strcpy(po->sSettDuration4,"0");
+	strcpy(po->sInFee4,"0");
+	strcpy(po->sOutFee4,"0");
+	po->iCnt5=0;
+	strcpy(po->sDuration5,"0");
+	strcpy(po->sSettDuration5,"0");
+	strcpy(po->sInFee5,"0");
+	strcpy(po->sOutFee5,"0");
+	po->iCnt6=0;
+	strcpy(po->sDuration6,"0");
+	strcpy(po->sSettDuration6,"0");
+	strcpy(po->sInFee6,"0");
+	strcpy(po->sOutFee6,"0");
+	po->iCnt7=0;
+	strcpy(po->sDuration7,"0");
+	strcpy(po->sSettDuration7,"0");
+	strcpy(po->sInFee7,"0");
+	strcpy(po->sOutFee7,"0");
+	
+	if(InsertBin(pptRoot,po,data_search_bintree_stat,
+			assign_insert_bintree_day_stat)<0){
+		WriteAlertMsg("生成二叉树 struct PrepTicketSttOutStruct 失败.");
+		return -1;
+	}
+	
+	return 0;
+}
+int UpdateSttStatistics2Bin(BINTREE **pptRoot,int iFlag,
+			struct SettItemControlDayStruct *pTemp)
+{
+	struct SettItemControlAllStruct *ptFound;
+
+	if(SearchBin(*pptRoot,(void *)pTemp,data_search_bintree_stat,
+		(void**)&ptFound)==FOUND){
+		if(iFlag==1){	
+			ptFound->iCnt1=pTemp->iCnt;
+			strcpy(ptFound->sDuration1,pTemp->sDuration);
+			strcpy(ptFound->sSettDuration1,pTemp->sSettDuration);
+			strcpy(ptFound->sInFee1,pTemp->sInFee);
+			strcpy(ptFound->sOutFee1,pTemp->sOutFee);
+		
+		}
+		if(iFlag==2){	
+			ptFound->iCnt2=pTemp->iCnt;
+			strcpy(ptFound->sDuration2,pTemp->sDuration);
+			strcpy(ptFound->sSettDuration2,pTemp->sSettDuration);
+			strcpy(ptFound->sInFee2,pTemp->sInFee);
+			strcpy(ptFound->sOutFee2,pTemp->sOutFee);
+		}
+	}
+	
+	return 0;
+}
+/*
+int EListCntSttStatistics2Bin(BINTREE **pptRoot,int iFlag,
+				struct SettItemControlDayStruct *pTemp)
+{
+	struct SettItemControlAllStruct *po,*ptFound,*ptCur;
+	struct SettItemControlDayStruct *ptHead; 
+	float iSettDur=0,iInFee=0,iOutFee=0,iDur=0;
+	char sOutFee[12];
+	if(SearchBin(*pptRoot,(void *)pTemp,data_search_bintree_stat,
+		(void**)&ptFound)==FOUND){
+		if(iFlag==3){
+			ptFound->iCnt6+=pTemp->iCnt;
+			iSettDur=atof(ptFound->sSettDuration6);
+			iInFee=atof(ptFound->sInFee6);
+			iOutFee=atof(ptFound->sOutFee6);
+			iDur=atof(ptFound->sDuration6);
+			
+			iSettDur+=atof(pTemp->sSettDuration);
+			iInFee+=atof(pTemp->sInFee);
+			iOutFee+=atof(pTemp->sOutFee);
+			iDur+=atof(pTemp->sDuration);
+			
+			sprintf(ptFound->sSettDuration6,"%0.0lf",floor(iSettDur));
+			ptFound->sSettDuration6[12]=0;
+			
+			sprintf(ptFound->sInFee6,"%0.0lf",floor(iInFee));
+			ptFound->sInFee6[12]=0;
+			sprintf(ptFound->sOutFee6,"%0.0lf",floor(iOutFee));
+			ptFound->sOutFee6[12]=0;
+			sprintf(ptFound->sDuration6,"%0.0lf",floor(iDur));
+			ptFound->sDuration6[12]=0;	
+			
+			iSettDur=0;
+			iInFee=0;
+			iOutFee=0;
+			iDur=0;
+			
+		}else if(iFlag==4){
+			ptFound->iCnt5+=pTemp->iCnt;
+			
+			iSettDur=atof(ptFound->sSettDuration5);
+			iInFee=atof(ptFound->sInFee5);
+			iOutFee=atof(ptFound->sOutFee5);
+			iDur=atof(ptFound->sDuration5);
+			
+			iSettDur+=atof(pTemp->sSettDuration);
+			iInFee+=atof(pTemp->sInFee);
+			iOutFee+=atof(pTemp->sOutFee);
+			iDur+=atof(pTemp->sDuration);
+			
+			sprintf(ptFound->sSettDuration5,"%0.0lf",floor(iSettDur));
+			sprintf(ptFound->sInFee5,"%0.0lf",floor(iInFee));
+			sprintf(ptFound->sOutFee5,"%0.0lf",floor(iOutFee));
+			sprintf(ptFound->sDuration5,"%0.0lf",floor(iDur));	
+			
+			iSettDur=0;
+			iInFee=0;
+			iOutFee=0;
+			iDur=0;
+			
+		}else if(iFlag==5){
+			ptFound->iCnt7+=pTemp->iCnt;
+			
+			iSettDur=atof(ptFound->sSettDuration7);
+			iInFee=atof(ptFound->sInFee7);
+			iOutFee=atof(ptFound->sOutFee7);
+			iDur=atof(ptFound->sDuration7);
+			
+			iSettDur+=atof(pTemp->sSettDuration);
+			iInFee+=atof(pTemp->sInFee);
+			iOutFee+=atof(pTemp->sOutFee);
+			iDur+=atof(pTemp->sDuration);
+			
+			sprintf(ptFound->sSettDuration7,"%0.0lf",floor(iSettDur));
+			sprintf(ptFound->sInFee7,"%0.0lf",floor(iInFee));
+			sprintf(ptFound->sOutFee7,"%0.0lf",floor(iOutFee));
+			sprintf(ptFound->sDuration7,"%0.0lf",floor(iDur));
+			
+			iSettDur=0;
+			iInFee=0;
+			iOutFee=0;
+			iDur=0;
+			
+		}
+	}
+				
+	return 0;
+}
+*/
+int LoadSttControlDay2Bin(char sTableName[],char sYearMonth[],
+		BINTREE **pptRoot,int iFlag)
+{
+	int iStat=0;
+	unsigned long ulTotalCnt=0; 
+	
+	struct SettItemControlDayStructIn TempIn;
+	struct SettItemControlDayStruct   Temp;
+	
+	bzero(&TempIn,sizeof(struct SettItemControlDayStructIn));
+	
+	strcpy(TempIn.sTableName,sTableName);
+	sprintf(TempIn.sCondition,"where STAT_DATE='%s'",sYearMonth);
+ 	
+	TempIn.iFirstFlag = true;
+	TempIn.iBufEmpty=true;
+	
+	Temp.pNext = NULL;
+	Temp.pLoadNext = NULL;
+	
+	if(iFlag==0){
+		if(iStat==0){
+			*pptRoot=NULL;
+			 iStat=1;
+		}
+	}
+	
+	while(EGetSettItemControlDayToStruct(&Temp,&TempIn)){
+		if (++ulTotalCnt%100000==0){
+			WriteProcMsg("正在加载表 %s 记录数 %lu 条!",
+				sTableName,ulTotalCnt);
+		}
+		
+		if(iFlag==0){
+			if(GenSttStatistics2Bin(pptRoot,&Temp)<0) return -1;
+		}else if(iFlag==1){
+			if(UpdateSttStatistics2Bin(pptRoot,1,&Temp)<0) return -1;
+		}else if(iFlag==2){
+			if(UpdateSttStatistics2Bin(pptRoot,2,&Temp)<0) return -1;
+		}/*else if(iFlag==3){
+			if(EListCntSttStatistics2Bin(pptRoot,3,&Temp)<0) return -1;
+		}else if(iFlag==4){
+			if(EListCntSttStatistics2Bin(pptRoot,4,&Temp)<0) return -1;
+		}else if(iFlag==5){
+			if(EListCntSttStatistics2Bin(pptRoot,5,&Temp)<0) return -1;
+		}*/
+	}
+	
+	WriteProcMsg("加载%s表 %s 完毕,总记录数 %lu 条.",
+			sYearMonth,sTableName,ulTotalCnt);
+	
+	return 0;
+}
+int UpdataCntSttStatAvg(struct SettItemControlAllStruct *ptCur)
+{
+	float iSettDur3=0,iInFee3=0,iOutFee3=0,iDur3=0;
+	float iSettDur4=0,iInFee4=0,iOutFee4=0,iDur4=0;
+	
+	iSettDur3=floor(atof(ptCur->sSettDuration6)/giNumdays);
+	iInFee3=floor(atof(ptCur->sInFee6)/giNumdays);
+	iOutFee3=floor(atof(ptCur->sOutFee6)/giNumdays);
+	iDur3=floor(atof(ptCur->sDuration6)/giNumdays);	
+	
+	ptCur->iCnt3=ptCur->iCnt6/giNumdays;
+	sprintf(ptCur->sSettDuration3,"%0.0lf",floor(iSettDur3));
+	sprintf(ptCur->sInFee3,"%0.0lf",floor(iInFee3));
+	sprintf(ptCur->sOutFee3,"%0.0lf",floor(iOutFee3));
+	sprintf(ptCur->sDuration3,"%0.0lf",floor(iDur3));
+	
+	iSettDur4=floor(atof(ptCur->sSettDuration5)/giNumdays);
+	iInFee4=floor(atof(ptCur->sInFee5)/giNumdays);
+	iOutFee4=floor(atof(ptCur->sOutFee5)/giNumdays);
+	iDur4=floor(atof(ptCur->sDuration)/giNumdays);	
+	
+	ptCur->iCnt4=ptCur->iCnt5/giNumdays;
+	sprintf(ptCur->sSettDuration4,"%0.0lf",floor(iSettDur4));
+	sprintf(ptCur->sInFee4,"%0.0lf",floor(iInFee4));
+	sprintf(ptCur->sOutFee4,"%0.0lf",floor(iOutFee4));
+	sprintf(ptCur->sDuration4,"%0.0lf",floor(iDur4));
+	
+	return 0;
+}
+int EInsertList2Table(struct SettItemControlAllStruct *ptHead,char sTableName[])
+{
+	unsigned long ulRecCnt=0;
+
+	struct SettItemControlAllStructOut TempOut;
+	struct SettItemControlAllStruct *ptCur=NULL;
+	struct SettItemControlAllStruct *ptLoadCur=NULL;
+
+	bzero(&TempOut,sizeof(struct SettItemControlAllStructOut));
+
+	strcpy(TempOut.sTableName,sTableName);
+
+	while(ptHead!=NULL){
+		ptLoadCur=ptHead;
+		ptHead=ptHead->pLoadNext;
+			while(ptLoadCur!= NULL){
+				ptCur = ptLoadCur;
+				ptLoadCur = ptLoadCur->pNext;
+				
+				UpdataCntSttStatAvg(ptCur);
+				
+				if((++ulRecCnt)%10000==0){
+					if(EInsertStructToSettItemControlAll(NULL,true,&TempOut)<0){
+						WriteAlertMsg("写表%s错误.",sTableName);
+						WriteErrStackAlert();
+						return -1;
+					}
+					CommitWork();
+					WriteProcMsg("当前输出数据到表 %s 记录数 %lu 条.",
+						sTableName,ulRecCnt);
+				}
+				if(EInsertStructToSettItemControlAll(ptCur,false,&TempOut)<0){
+					WriteAlertMsg("写表%s错误.",sTableName);
+					WriteErrStackAlert();
+					return -1;
+				}
+				free(ptCur);
+			}
+	}
+	if(EInsertStructToSettItemControlAll(NULL,true,&TempOut)<0){
+		WriteAlertMsg("写表%s错误.",sTableName);
+		WriteErrStackAlert();
+		return -1;
+	}
+	CommitWork();
+	WriteProcPrint("输出数据到 %s 表总记录数 %lu 条.",sTableName,ulRecCnt);
+
+	return 0;
+}
+int DeleteFun(char sTableName[],char sYesMonth[])
+{
+	char sSqlStmt[1024];
+
+	sprintf(sSqlStmt,"DELETE FROM %s WHERE stat_date='%s' ",sTableName,sYesMonth);
+
+	if(ExecSql(sSqlStmt)<0){
+		WriteAlertMsg("执行 %s 失败.",sSqlStmt);
+		exit(-1);
+	}
+
+	CommitWork();	
+	
+	return 0;
+}
+int EUpateCntSttStatistics2Bin(struct SettItemControlAllStruct*pTemp,
+							BINTREE **pptRoot)
+{
+	struct SettItemControlAllStruct *ptFound,*ptCur;
+	struct SettItemControlDayStruct *ptHead; 
+	float iSettDur5=0.0,iInFee5=0.0,iOutFee5=0.0,iDur5=0.0;
+	float iSettDur6=0.0,iInFee6=0.0,iOutFee6=0.0,iDur6=0.0;
+	float iSettDur7=0.0,iInFee7=0.0,iOutFee7=0.0,iDur7=0.0;
+	
+	if(SearchBin(*pptRoot,(void *)pTemp,data_search_bintree_stat,
+		(void**)&ptFound)==FOUND){
+		ptFound->iCnt6+=pTemp->iCnt6+ptFound->iCnt;
+		iSettDur6=atof(ptFound->sSettDuration1);
+		iInFee6=atof(ptFound->sInFee1);
+		iOutFee6=atof(ptFound->sOutFee1);
+		iDur6=atof(ptFound->sDuration1);
+		
+		iSettDur6+=atof(pTemp->sSettDuration6);
+		iInFee6+=atof(pTemp->sInFee6);
+		iOutFee6+=atof(pTemp->sOutFee6);
+		iDur6+=atof(pTemp->sDuration6);
+		
+		sprintf(ptFound->sSettDuration6,"%0.0lf",floor(iSettDur6));
+		sprintf(ptFound->sInFee6,"%0.0lf",floor(iInFee6));
+		sprintf(ptFound->sOutFee6,"%0.0lf",floor(iOutFee6));
+		sprintf(ptFound->sDuration6,"%0.0lf",floor(iDur6));
+		
+		ptFound->iCnt5+=pTemp->iCnt5+ptFound->iCnt;
+		iSettDur5=atof(ptFound->sSettDuration);
+		iInFee5=atof(ptFound->sInFee);
+		iOutFee5=atof(ptFound->sOutFee);
+		iDur5=atof(ptFound->sDuration);
+		
+		iSettDur5+=atof(pTemp->sSettDuration5);
+		iInFee5+=atof(pTemp->sInFee5);
+		iOutFee5+=atof(pTemp->sOutFee5);
+		iDur5+=atof(pTemp->sDuration5);
+		
+		sprintf(ptFound->sSettDuration5,"%0.0lf",floor(iSettDur5));
+		sprintf(ptFound->sInFee5,"%0.0lf",floor(iInFee5));
+		sprintf(ptFound->sOutFee5,"%0.0lf",floor(iOutFee5));
+		sprintf(ptFound->sDuration5,"%0.0lf",floor(iDur5));	
+		
+/*
+		ptFound->iCnt7+=pTemp->iCnt7+ptFound->iCnt;
+		iSettDur7=atof(ptFound->sSettDuration);
+		iInFee7=atof(ptFound->sInFee);
+		iOutFee7=atof(ptFound->sOutFee);
+		iDur7=atof(ptFound->sDuration);
+		
+		iSettDur7+=atof(pTemp->sSettDuration7);
+		iInFee7+=atof(pTemp->sInFee7);
+		iOutFee7+=atof(pTemp->sOutFee7);
+		iDur7+=atof(pTemp->sDuration7);
+		
+		sprintf(ptFound->sSettDuration7,"%0.0lf",floor(iSettDur7));
+		sprintf(ptFound->sInFee7,"%0.0lf",floor(iInFee7));
+		sprintf(ptFound->sOutFee7,"%0.0lf",floor(iOutFee7));
+		sprintf(ptFound->sDuration7,"%0.0lf",floor(iDur7));
+		
+*/
+		ptFound->iCnt7=0;
+		strcpy(ptFound->sSettDuration7,"0");
+		strcpy(ptFound->sInFee7,"0");
+		strcpy(ptFound->sOutFee7,"0");
+		strcpy(ptFound->sDuration7,"0");
+	
+	}
+	return 0;
+}
+int EUpdateControall2Bin(BINTREE **pptRoot,char sTableName[],char sYeaterday[])
+{
+	unsigned long ulTotalCnt=0; 
+	
+	struct SettItemControlAllStructIn TempIn;
+	struct SettItemControlAllStruct   Temp;
+	
+	bzero(&TempIn,sizeof(struct SettItemControlAllStructIn));
+	
+	strcpy(TempIn.sTableName,sTableName);
+	sprintf(TempIn.sCondition,"where stat_date='%s'",sYeaterday);
+	
+ 	
+	TempIn.iFirstFlag = true;
+	TempIn.iBufEmpty=true;
+	
+	Temp.pNext = NULL;
+	Temp.pLoadNext = NULL;
+	
+	while(EGetSettItemControlAllToStruct(&Temp,&TempIn)){
+		if (++ulTotalCnt%100000==0){
+			WriteProcMsg("正在加载表 %s 记录数 %lu 条!",
+				sTableName,ulTotalCnt);
+		}
+		if(EUpateCntSttStatistics2Bin(&Temp,pptRoot)<0) return -1;
+	}
+	
+	return 0;
+}
+int main(int argc,char *argv[])
+{
+	char sType[5];
+	char sYearMonthDay[9],sDays[3],sMonth[3];
+	char sTableNameIn[64],sTableNameOut[64],sYearMonth[9];
+	BINTREE *ptRoot=NULL;
+	
+	if(argc!=3){
+		printf("%s YearMonthDay(20120815) type(srt|fix|mob)\n",argv[0]);
+		return -1;
+	}
+	strcpy(sYearMonthDay,argv[1]);
+	strncpy(sDays,sYearMonthDay+6,2);
+	sDays[2]=0;
+	strncpy(sMonth,sYearMonthDay+4,2);
+	sMonth[2]=0;
+	strncpy(sYearMonth,sYearMonthDay,6);
+	sYearMonth[6]=0;
+	giNumdays=atoi(sDays);
+	giNumMon=atoi(sMonth);
+	strcpy(sType,argv[2]);
+	
+	sprintf(sTableNameIn,"sett_item_control_day_%s",sType);
+	sprintf(sTableNameOut,"sett_item_control_all_%s",sType);
+	
+	GetConditionTime(sYearMonthDay,sCondition1,
+				sCondition2,sCondition3);
+	
+	InitAppRes(argv[0]);
+	if(ConnectDataDB()<0) return -1;
+	
+	if(LoadSttControlDay2Bin(sTableNameIn,sYearMonthDay,&ptRoot,0)<0) return -1;
+	
+	if(LoadSttControlDay2Bin(sTableNameIn,sYesMonth,&ptRoot,1)<0) return -1;
+
+	if(LoadSttControlDay2Bin(sTableNameIn,sYesterday,&ptRoot,2)<0) return -1;
+			
+	if(EUpdateControall2Bin(&ptRoot,sTableNameOut,sYesterday)<0) return -1;
+	
+	gStatList=NULL;
+
+	TravelBin(ptRoot,append_bintree_to_list_day_stat);
+	
+	/*if(DeleteFun(sTableNameOut,sYearMonthDay)<0) return -1;*/
+	
+	if(EInsertList2Table(gStatList,sTableNameOut)<0) return -1;
+
+	DestroyBin(ptRoot);	
+	
+	DisconnectDatabase();
+
+	return 0;
+}

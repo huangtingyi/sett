@@ -1,0 +1,18 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+REC_NO              position(1  :15 ),    
+CALL_TYPE           position(16 :17 ),    
+CALLING_NBR         position(18 :41 ),   
+CALLED_NBR          position(42 :65 ), 
+REGISTER_TIME       position(66 :79 ),  
+SEND_TIME           position(80 :93 ),  
+MSG_LEN             position(94 :96 ),  
+LAST_STATUS         position(97 :101),  
+SERVICE_TYPE        position(102:104), 
+SERVICE_CODE        position(105:108),
+LAND_TYPE           position(109:109),
+PRIORITY            position(110:111)
+)
+

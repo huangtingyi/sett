@@ -1,0 +1,982 @@
+#include <up_back.h>
+#include <up_highcharge.h>
+#include <wwdb.h>
+#include <wwlog.h>
+#include <param_intf.h>
+
+#define GN	0
+#define GJ	1
+#define DATE	0
+#define TIME	1
+#define	CHN	0
+#define	ENG	1
+
+char sBelongCode[4],sMonth[3],sHighDate[15];
+char sPath_up[PATHLEN],sPath_work[PATHLEN];
+int iHighChargeGn,iHighChargeGj;
+
+int GethBelongCode(char sBelongCode[5]);
+
+void WriteTabLog(int iSerial,char* sFileType,char* sFullName,
+	char* sBeginTime,char* sEndTime,int iRecCount,
+	long lTotalFee,char* sDataDate,char* sDealBegin,char* sDealEnd)
+{
+	char	sBaseName[128];
+	GetBaseName(sFullName,sBaseName);
+	
+	EXEC SQL INSERT INTO UPDATA_LOG(\
+			UPDATA_ID,\
+			FILE_TYPE,\
+			FILE_NAME,\
+			BEGIN_TIME,\
+			END_TIME,\
+			REC_CNT,\
+			TOTAL_CHARGE,\
+			DATA_DATE,\
+			DEAL_BEGIN_DATE,\
+			DEAL_END_DATE\
+		) VALUES (\
+			:iSerial,\
+			:sFileType,\
+			:sBaseName,\
+			to_date(:sBeginTime,'yyyymmddhh24miss'),\
+			to_date(:sEndTime,'yyyymmddhh24miss'),\
+			:iRecCount,\
+			:lTotalFee,\
+			to_date(:sDataDate,'yyyymmddhh24miss'),\
+			to_date(:sDealBegin,'yyyymmddhh24miss'),\
+			to_date(:sDealEnd,'yyyymmddhh24miss')
+		);
+
+	CheckSqlError("INSERT UPDATA_LOG");
+}
+int WantToUpHigh(char sImsi[],char sLastCallTime[])
+{
+	int iCnt=0;
+	
+	EXEC SQL SELECT COUNT(*) INTO :iCnt
+		FROM UP_HIGHCHARGE
+		WHERE IMSI=:sImsi AND LAST_CALL_TIME=:sLastCallTime;
+	CheckSqlError("SELECT UP_HIGHCHARGE");
+	
+	return iCnt==0?true:false;
+}
+void InsertHighCharge(char sCallingNbr[],char sImsi[],int iRecCnt,
+	int iTotalFee,char sFirstTime[],char sLastTime[],char sFileName[],
+	char sFileTime[],int iTotalMinutes,char sRecType[],char sProvCode[])
+{
+		/*记录入库*/
+	EXEC SQL INSERT INTO UP_HIGHCHARGE(
+		CALLING_NBR,
+		IMSI,
+		REC_COUNT,
+		TOTAL_CHARGE,
+		FIRST_CALL_TIME,
+		LAST_CALL_TIME,
+		FILE_ID,
+		FILE_TIME,
+		TOTAL_MINUTES,
+		REC_TYPE,
+		HOME_PROV_CODE) 
+	VALUES (
+		:sCallingNbr,
+		:sImsi,
+		:iRecCnt,
+		:iTotalFee,
+		:sFirstTime,
+		:sLastTime,
+		:sFileName,
+		:sFileTime,
+		:iTotalMinutes,
+		:sRecType,
+		:sProvCode);
+	CheckSqlError("insert into up_highcharge");
+}
+
+void GetProvName(char* sProvName,char* sProvCode,int iNameType)
+{
+	if(iNameType==CHN){
+		if(strcmp(sProvCode,"089")==0) strcpy(sProvName,"新疆");
+		else if(strcmp(sProvCode,"038")==0) strcpy(sProvName,"福建");
+		else strcpy(sProvName,"未知");
+	}else{
+		if(strcmp(sProvCode,"089")==0) strcpy(sProvName,"XINJIANG");
+		else if(strcmp(sProvCode,"038")==0) strcpy(sProvName,"FUJIAN");
+		else strcpy(sProvName,"UNKNOWN");
+	}
+}
+void ChargeFormat(char* sTarget,char* sSource,int iFlag)
+{
+	if(iFlag==TIME)
+		strcpy(sTarget,"00/00/0000 00:00:00");
+	else
+		strcpy(sTarget,"00/00/0000");
+	strncpy(sTarget,sSource+6,2);
+	strncpy(sTarget+3,sSource+4,2);
+	strncpy(sTarget+6,sSource,4);
+	if(iFlag==TIME){
+		strncpy(sTarget+11,sSource+8,2);
+		strncpy(sTarget+14,sSource+10,2);
+		strncpy(sTarget+17,sSource+12,2);
+	}
+}
+
+void FillFileHeadGn(FILE* fp,char* sCurrentDate,char* sName)
+{
+	char sDate[11],sProvName[31];
+
+	ChargeFormat(sDate,sCurrentDate,DATE);
+	GetProvName(sProvName,sBelongCode,CHN);
+
+	fprintf(fp,"\n日  期：%s\n页号：1\n发送分公司：\t\
+中国联通%s分公司\t\t发送人:\t\t传真号码:\n收件分公司：\t\
+中国联通%s分公司\t\t收件人:\t\t传真号码:\n\t\t\t\t\
+国内漫游高额报告\n通话记录产生日期：%s\n",
+sDate,sProvName,sName,sDate);
+	fprintf(fp,"------------------------------------------------------------------------------------------------\n");
+	fprintf(fp,"  MSISDN         IMSI    CALL_DIRECTION OTHER_NUMBER   START_DATE START_TIME MINUTES CHARGES(￥)\n");
+	fprintf(fp,"------------------------------------------------------------------------------------------------\n");
+}
+
+void FillFileGn(FILE* fp,char* sImsi,int* piTotalMinutes,char* sTableName)
+{
+	int	iDuration,iCharge,iMin,iTotalMin=0;
+	char sCallingNbr[16],sCallType[3],sCalledNbr[19],sStartTime[20];
+	char sSql[1024],sRecord[512];
+
+	sprintf(sSql,"SELECT NVL(MSISDN,'44444'),CALL_TYPE,OTHER_PARTY,\n\
+		to_char(START_TIME,'yyyy/mm/dd hh24:mi:ss'),\n\
+		DURATION,\n\
+		ROAM_FEE+TOLL_FEE+ADD_FEE \n\
+		FROM %s \n\
+		WHERE DEAL_DATE=to_date('%s','yyyymmddhh24miss') AND \n\
+			IMSI='%s' AND	\n\
+			substr(SOURCE_ID,1,2) IN('CR','JR','TR','QR') AND\n\
+			CALL_TYPE IN ('01','02')",
+				sTableName,sHighDate,sImsi);
+	EXEC SQL PREPARE ROAM_GNPCR FROM :sSql;
+	CheckSqlError("Prepare cursor RoamGn");
+	
+	EXEC SQL DECLARE ROAM_GNCR cursor for ROAM_GNPCR;
+	CheckSqlError("Declare cursor RoamGn");
+	
+	EXEC SQL OPEN ROAM_GNCR;
+	CheckSqlError("Open cursor RoamGn");
+
+	while(1){
+		EXEC SQL FETCH ROAM_GNCR INTO
+				:sCallingNbr,:sCallType,:sCalledNbr,
+				:sStartTime,:iDuration,:iCharge;
+		CheckSqlError("FETCH ROAM_GNCR");
+		
+		if(NoDataFetched) break;
+		
+		AllTrim(sCallingNbr);
+		AllTrim(sCalledNbr);
+		AllTrim(sCallType);
+		AllTrim(sStartTime);
+		
+		if(strcmp(sCallType,"01")==0)
+			strcpy(sCallType,"20");
+		else
+			strcpy(sCallType,"30");
+
+		iMin=(iDuration+59)/60;
+		iTotalMin+=	iMin;
+		
+		sprintf(sRecord,"%-15s%-15s%2s%-21s%-23s%5d%-6s%6.2f\n",
+			sCallingNbr,sImsi,
+			sCallType,sCalledNbr,sStartTime,
+			iMin,"",((float)iCharge)/100);
+		fprintf(fp,"%s",sRecord);
+	}
+	EXEC SQL CLOSE ROAM_GNCR;
+	
+	*piTotalMinutes=iTotalMin;
+}
+
+void FillFileEnd(FILE* fp,char* sImsi,char* sFirstCallTime,char* sLastCallTime,
+	int iRecCount,int iTotalMinutes,long lTotalFee,int iFlag)
+{
+	char sFirstCall[20],sLastCall[20];
+
+	ChargeFormat(sFirstCall,sFirstCallTime,TIME);
+	ChargeFormat(sLastCall,sLastCallTime,TIME);
+
+	fprintf(fp,"IMSI/MIN NUMBER SUMMARY\t: %s\nFIRST CALL DTAE/TIME\t: %s\n\
+LAST  CALL DTAE/TIME\t: %s\nNUMBER OF CALL\t\t: %d\nTOTAL MINUTES\t\t: %d\n\
+TOTAL CHANGE (￥)\t: %.2f\n",sImsi,sFirstCall,sLastCall,iRecCount,iTotalMinutes,(float)lTotalFee/100);
+	if(iFlag==GJ) fprintf(fp,"TOTAL CHANGE (SDR)\t: %.2f\t\t1SDR≈￥12RMB\n",(float)lTotalFee/1200);
+}
+
+void FillFileHeadGj(FILE* fp,char* sCurrentDate)
+{
+	char sDate[11],sProvName[31];
+
+	ChargeFormat(sDate,sCurrentDate,DATE);
+	GetProvName(sProvName,sBelongCode,CHN);
+
+	fprintf(fp,"\nDATE：%s\n\t\t\tCHINA UNICOM %s PROVICE\n\t\t\
+GSM INTERNATIONAL ROAMING INTERFACE MODULE\n\t\t  INBOUND HIGH USAGE ROAMING GALL REPORT\n\
+Observation Date:%s\n",sDate,sProvName,sDate);
+	fprintf(fp,"----------------------------------------------------------------------------------------------------\n");
+	fprintf(fp,"     OPERATOR         IMSI        CALL_TYPE OTHER_NUMBER   START_DATE START_TIME MINUTES CHARGES(￥)\n");
+	fprintf(fp,"----------------------------------------------------------------------------------------------------\n");
+}
+
+void FillFileGj(FILE* fp,char* sImsi,char* sName,int* piTotalMinutes,char* sTableName)
+{
+	int	iDuration,iCharge,iMin,iTotalMin=0;
+	char sCallingNbr[16],sCallType[3],sCalledNbr[19],sStartTime[20];
+	char sSql[1024],sRecord[512];
+
+	sprintf(sSql,"SELECT NVL(MSISDN,'44444'),CALL_TYPE,OTHER_PARTY,\n\
+		to_char(START_TIME,'yyyy/mm/dd hh24:mi:ss'),\n\
+		DURATION,ROAM_FEE+TOLL_FEE+ADD_FEE \n\
+		FROM %s \n\
+		WHERE \n\
+			DEAL_DATE=to_date('%s','yyyymmddhh24miss') AND \n\
+			IMSI='%s'",sTableName,sHighDate,sImsi);
+	EXEC SQL PREPARE ROAM_GJPCR FROM :sSql;
+	CheckSqlError("Prepare cursor RoamGj");
+
+	EXEC SQL DECLARE ROAM_GJCR CURSOR FOR ROAM_GJPCR;
+	CheckSqlError("Declare cursor RoamGj");
+
+	EXEC SQL OPEN ROAM_GJCR;
+	CheckSqlError("Open cursor RoamGj");
+
+	*piTotalMinutes=0;
+	while(1){
+		EXEC SQL FETCH ROAM_GJCR INTO
+				:sCallingNbr,:sCallType,:sCalledNbr,
+				:sStartTime,:iDuration,:iCharge;
+
+		CheckSqlError("FETCH ROAM_GJCR");
+		
+		if(NoDataFetched) break;
+		
+		AllTrim(sCallingNbr);
+		AllTrim(sCalledNbr);
+		AllTrim(sCallType);
+		AllTrim(sStartTime);
+		
+		if(strcmp(sCallType,"01")==0)
+			strcpy(sCallType,"20");
+		else
+			strcpy(sCallType,"30");
+		iMin=(iDuration+59)/60;
+		iTotalMin+=	iMin;
+		
+		sprintf(sRecord,"%-15s%-15s%2s%-21s%-23s%5d%-6s%6.2f\n",
+			sName,sImsi,
+			sCallType,sCalledNbr,sStartTime,
+			iMin,"",((float)iCharge)/100);
+		fprintf(fp,"%s",sRecord);
+	}
+	EXEC SQL CLOSE ROAM_GJCR;
+	
+	*piTotalMinutes=iTotalMin;
+}
+
+void GetCallTimes(char* sFirstCallTime,char* sLastCallTime,char* sImsi,char* sTableName)
+{
+	char sCmd[2048],sFirst[15],sLast[15];
+
+	sprintf(sCmd,"select min(to_char(start_time,'yyyymmddhh24miss')),\
+		max(to_char(start_time,'yyyymmddhh24miss')) \
+		from %s where imsi='%s' and \n\
+		 deal_date=to_date('%s','yyyymmddhh24miss')",\
+		sTableName,sImsi,sHighDate);
+	EXEC SQL prepare TimePCR from :sCmd;
+	CheckSqlError("Prepare cursor TimePcr");
+	
+	EXEC SQL declare TimeCR cursor for TimePCR;
+	CheckSqlError("Declare cursor TimePcr");
+	
+	EXEC SQL OPEN TimeCR;
+	CheckSqlError("Open cursor TimePcr");
+	
+	EXEC SQL fetch TimeCR into :sFirst,:sLast;
+	EXEC SQL close TimeCR;
+	
+	strcpy(sFirstCallTime,sFirst);
+	strcpy(sLastCallTime,sLast);
+}
+void GetCompanyProv(char sCallingNbr[],char sCompanyName[],char sProvCode[])
+{
+	struct T130AreaCodeStruct * pT130;
+	struct AreaCodeDescStruct * pAreaCode,*pAreaCode1;
+	char sStartTime[14];
+	
+	strcpy(sCompanyName,"未知");
+	strcpy(sProvCode,"051");
+	GetHostTime(sStartTime);
+	
+	if(SearchT130AreaCode(sCallingNbr,sStartTime,&pT130)==FOUND){
+		if(SearchAreaCodeDesc(pT130->sAreaCode,&pAreaCode)==FOUND){
+			strcpy(sCompanyName,pAreaCode->sProvinceName);
+			if(SearchAreaCodeDesc(pAreaCode->sCapitalAreaCode,
+				&pAreaCode1)==FOUND){
+				strcpy(sProvCode,"0");
+				strncpy(sProvCode+1,pAreaCode1->sCityCode,2);
+				sProvCode[3]=0;
+			}
+		}
+	}
+}
+void Deal_Gsm_Gn(void)
+{
+	FILE *fp;
+	int iSerial,iRecCount,iTotalMinutes,iRtn;
+	long lTotalFee;
+	char sImsi[16],sCallingNbr[16],sName[41],sProvCode[4],sCityCode[4];
+	char sFirstCallTime[15],sLastCallTime[15];
+	char sCurrentTime[15],sEndTime[15],sCmd[2048],sTemp[20];
+	char sFileName[20],sFileNameTmp[FILENAMELEN],sTableName[21];
+
+	GetHostTime(sCurrentTime);
+	
+	sprintf(sTableName,"VISIT_TICKET_GSM_%s",sMonth);
+
+	sprintf(sCmd,"SELECT IMSI,MAX(MSISDN),\n\
+			count(*),sum(ROAM_FEE+TOLL_FEE+ADD_FEE) \n\
+		FROM	%s \n\
+		WHERE DEAL_DATE=to_date('%s','yyyymmddhh24miss') AND\n\
+			substr(source_id,1,3) in ('CRI','TRI') \n\
+		GROUP BY IMSI \n\
+		HAVING	sum(ROAM_FEE+TOLL_FEE+ADD_FEE)>%d",
+			sTableName,sHighDate,iHighChargeGn);
+
+	EXEC SQL PREPARE HighChargeGsmGnPCR FROM :sCmd;
+	CheckSqlError("Prepare cursor HighChargeGsmGn");
+
+	EXEC SQL declare HighChargeGsmGnCR CURSOR for HighChargeGsmGnPCR;
+	CheckSqlError("Declare cursor HighChargeGsmGn");
+
+	EXEC SQL OPEN HighChargeGsmGnCR;
+	CheckSqlError("Open cursor HighChargeGsmGn");
+
+	while(1){
+		EXEC SQL FETCH HighChargeGsmGnCR INTO 
+			:sImsi,:sCallingNbr,:iRecCount,:lTotalFee;
+		
+		if (sqlca.sqlcode!=0) break;
+
+		AllTrim(sImsi);
+		AllTrim(sCallingNbr);
+		
+		/*取第一个通话时间和最后一个通话时间*/
+		GetCallTimes(sFirstCallTime,sLastCallTime,sImsi,sTableName);
+
+		if(WantToUpHigh(sImsi,sLastCallTime)!=true) continue;
+		
+		/*取该记费号码归属的省分公司*/
+		GetCompanyProv(sCallingNbr,sName,sProvCode);
+
+		GetLastSeq("HR",sHighDate,&iSerial);
+		
+		iSerial++;
+
+		strncpy(sTemp,sHighDate,8);sTemp[8]=0;
+		sprintf(sFileName,"HR%s%04d",sTemp,iSerial);
+		sprintf(sFileNameTmp,"%s%s",sPath_work,sFileName);
+		
+		if((fp=fopen(sFileNameTmp,"w"))==NULL){
+			PrintLog(sLogFile,"File %s open Error!\n",sFileNameTmp);
+			exit(-1);
+		}
+
+		/*填写文件头*/
+		FillFileHeadGn(fp,sCurrentTime,sName);
+		/*填写文件体*/
+		FillFileGn(fp,sImsi,&iTotalMinutes,sTableName);
+		/*填写文件尾*/
+		FillFileEnd(fp,sImsi,sFirstCallTime,sLastCallTime,
+			iRecCount,iTotalMinutes,lTotalFee,GN);
+		fclose(fp);
+		
+		InsertHighCharge(sCallingNbr,sImsi,iRecCount,lTotalFee,
+			sFirstCallTime,sLastCallTime,sFileName,sHighDate,
+			iTotalMinutes,"HR",sProvCode);
+		/*记日志*/
+		GetHostTime(sEndTime);
+		sprintf(sFileNameTmp,"%s%s.%s",sPath_up,sFileName,sBelongCode);
+		
+		WriteTabLog(iSerial,"HR",sFileName,sFirstCallTime,sLastCallTime,
+			iRecCount,lTotalFee,sHighDate,sCurrentTime,sEndTime);
+		
+		CommitWork();
+		WriteProcMsg("G网国内高额文件%s生成！\n",sFileName);
+		
+		/*移动文件到高额路径*/
+		sprintf(sCmd,"mv %s%s %s%s.%s",
+			sPath_work,sFileName,sPath_up,sFileName,sBelongCode);
+		if((iRtn=system(sCmd))!=0)
+			PrintLog(sLogFile,"cmd [%s] execute error:%d,%d\n",sCmd,iRtn,errno);
+	}
+	EXEC SQL close HighChargeGsmGnCR;
+}
+
+void Deal_Gsm_Gj(void)
+{
+	FILE *fp;
+	int iSerial,iRecCount,iTotalMinutes,iRtn;
+	long lTotalFee;
+	char sImsi[16],sCallingNbr[16],sName[41],sCityCode[4];
+	char sFirstCallTime[15],sLastCallTime[15];
+	char sCurrentTime[15],sEndTime[15],sCmd[2048],sTemp[20];
+	char sFileName[20],sFileNameTmp[FILENAMELEN],sTableName[21];
+
+	GetHostTime(sCurrentTime);
+	sprintf(sTableName,"VISIT_TICKET_GSM_%s",sMonth);
+
+	sprintf(sCmd,"SELECT IMSI,MAX(NVL(MSISDN,'44444')),\n\
+			count(*),sum(ROAM_FEE+TOLL_FEE+ADD_FEE) \n\
+		FROM	%s \n\
+		WHERE DEAL_DATE=to_date('%s','yyyymmddhh24miss') AND\n\
+			substr(source_id,1,3) in ('CII','TII') \n\
+		GROUP BY IMSI \n\
+		HAVING	sum(ROAM_FEE+TOLL_FEE+ADD_FEE)>%d",
+			sTableName,sHighDate,iHighChargeGj);
+	
+	EXEC SQL prepare HighChargeGsmGjPCR from :sCmd;
+	CheckSqlError("Prepare cursor HighChargeGsmGj");
+	
+	EXEC SQL declare HighChargeGsmGjCR cursor for HighChargeGsmGjPCR;
+	CheckSqlError("Declare cursor HighChargeGsmGj");
+	
+	EXEC SQL OPEN HighChargeGsmGjCR;
+	CheckSqlError("Open cursor HighChargeGsmGj");
+
+	while(1){
+		EXEC SQL FETCH HighChargeGsmGjCR 
+			INTO :sImsi,:sCallingNbr,:iRecCount,:lTotalFee;
+		if (sqlca.sqlcode!=0) break;
+		
+		/*取第一个通话时间和最后一个通话时间*/
+		GetCallTimes(sFirstCallTime,sLastCallTime,sImsi,sTableName);
+
+		if(WantToUpHigh(sImsi,sLastCallTime)!=true) continue;
+		
+		/*取运营商名称和真正的高额标准*/
+		strncpy(sTemp,sImsi,5);sTemp[5]=0;
+		EXEC SQL SELECT COMPANY_NAME,HIGH_CHARGE
+			INTO :sName,:iRtn 
+			FROM HIGH_CONTACT
+			WHERE IMSI=:sTemp;
+		CheckSqlError("Get company_name and high_charge error!");
+		if (lTotalFee<iRtn) continue;
+
+		GetLastSeq("HI",sHighDate,&iSerial);
+		iSerial++;
+
+		strncpy(sTemp,sHighDate,8);sTemp[8]=0;
+		sprintf(sFileName,"HI%s%04d",sTemp,iSerial);
+		sprintf(sFileNameTmp,"%s%s",sPath_work,sFileName);
+		
+		if((fp=fopen(sFileNameTmp,"w"))==NULL){
+			PrintLog(sLogFile,"File %s open Error!\n",sFileNameTmp);
+			exit(-1);
+		}
+
+		/*填写文件头*/
+		FillFileHeadGj(fp,sHighDate);
+		/*填写文件体*/
+		FillFileGj(fp,sImsi,sName,&iTotalMinutes,sTableName);
+		/*填写文件尾*/
+		FillFileEnd(fp,sImsi,sFirstCallTime,sLastCallTime,
+			iRecCount,iTotalMinutes,lTotalFee,GJ);
+		fclose(fp);
+
+		InsertHighCharge(sCallingNbr,sImsi,iRecCount,lTotalFee,
+			sFirstCallTime,sLastCallTime,sFileName,sHighDate,
+			iTotalMinutes,"HI","GHI");
+			
+		CheckSqlError("insert into up_highcharge error in GsmGj!");
+		/*记日志*/
+		GetHostTime(sEndTime);
+		sprintf(sFileNameTmp,"%s%s.%s",sPath_up,sFileName,sBelongCode);
+		
+		WriteTabLog(iSerial,"HI",sFileNameTmp,sFirstCallTime,sLastCallTime,
+			iRecCount,lTotalFee,sHighDate,sCurrentTime,sEndTime);
+		
+		CommitWork();
+		
+		WriteProcMsg("G网国际高额文件%s生成！\n",sFileName);
+		/*移动文件到高额路径*/
+		sprintf(sCmd,"mv %s%s %s%s.%s",sPath_work,sFileName,sPath_up,sFileName,sBelongCode);
+		if((iRtn=system(sCmd))!=0)
+			PrintLog(sLogFile,"cmd [%s] execute error:%d,%d\n",sCmd,iRtn,errno);
+	}
+	EXEC SQL close HighChargeGsmGjCR;
+}
+
+void Deal_Cdma_Gn(void)
+{
+	FILE *fp;
+	int iSerial,iRecCount,iTotalMinutes,iRtn;
+	long lTotalFee;
+	char sImsi[16],sCallingNbr[16],sName[41],sProvCode[4];
+	char sFirstCallTime[15],sLastCallTime[15];
+	char sCurrentTime[15],sEndTime[15],sCmd[2048],sTemp[20];
+	char sFileName[20],sFileNameTmp[FILENAMELEN],sTableName[21];
+	struct T130AreaCodeStruct *pT130=NULL;
+	struct AreaCodeDescStruct *pAreaCode=NULL;
+
+	GetHostTime(sCurrentTime);
+	sprintf(sTableName,"VISIT_TICKET_CDMA_%s",sMonth);
+
+	sprintf(sCmd,"SELECT IMSI,MAX(MSISDN),\n\
+			count(*),sum(ROAM_FEE+TOLL_FEE+ADD_FEE) \n\
+		FROM	%s \n\
+		WHERE DEAL_DATE=to_date('%s','yyyymmddhh24miss') AND\n\
+			substr(source_id,1,3) in ('JRI','QRI') \n\
+		GROUP BY IMSI \n\
+		HAVING	sum(ROAM_FEE+TOLL_FEE+ADD_FEE)>%d",
+			sTableName,sHighDate,iHighChargeGn);
+	
+	EXEC SQL prepare HighChargeCdmaGnPCR from :sCmd;
+	CheckSqlError("Prepare cursor HighChargeCdmaGn");
+	EXEC SQL declare HighChargeCdmaGnCR cursor for HighChargeCdmaGnPCR;
+	CheckSqlError("Declare cursor HighChargeCdmaGn");
+	EXEC SQL OPEN HighChargeCdmaGnCR;
+	CheckSqlError("Open cursor HighChargeCdmaGn");
+
+	while(1){
+		EXEC SQL fetch HighChargeCdmaGnCR into :sImsi,:sCallingNbr,:iRecCount,:lTotalFee;
+		if (sqlca.sqlcode!=0) break;
+		
+		AllTrim(sImsi);
+		AllTrim(sCallingNbr);
+		
+		/*取第一个通话时间和最后一个通话时间*/
+		GetCallTimes(sFirstCallTime,sLastCallTime,sImsi,sTableName);
+	
+		if(WantToUpHigh(sImsi,sLastCallTime)!=true) continue;
+		
+		/*取该记费号码归属的省分公司*/
+		GetCompanyProv(sCallingNbr,sName,sProvCode);
+
+		GetLastSeq("HR",sHighDate,&iSerial);
+		iSerial++;
+
+		strncpy(sTemp,sHighDate,8);sTemp[8]=0;
+		sprintf(sFileName,"HR%s%04d",sTemp,iSerial);
+		sprintf(sFileNameTmp,"%s%s",sPath_work,sFileName);
+		if((fp=fopen(sFileNameTmp,"w"))==NULL){
+			PrintLog(sLogFile,"File %s open Error!\n",sFileNameTmp);
+			exit(-1);
+		}
+
+		/*填写文件头*/
+		FillFileHeadGn(fp,sHighDate,sName);
+		/*填写文件体*/
+		FillFileGn(fp,sImsi,&iTotalMinutes,sTableName);
+		/*填写文件尾*/
+		FillFileEnd(fp,sImsi,sFirstCallTime,sLastCallTime,iRecCount,iTotalMinutes,lTotalFee,GN);
+		fclose(fp);
+
+		InsertHighCharge(sCallingNbr,sImsi,iRecCount,lTotalFee,
+			sFirstCallTime,sLastCallTime,sFileName,sHighDate,
+			iTotalMinutes,"HR",sProvCode);
+		
+		/*记日志*/
+		GetHostTime(sEndTime);
+		sprintf(sFileNameTmp,"%s%s.%s",sPath_up,sFileName,sBelongCode);
+		WriteTabLog(iSerial,"HR",sFileNameTmp,sFirstCallTime,sLastCallTime,iRecCount,
+			lTotalFee,sHighDate,sCurrentTime,sEndTime);
+		CommitWork();
+		WriteProcMsg("C网国内高额文件%s生成！\n",sFileName);
+		/*移动文件到高额路径*/
+		sprintf(sCmd,"mv %s%s %s%s.%s",sPath_work,sFileName,sPath_up,sFileName,sBelongCode);
+		if((iRtn=system(sCmd))!=0) PrintLog(sLogFile,"cmd [%s] execute error:%d,%d\n",sCmd,iRtn,errno);
+	}
+	EXEC SQL close HighChargeCdmaGnCR;
+}
+
+void Deal_Cdma_Gj(void)
+{
+	FILE *fp;
+	int iSerial,iRecCount,iTotalMinutes,iRtn;
+	long lTotalFee;
+	char sImsi[16],sCallingNbr[16],sName[41],sCityCode[4];
+	char sFirstCallTime[15],sLastCallTime[15];
+	char sCurrentTime[15],sEndTime[15],sCmd[2048],sTemp[20];
+	char sFileName[20],sFileNameTmp[FILENAMELEN],sTableName[21];
+
+	GetHostTime(sCurrentTime);
+	sprintf(sTableName,"VISIT_TICKET_CDMA_%s",sMonth);
+
+	sprintf(sCmd,"SELECT IMSI,MAX(MSISDN),\n\
+			count(*),sum(ROAM_FEE+TOLL_FEE+ADD_FEE) \n\
+		FROM	%s \n\
+		WHERE DEAL_DATE=to_date('%s','yyyymmddhh24miss') AND\n\
+			substr(source_id,1,3) in ('JII','QII') \n\
+		GROUP BY IMSI \n\
+		HAVING	sum(ROAM_FEE+TOLL_FEE+ADD_FEE)>%d",
+			sTableName,sHighDate,iHighChargeGj);
+			
+	EXEC SQL prepare HighChargeCdmaGjPCR from :sCmd;
+	CheckSqlError("Prepare cursor HighChargeCdmaGj");
+	
+	EXEC SQL declare HighChargeCdmaGjCR cursor for HighChargeCdmaGjPCR;
+	CheckSqlError("Declare cursor HighChargeCdmaGj");
+	
+	EXEC SQL OPEN HighChargeCdmaGjCR;
+	CheckSqlError("Open cursor HighChargeCdmaGj");
+
+	while(1){
+		EXEC SQL fetch HighChargeCdmaGjCR into :sImsi,:sCallingNbr,:iRecCount,:lTotalFee;
+		if (sqlca.sqlcode!=0) break;
+		/*取第一个通话时间和最后一个通话时间*/
+		GetCallTimes(sFirstCallTime,sLastCallTime,sImsi,sTableName);
+
+		if(WantToUpHigh(sImsi,sLastCallTime)!=true) continue;
+		
+		/*取运营商名称和真正的高额标准*/
+		strncpy(sTemp,sImsi,5);sTemp[5]=0;
+		EXEC SQL SELECT COMPANY_NAME,HIGH_CHARGE
+			INTO	:sName,	:iRtn
+			FROM HIGH_CONTACT
+			WHERE IMSI=:sTemp;
+		if(CheckSqlResult("HIGH_CONTACT")!=0)
+			iRtn=	iHighChargeGj;
+		
+		
+		if (lTotalFee<iRtn) continue;
+		
+
+		GetLastSeq("HI",sHighDate,&iSerial);
+		iSerial++;
+		strncpy(sTemp,sHighDate,8);sTemp[8]=0;
+		sprintf(sFileName,"HI%s%04d",sTemp,iSerial);
+		sprintf(sFileNameTmp,"%s%s",sPath_work,sFileName);
+		if((fp=fopen(sFileNameTmp,"w"))==NULL){
+			PrintLog(sLogFile,"File %s open Error!\n",sFileNameTmp);
+			exit(-1);
+		}
+
+		/*填写文件头*/
+		FillFileHeadGj(fp,sHighDate);
+		/*填写文件体*/
+		FillFileGj(fp,sImsi,sName,&iTotalMinutes,sTableName);
+		/*填写文件尾*/
+		FillFileEnd(fp,sImsi,sFirstCallTime,sLastCallTime,iRecCount,iTotalMinutes,lTotalFee,GJ);
+		fclose(fp);
+
+		InsertHighCharge(sCallingNbr,sImsi,iRecCount,lTotalFee,
+			sFirstCallTime,sLastCallTime,sFileName,sHighDate,
+			iTotalMinutes,"HI","CHI");
+		
+		/*记日志*/
+		GetHostTime(sEndTime);
+		sprintf(sFileNameTmp,"%s%s.%s",sPath_up,sFileName,sBelongCode);
+		WriteTabLog(iSerial,"HI",sFileNameTmp,sFirstCallTime,sLastCallTime,iRecCount,
+			lTotalFee,sHighDate,sCurrentTime,sEndTime);
+		
+		CommitWork();
+		WriteProcMsg("C网国际高额文件%s生成！\n",sFileName);
+		/*移动文件到高额路径*/
+
+		sprintf(sCmd,"mv %s%s %s%s.%s",sPath_work,sFileName,sPath_up,sFileName,sBelongCode);
+		if((iRtn=system(sCmd))!=0) PrintLog(sLogFile,"cmd [%s] execute error:%d,%d\n",sCmd,iRtn,errno);
+	}
+	EXEC SQL close HighChargeCdmaGjCR;
+}
+
+/*批量数据动态从UP_HIGHCHARGE中用结构缓冲方式取数据*/
+int EGetUpHighchargeToStruct(struct UpHighchargeStruct *p,struct UpHighchargeStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[4096];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(IMSI,'-1'),\n\
+				nvl(TOTAL_CHARGE,-1),\n\
+				nvl(FIRST_CALL_TIME,'-1'),\n\
+				nvl(LAST_CALL_TIME,'-1'),\n\
+				nvl(HOME_PROV_CODE,'-1')\n\
+			FROM %s %s",sTableName,sCondition);
+
+/*printf("the statement =%s",statement);*/
+		EXEC SQL PREPARE UP_HIGHCHARGESCR FROM :statement;
+		CheckSqlError(" PREPARE UP_HIGHCHARGESCR UP_HIGHCHARGECR");
+
+		EXEC SQL DECLARE UP_HIGHCHARGECR CURSOR FOR UP_HIGHCHARGESCR;
+		CheckSqlError("Declare UP_HIGHCHARGECR");
+
+		EXEC SQL OPEN UP_HIGHCHARGECR;
+		CheckSqlError("Open UP_HIGHCHARGECR;");
+
+		pSource->iFirstFlag = FALSE;
+		pSource->iBufEmpty = TRUE;
+		pSource->iFetchRecNum = 0;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH UP_HIGHCHARGECR INTO
+			:pSource->asImsi,
+			:pSource->aiTotalCharge,
+			:pSource->asFirstCallTime,
+			:pSource->asLastCallTime,
+			:pSource->asProvCode;
+		CheckSqlError("Fetch UP_HIGHCHARGECR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE UP_HIGHCHARGECR;
+
+			return FALSE;
+		}
+
+		if(pSource->iEndFlag=(pSource->iRecCnt!=UP_HIGHCHARGE_BUFLEN_IN))
+			pSource->iRecCnt++;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sImsi,		pSource->asImsi[iCurPos]);
+
+		p->iTotalCharge=		pSource->aiTotalCharge[iCurPos];
+
+		strcpy(p->sFirstCallTime,	pSource->asFirstCallTime[iCurPos]);
+		strcpy(p->sLastCallTime,	pSource->asLastCallTime[iCurPos]);
+		strcpy(p->sProvCode,		pSource->asProvCode[iCurPos]);
+
+		AllTrim(p->sImsi);
+		AllTrim(p->sFirstCallTime);
+		AllTrim(p->sLastCallTime);
+		AllTrim(p->sProvCode);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt){
+
+		if(pSource->iEndFlag){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE UP_HIGHCHARGECR;
+
+			return FALSE;
+		}
+		pSource->iBufEmpty=TRUE;
+	}
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+void Struct2FileBuf_cfi(up_cfi_buf* pcfi_buf,struct UpHighchargeStruct* pcfi_str)
+{
+	char sTemp[10];
+
+	memset(pcfi_buf,' ',sizeof(up_cfi_buf));
+
+	strncpy(pcfi_buf->RecType,"20",2);
+	strncpy(pcfi_buf->FilialeCode,pcfi_str->sProvCode,strlen(pcfi_str->sProvCode));
+	strncpy(pcfi_buf->Imsi,pcfi_str->sImsi,strlen(pcfi_str->sImsi));
+	strncpy(pcfi_buf->FirstCallTime,pcfi_str->sFirstCallTime,strlen(pcfi_str->sFirstCallTime));
+	strncpy(pcfi_buf->LastCallTime,pcfi_str->sLastCallTime,strlen(pcfi_str->sLastCallTime));
+	sprintf(sTemp,"%08d",pcfi_str->iTotalCharge);
+	strncpy(pcfi_buf->TotalFee,sTemp,8);
+	pcfi_buf->BackLine=0x0d;
+	pcfi_buf->NewLine=0x0a;
+}
+
+void WriteHeadBuf_cfi(FILE* fp,char* sCurrentTime,int iRecCount,int iTotalFee)
+{
+	up_cfi_head_buf cfi_head_buf;
+	char sTemp[16];
+	int iRtn;
+
+	memset(&cfi_head_buf,' ',sizeof(up_cfi_head_buf));
+
+	strncpy(cfi_head_buf.RecType,"10",2);
+	strncpy(cfi_head_buf.FilialeCode,sBelongCode,3);
+	strncpy(cfi_head_buf.Verson,"01",2);
+	strncpy(cfi_head_buf.FileTime,sCurrentTime,14);
+	sprintf(sTemp,"%06d",iRecCount);
+	strncpy(cfi_head_buf.RecCount,sTemp,6);
+	sprintf(sTemp,"%015d",iTotalFee);
+	strncpy(cfi_head_buf.TotalFee,sTemp,15);
+	cfi_head_buf.BackLine=0x0d;
+	cfi_head_buf.NewLine=0x0a;
+
+	rewind(fp);
+	if ((iRtn=fwrite(&cfi_head_buf,sizeof(up_cfi_head_buf),1,fp))!=1){
+		PrintLog(sLogFile,"写文件cfi_head错误！return:%d;errno:%d\n",iRtn,errno);
+		exit(-1);
+	}
+}
+
+void Deal_HuiZong(void)
+{
+	up_cfi_buf cfi_buf;
+	struct UpHighchargeStruct strRec;
+	struct UpHighchargeStructIn tabStructIn;
+	int iRtn,iSerial,iRecCount=0,iTotalFee=0,iFirstRec=TRUE;
+	char sTemp[128];
+	char sFileNameOut[21],sFullName[FILENAMELEN];
+	char sBeginTime[15],sEndTime[15],sCmd[1048];
+	FILE* fp_out;
+
+	EXEC SQL SELECT count(*) INTO :iSerial
+		FROM UPDATA_LOG
+		WHERE FILE_TYPE='CFI' AND 
+		DATA_DATE=to_date(:sHighDate,'yyyymmddhh24miss');
+	if(iSerial>0){
+		WriteProcMsg("今日的高额汇总文件已经生成。\n");
+		return;
+	}
+	iSerial=1;
+
+	GetHostTime(sBeginTime);
+
+	bzero((void*)&tabStructIn,sizeof(struct UpHighchargeStructIn));
+	tabStructIn.iCurPos=0;
+	strcpy(tabStructIn.sTableName,"UP_HIGHCHARGE");
+	sprintf(tabStructIn.sCondition,"\n\
+		WHERE FILE_TIME='%s' AND\n\
+			ROWID IN (	\n\
+				SELECT MAX(ROWID) FROM UP_HIGHCHARGE\n\
+				WHERE FILE_TIME='%s'\n\
+				GROUP BY IMSI,LAST_CALL_TIME\n\
+			)\n\
+		ORDER BY REC_TYPE,IMSI",sHighDate,sHighDate);
+	tabStructIn.iBufEmpty =TRUE;
+	tabStructIn.iFirstFlag = TRUE;
+
+	while(EGetUpHighchargeToStruct(&strRec,&tabStructIn)){
+		if(iFirstRec){
+			strncpy(sTemp,sHighDate+2,6);sTemp[6]=0;
+			sprintf(sFileNameOut,"CFI%s%03d.%s",sTemp,iSerial,sBelongCode);
+			sprintf(sFullName,"%s%s",sPath_work,sFileNameOut);
+			if((fp_out=fopen(sFullName,"w"))==NULL){
+				PrintLog(sLogFile,"File %s Open Error!\n",sFullName);
+				exit(-1);
+			}
+			/*预留首记录的位置*/
+			if (fseek(fp_out,sizeof(up_cfi_head_buf),SEEK_SET)<0){
+				PrintLog(sLogFile,"预留cfi_head错误！errno:%d\n",errno);
+				exit(-1);
+			}
+			iFirstRec=FALSE;
+		}
+		iRecCount++;
+		iTotalFee+=strRec.iTotalCharge;
+		Struct2FileBuf_cfi(&cfi_buf,&strRec);
+		if ((iRtn=fwrite(&cfi_buf,sizeof(up_cfi_buf),1,fp_out))!=1){
+			PrintLog(sLogFile,"写文件cfi错误！return:%d;errno:%d\n",iRtn,errno);
+			exit(-1);
+		}
+	}
+	if(!iFirstRec){
+		WriteHeadBuf_cfi(fp_out,sBeginTime,iRecCount,iTotalFee);
+		fclose(fp_out);
+		GetHostTime(sEndTime);
+		WriteTabLog(iSerial,"CFI",sFullName,sBeginTime,sEndTime,
+			iRecCount,iTotalFee,sHighDate,sBeginTime,sEndTime);
+		CommitWork();
+		WriteProcMsg("G网国内高额汇总文件生成\n");
+		/*移动文件到高额路径*/
+		sprintf(sCmd,"mv %s%s %s",sPath_work,sFileNameOut,sPath_up);
+		if((iRtn=system(sCmd))!=0)
+		 	WriteAlertMsg("执行命令%s 错误",sCmd);
+	}
+}
+int GethBelongCode(char sBelongCode[5])
+{
+	
+	int iRet;
+	char sTemp[128],sPath[128],*env;
+
+	GetIniName(sPath);
+	
+	iRet=ReadString(sPath,"bss","updata","belong_code",sTemp);
+	ERROR_RETURNZ(iRet<0,"读取bill.ini文件失败");
+	ERROR_RETURNA((strlen(sTemp)==0),"bill.ini->bss->updata-%s无对应配置",
+		"belong_code");
+	strncpy(sBelongCode,sTemp,4);sBelongCode[4]=0;AllTrim(sBelongCode);
+
+	return 0;
+}
+
+int main(int argc,char* argv[])
+{
+	char	sDealDate[15],sTempDate[15];
+	
+	if(argc!=3&&argc!=4){
+		printf("Usage %s workpath uppath [yyyymmdd].\n",argv[0]);
+		return -1;
+	}
+	InitAppRes(argv[0]);
+	strcpy(sPath_work,argv[1]);
+	strcpy(sPath_up,argv[2]);
+
+	RegularDir(sPath_work);
+	RegularDir(sPath_up);
+
+	if(argc==4){
+		strcpy(sDealDate,argv[3]);
+		strcpy(sDealDate+8,"000000");
+		if(tGetTime(sDealDate)==-1){
+			printf("输入日期非法[yyyymmdd].%s.\n",sDealDate);
+			return -1;
+		}
+	}
+	else{
+		GetHostTime(sDealDate);
+		AddDays(sDealDate,-1);
+	}
+	
+	GethBelongCode(sBelongCode);
+	
+	iHighChargeGn=	40000;
+	iHighChargeGj=	60000;
+	strncpy(sHighDate,sDealDate,8);
+	strcpy(sHighDate+8,"000000");
+	strcpy(sTempDate,sDealDate);AddDays(sTempDate,-1);
+	strncpy(sMonth,sTempDate+4,2);sMonth[2]=0;
+	
+/*连接数据库*/	
+	IniConnect("dataconnstr");
+
+	Deal_Gsm_Gn();	/*GSM国内*/
+	Deal_Gsm_Gj();	/*GSM国际*/
+	/*Deal_Cdma_Gn();CDMA国内*/
+	/*Deal_Cdma_Gj();Cdma国际*/
+	Deal_HuiZong();	/*GSM国内的高额汇总文件*/
+
+	printf("高额生成成功.\n");
+	
+	DisconnectDatabase();
+
+	return 0;
+}

@@ -1,0 +1,130 @@
+{
+/*声明输出部分*/
+goto aa;
+	setfilefmt("bin0:l{01:02}:0");
+	declf(t_cur,"3");
+	initdate(30);
+	setfmt(t_call_type,	"00","%02d",posp("0:2"));
+	setfmt(t_imsi,		" ","%-15s",posp("2:15"));
+	setfmt(t_calling_nbr,	" ","%-15s",posp("17:15"));
+	setfmt(t_called_nbr,	" ","%-24s",posp("32:24"));
+	setfmt(t_start_date,	" ","%-8s",posp("56:8"));
+	setfmt(t_start_time,	" ","%-6s",posp("64:6"));
+	setfmt(t_duration,	" ","%06d",posp("70:6"));
+	setfmt(t_msc,		" ","%-10s",posp("76:10"));
+	setfmt(t_trunk_in,	" ","%-8s",posp("86:8"));
+	setfmt(t_trunk_out,	" ","%-8s",posp("94:8"));
+	setfmt(t_lac,		" ","%-4s",posp("102:4"));
+	setfmt(t_cell_id,	" ","%-4s",posp("106:4"));
+	setfmt(t_other_lac,	" ","%-4s",posp("110:4"));
+	setfmt(t_other_cell_id,	" ","%-4s",posp("114:4"));
+	setfmt(t_service_type,	" ","%-3s",posp("118:3"));
+	setfmt(t_service_code,	" ","%-4s",posp("121:4"));
+	setfmt(t_third_party,	" ","%-15s",posp("125:15"));
+	setfmt(t_msrn,		" ","%-15s",posp("140:15"));
+aa:
+	ticketvalid=1;
+p=t_ori;
+l=t_orilen;
+iPos=0;
+
+while(1){
+	if(iPos>=l) break;
+	t_cur=p+iPos;
+	tag=	HEX_OCTET_INT4B(getfixpos(t_cur,fixp("0:1")));
+	if(tag==0x64){
+		t_start_date=STARTDATE_STRING(getfixpos(t_cur,fixp("1:3")));
+		t_start_time=STARTTIME_STRING(getfixpos(t_cur,fixp("4:3")));
+		t_duration= HEX_TBCD_INT4B(getfixpos(t_cur,fixp("8:3")));
+		iPos=iPos+11;
+		continue;
+	}
+	if(tag==0x74){
+		if(length(t_start_date)==0){
+		t_start_date=STARTDATE_STRING(getfixpos(t_cur,fixp("1:3")));
+		t_start_time=STARTTIME_STRING(getfixpos(t_cur,fixp("4:3")));
+		}
+		iPos=iPos+8;
+		continue;
+	}
+	if(tag==0x76){iPos=iPos+4;continue;}
+	if(tag==0x65){/*被叫号码*/
+		len= HEX_OCTET_INT4B(getfixpos(t_cur,fixp("1:1")));
+		len=len&0x1F;
+		temp=HEX_OCTET_STRING(getfixpos(t_cur,fixp("2:10")));
+		t_called_nbr=rplx(temp,"F","");
+		iPos=iPos+2+(len+1)/2;
+		continue;
+	}
+	if(tag==0x92){
+		pack_len= HEX_OCTET_INT4B(getfixpos(t_cur,fixp("1:1")));	
+		temp=HEX_OCTET_STRING(getfixpos(t_cur,fixp("3:10")));
+		t_third_party=rplx(temp,"F","");
+		iPos=iPos+pack_len;
+		continue;
+	}
+	if(tag==0x66||tag==67||tag==68){iPos=iPos+4;continue;}
+	if(tag==0x69||tag==0x6B){/*入中继*/
+		if(length(t_trunk_in)==0)
+			t_trunk_in=IA5STRING(getfixpos(t_cur,fixp("1:6")));
+		iPos=iPos+9;
+		continue;
+	}
+	if(tag==0x6A||tag==0x6C){/*出中继*/
+		if(length(t_trunk_out)==0)
+			t_trunk_out=IA5STRING(getfixpos(t_cur,fixp("1:6")));
+		iPos=iPos+9;
+		continue;
+	}
+	if(tag==0x8E||tag==0xAC){/*主叫号码*/
+		pack_len= HEX_OCTET_INT4B(getfixpos(t_cur,fixp("1:1")));	
+		temp=HEX_OCTET_STRING(getfixpos(t_cur,fixp("5:10")));
+		t_calling_nbr=rplx(temp,"F","");
+		iPos=iPos+pack_len;
+		continue;
+	}
+	if(tag==0xA8){
+		pack_len= HEX_OCTET_INT4B(getfixpos(t_cur,fixp("1:1")));	
+		temp=HEX_OCTET_STRING(getfixpos(t_cur,fixp("5:10")));
+		t_called_nbr=rplx(temp,"F","");
+		iPos=iPos+pack_len;
+		continue;
+	}
+	if(tag==0xAA||tag==0xB0||tag==0x6E||tag==0x75){
+		pack_len= HEX_OCTET_INT4B(getfixpos(t_cur,fixp("1:1")));	
+		iPos=iPos+pack_len;
+		continue;	
+	}
+	len=di2i(tag,pi2i(
+"0x76:4:0x66:4:0x68:3:0x6d:18:0x70:3:0x71:4:0x77:2:0x78:2:0x77:2:0x78:2:0x86:6:0x87:4:0x88:6:0x8A:4:255"));
+	iPos=iPos+len;
+}
+
+	t_call_type=01;
+	t_service_type="000";
+	t_service_code="0011";
+/*字段校正部分*/
+	t_msc=$MSC;
+	if(strlen(t_msrn)>12&&substr(t_msrn,0,2)=="86")
+		t_msrn=substr(t_msrn,2,10);
+
+	if(llike(t_called_nbr,"0086"))/*去掉0086*/
+		t_called_nbr=substr(t_called_nbr,4,20);
+	if(llike(t_called_nbr,"86")&&strlen(t_called_nbr)>9)
+		t_called_nbr=substr(t_called_nbr,2,22);
+	if(llike(t_called_nbr,"013")&&strlen(t_called_nbr)==12)
+		t_called_nbr=substr(t_called_nbr,1,11);
+	l=length($AREACODE);
+	if(length(t_called_nbr)>12&&l!=0){
+		if(llike(t_called_nbr,$AREACODE))
+			t_called_nbr=substr(t_called_nbr,l,20);
+		else if(llike(t_called_nbr,"0"+$AREACODE))
+			t_called_nbr=substr(t_called_nbr,l+1,20);
+	}
+	if(llike(t_calling_nbr,"0086"))/*去掉0086*/
+		t_calling_nbr=substr(t_calling_nbr,4,20);
+	if(llike(t_calling_nbr,"86")&&strlen(t_calling_nbr)>9)
+		t_calling_nbr=substr(t_calling_nbr,2,22);
+	if(llike(t_calling_nbr,"013")&&strlen(t_calling_nbr)==12)
+		t_calling_nbr=substr(t_calling_nbr,1,11);
+}

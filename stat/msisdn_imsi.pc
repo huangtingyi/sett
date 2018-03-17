@@ -1,0 +1,223 @@
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdb.h>
+
+#include <msisdn_imsi.h>
+
+/*******************MSISDN_IMSI_STAT***************/
+/*批量数据动态从MSISDN_IMSI_STAT中用结构缓冲方式取数据*/
+int EGetMsisdnImsiStatToStruct(struct MsisdnImsiStatStruct *p,
+	struct MsisdnImsiStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(MSISDN,' '),\n\
+				nvl(IMSI,' '),\n\
+				nvl(SCP_FLAG,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE MSISDN_IMSI_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE MSISDN_IMSI_STATSCR MSISDN_IMSI_STATCR");
+
+		EXEC SQL DECLARE MSISDN_IMSI_STATCR CURSOR FOR MSISDN_IMSI_STATSCR;
+		CheckSqlError("Declare MSISDN_IMSI_STATCR");
+
+		EXEC SQL OPEN MSISDN_IMSI_STATCR;
+		CheckSqlError("Open MSISDN_IMSI_STATCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE MSISDN_IMSI_STATCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH MSISDN_IMSI_STATCR INTO
+			:pSource->asMsisdn,
+			:pSource->asImsi,
+			:pSource->asScpFlag,
+			:pSource->asRowID;
+		CheckSqlError("Fetch MSISDN_IMSI_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE MSISDN_IMSI_STATCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=MSISDN_IMSI_STAT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sMsisdn,	pSource->asMsisdn[iCurPos]);
+		strcpy(p->sImsi,	pSource->asImsi[iCurPos]);
+		strcpy(p->sScpFlag,	pSource->asScpFlag[iCurPos]);
+		
+		strcpy(p->sRowID,	pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sImsi);
+		AllTrim(p->sScpFlag);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+
+/**对表MSISDN_IMSI_STAT的链表释放函数**/
+void DestroyMsisdnImsiStat(struct MsisdnImsiStatStruct *ptHead)
+{
+	struct MsisdnImsiStatStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+/*批量数据结构缓冲写入MSISDN_IMSI_STAT*/
+int EInsertStructToMsisdnImsiStat(struct MsisdnImsiStatStruct *p,
+	int iInsertFlag,struct MsisdnImsiStatStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asMsisdn[iCurPos],	p->sMsisdn);
+		strcpy(pTarget->asImsi[iCurPos],	p->sImsi);
+		strcpy(pTarget->asScpFlag[iCurPos],	p->sScpFlag);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==MSISDN_IMSI_STAT_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				MSISDN,\n\
+				IMSI,\n\
+				SCP_FLAG)\n\
+			VALUES (\n\
+				:asMsisdn,\n\
+				:asImsi,\n\
+				:asScpFlag\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE MSISDN_IMSI_STATTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement MSISDN_IMSI_STAT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE MSISDN_IMSI_STATTRG USING
+				:pTarget->asMsisdn,
+				:pTarget->asImsi,
+				:pTarget->asScpFlag;
+		if(CheckSqlResult("Dyn insert into MSISDN_IMSI_STAT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+int UpdateDateToMsisdnImsiStat(struct MsisdnImsiStatStruct *p,
+	int iUpdateFlag,struct MsisdnImsiStatStructOut *pTarget)
+{
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asMsisdn[iCurPos],	p->sMsisdn);
+		strcpy(pTarget->asImsi[iCurPos],	p->sImsi);
+		strcpy(pTarget->asScpFlag[iCurPos],	p->sScpFlag);
+		strcpy(pTarget->asRowID[iCurPos],	p->sRowID);
+		
+		iCurPos++;
+	}
+	
+	if(iUpdateFlag==TRUE||iCurPos==MSISDN_IMSI_STAT_BUFLEN_OUT){
+
+/* UPDATE */
+		char statement[8192]="";
+		
+		if(iCurPos==0) return 0;
+		
+		sprintf(statement,"UPDATE %s\n\
+				 SET SCP_FLAG=  :asScpFlag,\n\
+				 IMSI=   :asImsi\n\
+				 WHERE \n\
+				 ROWID = chartorowid(:asRowID)", sTableName);
+		
+		EXEC SQL PREPARE MSISDN_IMSI_UPDATE_E FROM :statement;
+		if(CheckSqlResult("Prepare update statement MSISDN_IMSI_UPDATE_E")<0)return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE MSISDN_IMSI_UPDATE_E USING
+				:pTarget->asScpFlag,
+				:pTarget->asImsi,
+				:pTarget->asRowID;
+		if(CheckSqlResult("Dyn update  MSISDN_IMSI_UPDATE_E")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+
+/**************MSISDN_IMSI_STAT************************/
+

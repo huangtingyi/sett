@@ -1,0 +1,19 @@
+{
+/*声明输出部分*/
+goto aa;
+	setfilefmt("txt");
+	initdate(300);
+setfmt(it_sett_carrier_id," ", "%-2s",posp(   "0:2"));
+setfmt(st_service_code	 ," ", "%-5s",posp(   "2:5"));
+setfmt(it_amnt,		  " ","%-15s",posp(  "7:15"));
+aa:
+ticketvalid=1;
+if(trimcut(t_ori,0,1)=="#"){ticketvalid=-2;return;}
+it_sett_carrier_id=	atoi(IA5STRING(gettabpos(t_ori,tabp("0:1"))));
+st_service_code=	IA5STRING(gettabpos(t_ori,tabp("1:1")));
+it_amnt=		atoi(IA5STRING(gettabpos(t_ori,tabp("2:1"))));
+if(it_sett_carrier_id==101) rate=700;
+else	rate=600;
+it_amnt=		(it_amnt*rate+500)/1000;
+
+}	  

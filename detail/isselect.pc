@@ -1,0 +1,24 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <wwfile.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdb.h>
+#include <list.h>
+#include <wwdir.h>
+
+#include <isselect.h>
+
+int IsInNBR(char sMsisdn[],char sTable[])
+{
+	int iStaffID=0;
+	
+	EXEC SQL SELECT CNT INTO :iStaffID 
+		FROM NUMBER_INFO 
+		WHERE MSISDN=:sMsisdn;
+
+/*	EXEC SQL SELECT STAFF_ID INTO :iStaffID FROM STAFF WHERE ROWNUM<2;*/
+	if(CheckSqlResult("CHECK ALL_APP_INFO_NBR")<0) return -1;
+
+	return iStaffID;
+}

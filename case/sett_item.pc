@@ -1,0 +1,429 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <list.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwfile.h>
+#include <wwdb.h>
+
+#include "sett_item.h"
+
+/*批量数据动态从SETT_ITEM中用结构缓冲方式取数据*/
+int EGetSettItemToStruct(struct SettItemStruct *p,
+	struct SettItemStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				SETT_ITEM_ID,\n\
+				LATN_ID,\n\
+				ACCT_ITEM_TYPE_ID,\n\
+				CHARGE,\n\
+				to_char(SETT_ITEM_DATE,'yyyymmddhh24miss'),\n\
+				to_char(CREATED_DATE,'yyyymmddhh24miss'),\n\
+				STATE,\n\
+				OPP_CARRIER_ID,\n\
+				SETT_CYCLE_ID,\n\
+				nvl(USER_TYPE,'G'),\n\
+				nvl(SOURCE_ID,'000000'),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+		EXEC SQL PREPARE SETT_ITEMSCR FROM :statement;
+		CheckSqlError(" PREPARE SETT_ITEMSCR SETT_ITEMCR");
+
+		EXEC SQL DECLARE SETT_ITEMCR CURSOR FOR SETT_ITEMSCR;
+		CheckSqlError("Declare SETT_ITEMCR");
+
+		EXEC SQL OPEN SETT_ITEMCR;
+		CheckSqlError("Open SETT_ITEMCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SETT_ITEMCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SETT_ITEMCR INTO
+			:pSource->aiSettItemID,
+			:pSource->aiLatnID,
+			:pSource->aiAcctItemTypeID,
+			:pSource->aiCharge,
+			:pSource->asSettItemDate,
+			:pSource->asCreatedDate,
+			:pSource->asState,
+			:pSource->aiOppCarrierID,
+			:pSource->aiSettCycleID,
+			:pSource->asUserType,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch SETT_ITEMCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SETT_ITEMCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SETT_ITEM_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iSettItemID=			pSource->aiSettItemID[iCurPos];
+		p->iLatnID=			pSource->aiLatnID[iCurPos];
+		p->iAcctItemTypeID=		pSource->aiAcctItemTypeID[iCurPos];
+		p->iCharge=			pSource->aiCharge[iCurPos];
+
+		strcpy(p->sSettItemDate,	pSource->asSettItemDate[iCurPos]);
+		strcpy(p->sCreatedDate,		pSource->asCreatedDate[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+
+		p->iOppCarrierID=		pSource->aiOppCarrierID[iCurPos];
+		p->iSettCycleID=		pSource->aiSettCycleID[iCurPos];
+		
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+		
+		AllTrim(p->sSettItemDate);
+		AllTrim(p->sCreatedDate);
+		AllTrim(p->sState);
+		AllTrim(p->sUserType);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/**对表SETT_ITEM的链表释放函数**/
+void DestroySettItem(struct SettItemStruct *ptHead)
+{
+	struct SettItemStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+int InitSettItem(struct SettItemStruct **pptHead)
+{
+	int iCnt=0;
+	static struct SettItemStruct *pTemp,*ptHead=NULL;
+	struct SettItemStruct Temp;
+	struct SettItemStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroySettItem(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct SettItemStructIn));
+	sprintf(TempIn.sTableName,"SETT_ITEM");
+	sprintf(TempIn.sCondition," ");
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetSettItemToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct SettItemStruct*)
+			malloc(sizeof(struct SettItemStruct)))==NULL){
+
+			DestroySettItem(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct SettItemStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表SETT_ITEM记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表SETT_ITEM完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+
+/*批量数据结构缓冲写入SETT_ITEM*/
+int EInsertStructToSettItem(struct SettItemStruct *p,
+	int iInsertFlag,struct SettItemStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiSettItemID[iCurPos]=			p->iSettItemID;
+		pTarget->aiLatnID[iCurPos]=			p->iLatnID;
+		pTarget->aiAcctItemTypeID[iCurPos]=		p->iAcctItemTypeID;
+		pTarget->aiCharge[iCurPos]=			p->iCharge;
+
+		strcpy(pTarget->asSettItemDate[iCurPos],	p->sSettItemDate);
+		strcpy(pTarget->asCreatedDate[iCurPos],		p->sCreatedDate);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		
+		pTarget->aiOppCarrierID[iCurPos]=		p->iOppCarrierID;
+		pTarget->aiSettCycleID[iCurPos]=		p->iSettCycleID;
+		
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SETT_ITEM_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				SETT_ITEM_ID,\n\
+				LATN_ID,\n\
+				ACCT_ITEM_TYPE_ID,\n\
+				CHARGE,\n\
+				SETT_ITEM_DATE,\n\
+				CREATED_DATE,\n\
+				STATE,\n\
+				OPP_CARRIER_ID,\n\
+				SETT_CYCLE_ID,\n\
+				USER_TYPE,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:aiSettItemID,\n\
+				:aiLatnID,\n\
+				:aiAcctItemTypeID,\n\
+				:aiCharge,\n\
+				to_date(:asSettItemDate,'yyyymmddhh24miss'),\n\
+				to_date(:asCreatedDate,'yyyymmddhh24miss'),\n\
+				:aiOppCarrierID,\n\
+				:aiSettCycleID,\n\
+				:asState,\n\
+				:asUserType,\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SETT_ITEMTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SETT_ITEM")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SETT_ITEMTRG USING
+				:pTarget->aiSettItemID,
+				:pTarget->aiLatnID,
+				:pTarget->aiAcctItemTypeID,
+				:pTarget->aiCharge,
+				:pTarget->asSettItemDate,
+				:pTarget->asCreatedDate,
+				:pTarget->asState,
+				:pTarget->aiOppCarrierID,
+				:pTarget->aiSettCycleID,
+				:pTarget->asUserType,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into SETT_ITEM")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据结构缓冲更新SETT_ITEM*/
+int EUpdateStructToSettItem(struct SettItemStruct *p,
+	int iUpdateFlag,struct SettItemStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiSettItemID[iCurPos]=			p->iSettItemID;
+		pTarget->aiLatnID[iCurPos]=			p->iLatnID;
+		pTarget->aiAcctItemTypeID[iCurPos]=		p->iAcctItemTypeID;
+		pTarget->aiCharge[iCurPos]=			p->iCharge;
+
+		strcpy(pTarget->asSettItemDate[iCurPos],	p->sSettItemDate);
+		strcpy(pTarget->asCreatedDate[iCurPos],		p->sCreatedDate);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		
+		pTarget->aiOppCarrierID[iCurPos]=		p->iOppCarrierID;
+		pTarget->aiSettCycleID[iCurPos]=		p->iSettCycleID;
+		
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+		strcpy(pTarget->asSourceID[iCurPos],		p->sSourceID);
+		strcpy(pTarget->asRowID[iCurPos],		p->sRowID);
+
+		iCurPos++;
+	}
+
+	if(iUpdateFlag==TRUE||iCurPos==SETT_ITEM_BUFLEN_UP){
+
+/* Update */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE  %s \n\
+			SET \n\
+				CHARGE=	:aiCharge \n\
+			WHERE \n\
+				ROWID = chartorowid(:asRowID)\n\
+			",sTableName);
+			
+		EXEC SQL PREPARE SETT_ITEMTRG FROM :statement;
+		if(CheckSqlResult("Prepare update statement SETT_ITEM")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SETT_ITEMTRG USING
+				:pTarget->aiCharge ,
+				:pTarget->asRowID ;
+		if(CheckSqlResult("Dyn update SETT_ITEM")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+int iGetAcctItemID()
+{
+	static int  iAcctItemIDStep=0;
+	static int  iAcctItemID=0,iBaseAcctItemID=0;
+
+	if(iAcctItemID-iBaseAcctItemID==iAcctItemIDStep){
+		if(!iAcctItemIDStep){
+			EXEC SQL SELECT INCREMENT_BY INTO :iAcctItemIDStep
+				FROM USER_SEQUENCES
+			WHERE SEQUENCE_NAME ='ACCT_ITEM_ID_SEQ';
+			CheckSqlError("Get AcctItemID SeqStep");
+		}
+		EXEC SQL SELECT ACCT_ITEM_ID_SEQ.NEXTVAL 
+			INTO :iBaseAcctItemID FROM DUAL;
+		CheckSqlError("Get Base Value0");
+		iAcctItemID=iBaseAcctItemID;
+     	}
+	return iAcctItemID++;
+}
+
+void mvitem_settitem(struct SettItemStruct *pi,struct SettItemStruct *po)
+{/*数据移动部分*/
+
+	bzero((void*)po,sizeof(struct SettItemStruct));
+
+		po->iSettItemID=		pi->iSettItemID;
+		po->iAcctItemTypeID=		pi->iAcctItemTypeID;
+		po->iLatnID=			pi->iLatnID;
+		po->iCharge=			pi->iCharge;
+
+		strncpy(po->sSettItemDate,	pi->sSettItemDate,14);
+		strncpy(po->sCreatedDate,	pi->sCreatedDate,14);
+		strncpy(po->sState,		pi->sState,3);
+
+		po->iOppCarrierID=		pi->iOppCarrierID;
+		po->iSettCycleID=		pi->iSettCycleID;
+
+		strncpy(po->sUserType,		pi->sUserType,10);
+		strncpy(po->sSourceID,		pi->sSourceID,30);
+		strncpy(po->sRowID,		pi->sRowID,19);
+}
+
+int CheckAcctDbCtrl(int iLatnId,char sModule[])
+{
+	char sState[4],sValue[60];
+
+	sprintf(sValue,"%d%s",iLatnId,sModule);
+
+	EXEC SQL SELECT STATE INTO :sState
+		FROM ACCTDB_CTRL
+		WHERE TABLE_NAME='SETT_ITEM' AND
+			COLUMN_NAME	='LATN_MODULE' AND
+			VALUE		=:sValue;
+
+	if(CheckSqlResult("CHECK ACCTDB_CTRL")<0) return -1;
+
+	if(strcmp(sState,"A0A")!=0){
+		WriteAlertPrint("控制表数据状态无效,%s的状态应为A0A实际为%s",
+			sValue,sState);
+		return -1;
+	}
+	return 0;
+}
+
+int SetAcctDbCtrl(int iLatnId,char sModule[],char sState[])
+{
+	char sValue[60];
+
+	sprintf(sValue,"%d%s",iLatnId,sModule);
+
+	EXEC SQL UPDATE ACCTDB_CTRL
+		SET STATE=:sState
+		WHERE TABLE_NAME='SETT_ITEM' AND
+		COLUMN_NAME	='LATN_MODULE' AND
+		VALUE		=:sValue;
+
+	if(CheckSqlResult("UPDATE ACCTDB_CTRL")<0){
+		WriteAlertPrint("更新ACCTDB_CTRL表记录失败,value=%s",sValue);
+		return -1;
+	}
+	return 0;
+}

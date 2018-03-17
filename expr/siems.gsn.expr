@@ -1,0 +1,187 @@
+{
+/*声明输出部分*/
+goto aa;
+	setfilefmt("asn");
+	initdate(300);
+setfmt(st_record_type       ," ", "%-2s",posp(    "0:2"));  
+setfmt(st_ni_pdp            ," ", "%-1s",posp(    "2:1"));  
+setfmt(st_msisdn            ," ","%-15s",posp(   "3:15"));  
+setfmt(st_imsi              ," ","%-15s",posp(  "18:15"));  
+setfmt(st_sgsn              ," ", "%-8s",posp(   "33:8"));  
+setfmt(st_msnc              ," ", "%-1s",posp(   "41:1"));  
+setfmt(st_lac               ," ", "%-4s",posp(   "42:4"));  
+setfmt(st_route_area        ," ", "%-4s",posp(   "46:4"));  
+setfmt(st_cell_id           ," ", "%-4s",posp(   "50:4"));  
+setfmt(st_charging_id       ," ", "%-8s",posp(   "54:8"));  
+setfmt(st_ggsn              ," ", "%-8s",posp(   "62:8"));  
+setfmt(st_apn_ni            ," ","%-63s",posp(  "70:63"));  
+setfmt(st_apn_oi            ," ","%-37s",posp( "133:37"));  
+setfmt(st_pdp_type          ," ", "%-1s",posp(  "170:1"));  
+setfmt(st_served_pdp_address," ","%-16s",posp( "171:16"));  
+setfmt(st_sgsn_change       ," ", "%-1s",posp(  "187:1"));  
+setfmt(st_close_cause       ," ", "%-1s",posp(  "188:1"));  
+setfmt(st_result            ," ", "%-1s",posp(  "189:1"));  
+setfmt(st_home_area_code    ," ", "%-9s",posp(  "190:9"));  
+setfmt(st_visit_area_code   ," ", "%-9s",posp(  "199:9"));  
+setfmt(st_user_type         ," ", "%-2s",posp(  "208:2"));  
+setfmt(st_fee_type          ," ", "%-2s",posp(  "210:2"));  
+setfmt(st_roam_type         ," ", "%-1s",posp(  "212:1"));  
+setfmt(st_service_type      ," ", "%-3s",posp(  "213:3"));  
+setfmt(st_start_time        ," ","%-14s",posp( "216:14"));  
+setfmt(it_call_duration     ," ", "%06d",posp(  "230:6"));  
+setfmt(st_tariff1           ," ", "%-1s",posp(  "236:1"));  
+setfmt(it_data_flowup1      ," ","%010d",posp( "237:10"));  
+setfmt(it_data_flowdn1      ," ","%010d",posp( "247:10"));  
+setfmt(it_duration1         ," ", "%06d",posp(  "257:6"));  
+setfmt(st_tariff2           ," ", "%-1s",posp(  "263:1"));  
+setfmt(it_data_flowup2      ," ","%010d",posp( "264:10"));  
+setfmt(it_data_flowdn2      ," ","%010d",posp( "274:10"));  
+setfmt(it_duration2         ," ", "%06d",posp(  "284:6"));  
+setfmt(st_tariff3           ," ", "%-1s",posp(  "290:1"));  
+setfmt(it_data_flowup3      ," ","%010d",posp( "291:10"));  
+setfmt(it_data_flowdn3      ," ","%010d",posp( "301:10"));  
+setfmt(it_duration3         ," ", "%06d",posp(  "311:6"));  
+setfmt(st_tariff4           ," ", "%-1s",posp(  "317:1"));  
+setfmt(it_data_flowup4      ," ","%010d",posp( "318:10"));  
+setfmt(it_data_flowdn4      ," ","%010d",posp( "328:10"));  
+setfmt(it_duration4         ," ", "%06d",posp(  "338:6"));  
+setfmt(st_tariff5           ," ", "%-1s",posp(  "344:1"));  
+setfmt(it_data_flowup5      ," ","%010d",posp( "345:10"));  
+setfmt(it_data_flowdn5      ," ","%010d",posp( "355:10"));  
+setfmt(it_duration5         ," ", "%06d",posp(  "365:6"));  
+setfmt(st_tariff6           ," ", "%-1s",posp(  "371:1"));  
+setfmt(it_data_flowup6      ," ","%010d",posp( "372:10"));  
+setfmt(it_data_flowdn6      ," ","%010d",posp( "382:10"));  
+setfmt(it_duration6         ," ", "%06d",posp(  "392:6"));  
+setfmt(it_cfee              ," ", "%08d",posp(  "398:8"));  
+setfmt(it_fee1              ," ", "%08d",posp(  "406:8"));  
+setfmt(it_fee2              ," ", "%08d",posp(  "414:8"));  
+setfmt(it_fee3              ," ", "%08d",posp(  "422:8"));  
+setfmt(it_total_fee         ," ", "%09d",posp(  "430:9"));  
+
+aa:
+	ticketvalid=1;
+call_type=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("0:1")));
+if(call_type=="A0"){/*SGSN话单*/
+st_record_type       ="40";
+st_ni_pdp            =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:81")));
+st_msisdn            =ADDRESS_STRING(getasnpos(t_ori,asnp("A0:9D")));
+st_imsi              =TBCD_STRING(getasnpos(t_ori,asnp("A0:83")));
+st_sgsn              =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:A5:82")));
+st_msnc              =$MSC;
+st_lac               =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:88")));
+st_route_area        =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:87")));
+st_cell_id           =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:89")));
+st_charging_id       =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:8A")));
+st_ggsn              =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:AB:82")));
+st_apn_ni            =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:8C")));
+st_apn_oi            =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:9A")));
+st_pdp_type          =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:8D")));
+st_served_pdp_address=HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:AE:82")));
+st_sgsn_change       =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:92")));
+st_close_cause       =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:93")));
+st_result            =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:9E")));
+st_start_time        =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A0:AF:30:86")));
+st_start_date	     =OCTET_YYMMDD(getasnpos(t_ori,asnp("A0:AF:30:86")));
+st_start_time	     =st_start_date+substr(st_start_time,-6,6);
+it_call_duration     =HEX_OCTET_INT4B(getasnpos(t_ori,asnp("A0:91")));
+it_data_flowup1      =HEX_OCTET_INT4B(getasnpos(t_ori,asnp("A0:AF:30:83")));
+it_data_flowdn1      =HEX_OCTET_INT4B(getasnpos(t_ori,asnp("A0:AF:30:84")));
+it_duration1         =it_call_duration;
+}
+else if(call_type=="A1"){/*GGSN话单*/
+st_record_type       ="41";
+st_ni_pdp            =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A1:81")));
+st_msisdn            =ADDRESS_STRING(getasnpos(t_ori,asnp("A1:9D")));
+st_imsi              =TBCD_STRING(getasnpos(t_ori,asnp("A1:83")));
+st_sgsn              =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A1:A6:30:82")));
+st_msnc              =$MSC;
+st_lac               ="";
+st_route_area        ="";
+st_cell_id           ="";
+st_charging_id       =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A1:85")));
+st_ggsn              =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A1:A4:82")));
+st_apn_ni            =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A1:87")));
+st_apn_oi            ="";
+st_pdp_type          =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A1:88")));
+st_served_pdp_address=HEX_OCTET_STRING(getasnpos(t_ori,asnp("A1:A9:A0:82")));
+st_sgsn_change       ="";
+st_close_cause       =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A1:8F")));
+st_result            =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A1:9E")));
+st_start_time        =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A1:AC:30:86")));
+st_start_date	     =OCTET_YYMMDD(getasnpos(t_ori,asnp("A1:AC:30:86")));
+st_start_time	     =st_start_date+substr(st_start_time,-6,6);
+it_call_duration     =HEX_OCTET_INT4B(getasnpos(t_ori,asnp("A1:8E")));
+it_data_flowup1      =HEX_OCTET_INT4B(getasnpos(t_ori,asnp("A1:AC:30:83")));
+it_data_flowdn1      =HEX_OCTET_INT4B(getasnpos(t_ori,asnp("A1:AC:30:84")));
+it_duration1         =it_call_duration;
+}
+else if(call_type=="A3"){/*SMO话单*/
+	ticketvalid=-3;
+st_record_type       ="47";
+st_msisdn	     =OCTET_STRING(getasnpos(t_ori,asnp("A3:83")));
+st_imsi	     	     =OCTET_STRING(getasnpos(t_ori,asnp("A3:81")));
+st_start_time        =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A3:8B")));
+st_start_date	     =OCTET_YYMMDD(getasnpos(t_ori,asnp("A3:8B")));
+st_start_time	     =st_start_date+substr(st_start_time,-6,6);
+st_result	     =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A3:8C")));
+it_call_duration     =HEX_OCTET_INT4B(getasnpos(t_ori,asnp("A3:8A")));
+st_lac               =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A3:88")));
+st_route_area        =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A3:87")));
+st_cell_id           =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A3:89")));
+}
+else if(call_type=="A4"){/*SMT话单*/
+	ticketvalid=-3;
+st_record_type       ="48";
+st_msisdn	     =OCTET_STRING(getasnpos(t_ori,asnp("A4:83")));
+st_imsi	     	     =OCTET_STRING(getasnpos(t_ori,asnp("A4:81")));
+st_start_time        =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A4:8A")));
+st_start_date	     =OCTET_YYMMDD(getasnpos(t_ori,asnp("A4:8A")));
+st_start_time	     =st_start_date+substr(st_start_time,-6,6);
+st_result	     =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A4:8B")));
+it_call_duration     =0;
+st_lac               =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A4:88")));
+st_route_area        =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A4:87")));
+st_cell_id           =HEX_OCTET_STRING(getasnpos(t_ori,asnp("A4:89")));
+
+}
+else
+	ticketvalid=-1;
+
+st_home_area_code    ="";
+st_visit_area_code   ="";
+st_user_type         ="";
+st_fee_type          ="";
+st_roam_type         ="";
+st_service_type      ="";
+st_tariff1     ="A";
+st_tariff2     ="B";
+it_data_flowup2=0;
+it_data_flowdn2=0;
+it_duration2   =0;
+st_tariff3     ="C";
+it_data_flowup3=0;
+it_data_flowdn3=0;
+it_duration3   =0;    
+st_tariff4     ="D";     
+it_data_flowup4=0;     
+it_data_flowdn4=0;     
+it_duration4   =0;     
+st_tariff5     ="E";     
+it_data_flowup5=0;     
+it_data_flowdn5=0;     
+it_duration5   =0;     
+st_tariff6     ="F";     
+it_data_flowup6=0;     
+it_data_flowdn6=0;     
+it_duration6   =0;     
+it_cfee        =0;     
+it_fee1        =0;     
+it_fee2        =0;     
+it_fee3        =0;     
+it_total_fee   =0;     
+	
+	if(maxdatadate(substr(st_start_time,0,8))<0)	ticketvalid=-1;
+	
+	st_msisdn=fmt86a13(st_msisdn);
+}

@@ -1,0 +1,364 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <wwdb.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <bintree.h>
+#include <list.h>
+#include <wwfile.h>
+#include <wwdir.h>
+#include <stt_ticket.h>
+#include <dbsupp.h>
+
+struct SmsUpHeadStruct{
+	char sHeadFlag[3];	/*头记录标示		*/
+	char sProvCode[4];	/*上传文件公司		*/
+	char sReserve1[6];	/*保留1			*/
+	char sFileSeq[4];	/*文件序号		*/
+	char sReserve2[3];	/*保留2			*/
+	char sFileDate[15];	/*文件产生日期		*/
+	char sFileVer[4];	/*文件版本号		*/
+	int  iRecCnt;		/*本文件包含记录条数	*/
+	int  iBaseFee;		/*通信费总额		*/
+	int  iOFee;		/*不均衡通信费总额	*/
+	int  iInfoFee;		/*信息费总额		*/
+	int  iFee;		/*结算费用总额		*/
+	char sReserve3[74];	/*保留3			*/
+};
+
+int ExecStatement(char statement[]){
+
+	/*printf("%s\n\n\n",statement);*/
+	EXEC SQL PREPARE EXECSQL_SCRB FROM :statement;
+	CheckSqlError(" PREPARE EXECSQL_SCRB");
+
+	EXEC SQL DECLARE EXECSQL_CUR CURSOR FOR EXECSQL_SCRB;
+	CheckSqlError("Declare EXECSQL_CUR");
+
+	EXEC SQL OPEN EXECSQL_CUR;
+	CheckSqlError("Open EXECSQL_CUR;");
+	EXEC SQL CLOSE EXECSQL_CUR;
+
+	return 0;
+}
+
+int main( int argc, char **argv )
+{
+/*
+1.设置详单表状态。
+2.建立详单表视图---只要做一次吧。需要每次做，因为每次详单表可能不一样。
+3.生成结果记录到结果表中。
+4.更新详单表状态。
+5.从结果表生成文件。
+6.更新结果表状态。
+7.完成。
+*/
+	struct SmsupIntfTicketStructIn TempIn;
+	struct SmsupIntfTicketStruct Temp;
+	struct FSmsupIntfTicketStruct FTicket;
+	struct FileControlStruct *pOutput=NULL;
+	struct SmsUpHeadStruct Head;
+	struct UpdataLogStruct UpdataLog;
+	int iEndSeq,iTypeId;
+	char statement[8192],sTableName[31],sResTableName[31],sDateTime[15];
+	char sFileName[256],sFileType[4],sOutputPath[256],sTemp[256];
+
+	if( argc != 6 ){
+		printf("Usage %s ticket_tableName result_tableName file_type output_path type_id.\n",argv[0]);
+		return -1;
+	}
+
+	strcpy(sTableName,argv[1]);
+	strcpy(sResTableName,argv[2]);
+	strcpy(sFileType,argv[3]);
+	strcpy(sOutputPath,argv[4]);
+	iTypeId=atoi(argv[5]);
+	RegularDir(sOutputPath);
+	bzero(&UpdataLog,sizeof(UpdataLog));
+	GetHostTime(UpdataLog.sDealBeginDate);
+/*
+	strcpy(sTableName,"sms_ticket_test");
+	strcpy(sResTableName,"SMSUP_INTF_TICKET_07");
+*/
+	InitAppRes(argv[0]);
+	IniConnect("dataconnstr");
+
+	/*1.设置详单表状态。*/
+	strncpy(sTemp,sFileType,2);sTemp[2]=0;
+	sprintf(statement,"\n\
+		UPDATE %s SET\n\
+			STATE='%d',\n\
+			UPDATE_DATE=SYSDATE\n\
+		WHERE STATE IS NULL\n\
+			AND USER_TYPE='%c'\n\
+			AND SUBSTR(RESERVE,1,2)='%s'",sTableName,iTypeId,sFileType[2],sTemp);
+	if (ExecStatement( statement )<0){
+		printf("执行语句失败:\n%s\n",statement);
+		RollbackWork();
+		return -1;
+	}
+
+	/*2.建立详单表视图*/
+	sprintf(statement,"\n\
+		CREATE OR REPLACE VIEW SMS_INTF_TICKET AS\n\
+			SELECT DECODE(SUBSTR(SP_SERVICE_CODE,1,1),'$','30','20') RECORD_TAG,\n\
+			TRIM(SUBSTR(RESERVE,4,3)) MSG_TYPE,\n\
+			SP_PROV_CODE,\n\
+			NVL(TO_NUMBER(TSMG),1) SMG,\n\
+			TO_NUMBER(SP_CODE) SP_CODE,\n\
+			1 FW_SMG,\n\
+			1 FW_SMG_PROV,\n\
+			START_TIME,\n\
+			DECODE(CALL_TYPE,'07',1,'08',0) MO_CNT,\n\
+			DECODE(CALL_TYPE,'07',0,'08',1) MT_CNT,\n\
+			BASE_FEE,INFO_FEE+RENT_FEE INFO_FEE,\n\
+			SUBSTR(RESERVE,1,2) FILE_TYPE,\n\
+			CALL_TYPE,\n\
+			HOME_PROV_CODE\n\
+		FROM %s WHERE STATE='%d'",sTableName,iTypeId);
+
+	if (ExecStatement( statement )<0){
+		printf("执行语句失败:\n%s\n",statement);
+		RollbackWork();
+		return -1;
+	}
+
+	/*3.生成结果记录到结果表中。*/
+	sprintf(statement,"INSERT INTO %s SELECT RECORD_TAG,\n\
+	       MSG_TYPE,\n\
+	       SP_PROV_CODE,\n\
+	       SMG,SP_CODE,\n\
+	       FW_SMG,\n\
+	       FW_SMG_PROV,\n\
+	       MIN_TIME,\n\
+	       MAX_TIME,\n\
+	       MO_CNT+MO_MCNT,\n\
+	       MO_CNT,\n\
+	       MT_CNT+MF_MCNT,\n\
+	       MT_CNT,\n\
+	       FEE+MFEE,\n\
+	       FEE,\n\
+	       HOME_PROV_CODE,\n\
+	       BASE_FEE+MBASE_FEE,\n\
+	       BASE_FEE,\n\
+	       INFO_FEE+MINFO_FEE,\n\
+	       INFO_FEE,\n\
+	       (MT_CNT+MF_MCNT-MO_CNT-MO_MCNT)*5 MOFEE,\n\
+	       (MT_CNT-MO_CNT)*5 OFEE,\n\
+	       RESERVE,\n\
+	       STATE,\n\
+	       UPDATE_DATE,\n\
+	       DEAL_DATE,\n\
+	       SOURCE_ID\n\
+	FROM (\n\
+	        SELECT\n\
+	               RECORD_TAG,\n\
+	               MSG_TYPE,\n\
+	               SP_PROV_CODE,SMG,\n\
+	               SP_CODE,FW_SMG,\n\
+	               FW_SMG_PROV,\n\
+	               MIN_TIME,\n\
+	               MAX_TIME,\n\
+	               NVL((SELECT SUM(MO_CNT2) FROM %s B\n\
+	                           WHERE B.MSG_TYPE=A.MSG_TYPE\n\
+	                           AND B.SP_PROV_CODE=A.SP_PROV_CODE\n\
+	                           AND B.SMG=A.SMG AND B.SP_CODE=A.SP_CODE\n\
+	                           AND A.HOME_PROV_CODE=B.HOME_PROV_CODE\n\
+	                           AND B.FW_SMG=A.FW_SMG\n\
+	                           AND SUBSTR(SOURCE_ID,1,3)='%s'\n\
+	                           AND B.FW_SMG_PROV=A.FW_SMG_PROV),0) MO_MCNT,\n\
+	               MO_CNT,\n\
+	               NVL((SELECT SUM(MF_CNT2) FROM %s B\n\
+	                           WHERE B.MSG_TYPE=A.MSG_TYPE\n\
+	                           AND B.SP_PROV_CODE=A.SP_PROV_CODE\n\
+	                           AND B.SMG=A.SMG AND B.SP_CODE=A.SP_CODE\n\
+	                           AND A.HOME_PROV_CODE=B.HOME_PROV_CODE\n\
+	                           AND B.FW_SMG=A.FW_SMG\n\
+	                           AND SUBSTR(SOURCE_ID,1,3)='%s'\n\
+	                           AND B.FW_SMG_PROV=A.FW_SMG_PROV),0) MF_MCNT,\n\
+		       MT_CNT,\n\
+	               NVL((SELECT SUM(FEE2)  FROM %s B\n\
+	                           WHERE B.MSG_TYPE=A.MSG_TYPE\n\
+	                           AND B.SP_PROV_CODE=A.SP_PROV_CODE\n\
+	                           AND B.SMG=A.SMG AND B.SP_CODE=A.SP_CODE\n\
+	                           AND A.HOME_PROV_CODE=B.HOME_PROV_CODE\n\
+	                           AND B.FW_SMG=A.FW_SMG\n\
+	                           AND SUBSTR(SOURCE_ID,1,3)='%s'\n\
+	                           AND B.FW_SMG_PROV=A.FW_SMG_PROV),0) MFEE,\n\
+	               FEE,\n\
+	               HOME_PROV_CODE,\n\
+	               NVL((SELECT SUM(ROAM_FEE2) FROM %s B\n\
+	                           WHERE B.MSG_TYPE=A.MSG_TYPE\n\
+	                           AND B.SP_PROV_CODE=A.SP_PROV_CODE\n\
+	                           AND B.SMG=A.SMG AND B.SP_CODE=A.SP_CODE\n\
+	                           AND A.HOME_PROV_CODE=B.HOME_PROV_CODE\n\
+	                           AND B.FW_SMG=A.FW_SMG\n\
+	                           AND SUBSTR(SOURCE_ID,1,3)='%s'\n\
+	                           AND B.FW_SMG_PROV=A.FW_SMG_PROV),0) MBASE_FEE,\n\
+	               BASE_FEE,\n\
+	               NVL((SELECT SUM(INFO_FEE2) FROM %s B\n\
+	                           WHERE B.MSG_TYPE=A.MSG_TYPE\n\
+	                           AND B.SP_PROV_CODE=A.SP_PROV_CODE\n\
+	                           AND B.SMG=A.SMG AND B.SP_CODE=A.SP_CODE\n\
+	                           AND A.HOME_PROV_CODE=B.HOME_PROV_CODE\n\
+	                           AND B.FW_SMG=A.FW_SMG\n\
+	                           AND SUBSTR(SOURCE_ID,1,3)='%s'\n\
+	                           AND B.FW_SMG_PROV=A.FW_SMG_PROV),0) MINFO_FEE,\n\
+	               INFO_FEE,\n\
+	               LPAD(' ',20,' ') RESERVE,\n\
+	               'E0A' STATE,\n\
+	               NULL UPDATE_DATE,\n\
+	               SYSDATE DEAL_DATE,\n\
+	               NULL SOURCE_ID\n\
+	        FROM\n\
+	          (\n\
+	               SELECT\n\
+	                      RECORD_TAG,\n\
+	                      MSG_TYPE,\n\
+	                      SP_PROV_CODE,\n\
+	                      SMG,SP_CODE,\n\
+	                      FW_SMG,\n\
+	                      FW_SMG_PROV,\n\
+	                      HOME_PROV_CODE,\n\
+	                      MIN(START_TIME) MIN_TIME,\n\
+	                      MAX(START_TIME) MAX_TIME,\n\
+	                      SUM(MO_CNT) MO_CNT,\n\
+	                      SUM(MT_CNT) MT_CNT,\n\
+	                      SUM(BASE_FEE) BASE_FEE,\n\
+	                      SUM(INFO_FEE) INFO_FEE,\n\
+	                      ROUND(SUM(INFO_FEE)*0.93) FEE\n\
+	              FROM SMS_INTF_TICKET C\n\
+	              GROUP BY\n\
+	                    RECORD_TAG,\n\
+	                    MSG_TYPE,\n\
+	                    SP_PROV_CODE,\n\
+	                    SMG,\n\
+	                    SP_CODE,\n\
+	                    FW_SMG,\n\
+	                    FW_SMG_PROV,\n\
+	                    HOME_PROV_CODE\n\
+	          ) A\n\
+	)",sResTableName,sResTableName,sFileType,sResTableName,sFileType,
+	sResTableName,sFileType,sResTableName,sFileType,sResTableName,sFileType);
+
+	if (ExecStatement( statement )<0){
+		printf("执行语句失败:\n%s\n",statement);
+		RollbackWork();
+		return -1;
+	}
+
+	/*4.更新详单表状态。*/
+	sprintf(statement,"\n\
+		UPDATE %s SET\n\
+			STATE='2',\n\
+			UPDATE_DATE=SYSDATE\n\
+		WHERE STATE='%d'",sTableName,iTypeId);
+	if (ExecStatement( statement )<0){
+		printf("执行语句失败:\n%s\n",statement);
+		RollbackWork();
+		return -1;
+	}
+
+	/*5.从结果表生成文件。*/
+	if ( ( iEndSeq = GetNextSeq( sFileType)) < 0 ){
+		printf("取序列号错误！\n");
+		exit(-1);
+	}	
+	/*统计文件头*/
+	bzero((void*)&Head,sizeof(Head));
+	strcpy(Head.sHeadFlag,"10");
+	strcpy(Head.sProvCode,"087");
+	strcpy(Head.sFileVer ,"002");  
+	GetHostTime(sDateTime);
+	strcpy(Head.sFileDate,sDateTime);
+	sprintf(Head.sFileSeq ,"%03d",iEndSeq);
+	/*初始化select和update结构缓冲*/
+	bzero((void*)&TempIn,sizeof(struct SmsupIntfTicketStructIn));
+	TempIn.iFirstFlag=true;
+	TempIn.iBufEmpty =true;
+	strcpy(TempIn.sTableName,sResTableName);
+	strcpy(TempIn.sCondition," WHERE STATE='E0A' ");
+
+	while(EGetSmsupIntfTicketToStruct(&Temp,&TempIn)==true){
+
+		mvitem_mfsmsupintfticket(&Temp,&FTicket);
+
+		Head.iRecCnt++;
+		Head.iBaseFee+=atoi(Temp.sRoamFee2);
+		Head.iOFee+=atoi(Temp.sRoamNfee2);
+		Head.iInfoFee+=atoi(Temp.sInfoFee2);
+		Head.iFee+=atoi(Temp.sFee2);
+
+		if(item2list(&pOutput,&FTicket,sizeof(FTicket))<0){
+			printf("生成输出文件链表错误.\n");
+			RollbackWork();
+			return -1;
+		}
+
+	}
+
+	sprintf(sTemp,"%-2s%-3s%-5s%-3s%-2s%-14s%-3s%03d%010d%010d%010d%010d%-73s",
+		Head.sHeadFlag,Head.sProvCode,
+		Head.sReserve1,Head.sFileSeq,
+		Head.sReserve2,Head.sFileDate,
+		Head.sFileVer,Head.iRecCnt,
+		Head.iBaseFee,Head.iOFee,
+		Head.iInfoFee,Head.iFee,
+		Head.sReserve3);
+	if(item2list(&pOutput,sTemp,strlen(sTemp))<0){
+		printf("添加文件头错误.\n");
+		RollbackWork();
+		return -1;
+	}
+
+
+	GetHostTime(sDateTime);sDateTime[8]=0;
+	sprintf(sFileName,"%s%s%03d.087",sFileType,sDateTime,iEndSeq);
+	sprintf(sTemp,"%s%s",sOutputPath,sFileName);
+	if(list2filelrn(&pOutput,sTemp)<0){
+		printf("写输出文件%s失败.\n",sTemp);
+		RollbackWork();
+		return -1;
+	}
+
+	/*6.更新结果表状态。*/
+	sprintf(statement,"\n\
+		UPDATE %s SET\n\
+			STATE='F0A',\n\
+			SOURCE_ID='%s',\n\
+			UPDATE_DATE=SYSDATE\n\
+		WHERE STATE='E0A'",sResTableName,sFileName);
+
+	if (ExecStatement( statement )<0){
+		printf("执行语句失败:\n%s\n",statement);
+		RollbackWork();
+		return -1;
+	}
+	
+	/*写updata_log*/
+	UpdataLog.iRecCnt=Head.iRecCnt;
+	UpdataLog.iTotalCharge=Head.iFee;
+	UpdataLog.iUpdataID=iEndSeq;
+	strcpy(UpdataLog.sFileType,sFileType);
+	strcpy(UpdataLog.sFileName,sFileName);
+	GetHostTime(UpdataLog.sDataDate);
+	strcpy(UpdataLog.sDataDate+8,"000000");
+	strcpy(UpdataLog.sBeginTime,UpdataLog.sDealBeginDate);	
+	GetHostTime(UpdataLog.sDealEndDate);
+	strcpy(UpdataLog.sEndTime,UpdataLog.sDealEndDate);
+	strcpy(UpdataLog.sAppID,"TSMSFILE");
+	UpdataLog.iTacheID=0;
+	
+	if(SDInsertStructToUpdataLog(&UpdataLog,"UPDATA_LOG")<0){
+		printf("写入日志表UPDATA_LOG失败.\n");
+		RollbackWork();
+		return -1;
+	}
+	
+	printf("%s\n",sFileName);
+
+	/*7.完成。*/
+	CommitWork();
+	DisconnectDatabase();
+	return 0;
+}

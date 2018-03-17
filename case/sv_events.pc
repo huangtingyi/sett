@@ -1,0 +1,318 @@
+#include <wwdb.h>
+#include <sv_events.h>
+
+/*批量数据动态从ALERT_INFO中用结构缓冲方式取数据*/
+int EGetUAlertInfoToStruct(struct UAlertInfoStruct *p,
+	struct AlertInfoStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(ALERT_ID,0),\n\
+				nvl(DEVICE_NAME,' '),\n\
+				nvl(CATEGORY,' '),\n\
+				nvl(LEVEL1,0),\n\
+				nvl(OBJECT_NAME,' '),\n\
+				nvl(DEVICE_IP,' '),\n\
+				nvl(REMARK,' '),\n\
+				to_char(nvl(CREATED_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(ALERT_SOURCE,' '),\n\
+				nvl(MSG_ID,' '),\n\
+				nvl(SEND_STATE,' '),\n\
+				to_char(nvl(SEND_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE ALERT_INFOSCR FROM :statement;
+		CheckSqlError(" PREPARE ALERT_INFOSCR ALERT_INFOCR");
+
+		EXEC SQL DECLARE ALERT_INFOCR CURSOR FOR ALERT_INFOSCR;
+		CheckSqlError("Declare ALERT_INFOCR");
+
+		EXEC SQL OPEN ALERT_INFOCR;
+		CheckSqlError("Open ALERT_INFOCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE ALERT_INFOCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH ALERT_INFOCR INTO
+			:pSource->aiAlertID,
+			:pSource->asDeviceName,
+			:pSource->asCategory,
+			:pSource->aiLevel1,
+			:pSource->asObjectName,
+			:pSource->asDeviceIp,
+			:pSource->asRemark,
+			:pSource->asCreatedDate,
+			:pSource->asDealDate,
+			:pSource->asAlertSource,
+			:pSource->asMsgID,
+			:pSource->asSendState,
+			:pSource->asSendDate,
+			:pSource->asRowID;
+		CheckSqlError("Fetch ALERT_INFOCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE ALERT_INFOCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=ALERT_INFO_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iAlertID=		pSource->aiAlertID[iCurPos];
+
+		strcpy(p->sDeviceName,	pSource->asDeviceName[iCurPos]);
+		strcpy(p->sCategory,	pSource->asCategory[iCurPos]);
+
+		p->iLevel1=		pSource->aiLevel1[iCurPos];
+
+		strcpy(p->sObjectName,	pSource->asObjectName[iCurPos]);
+		strcpy(p->sDeviceIp,	pSource->asDeviceIp[iCurPos]);
+		strcpy(p->sRemark,	pSource->asRemark[iCurPos]);
+		strcpy(p->sCreatedDate,	pSource->asCreatedDate[iCurPos]);
+		strcpy(p->sDealDate,	pSource->asDealDate[iCurPos]);
+		strcpy(p->sAlertSource,	pSource->asAlertSource[iCurPos]);
+		strcpy(p->sMsgID,	pSource->asMsgID[iCurPos]);
+		strcpy(p->sSendState,	pSource->asSendState[iCurPos]);
+		strcpy(p->sSendDate,	pSource->asSendDate[iCurPos]);
+		strcpy(p->sRowID,	pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sDeviceName);
+		AllTrim(p->sCategory);
+		AllTrim(p->sObjectName);
+		AllTrim(p->sDeviceIp);
+		AllTrim(p->sRemark);
+		AllTrim(p->sCreatedDate);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sAlertSource);
+		AllTrim(p->sMsgID);
+		AllTrim(p->sSendState);
+		AllTrim(p->sSendDate);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据结构缓冲写入SV_EVENT_TEMP*/
+int EInsertStructToSvEventTemp(struct SvEventTempStruct *p,
+	int iInsertFlag,struct SvEventTempStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asTmpID[iCurPos],		p->sTmpID);
+		strcpy(pTarget->asTmpDeviceName[iCurPos],	p->sTmpDeviceName);
+		strcpy(pTarget->asTmpCategory[iCurPos],		p->sTmpCategory);
+
+		pTarget->aiTmpSeverity[iCurPos]=		p->iTmpSeverity;
+
+		strcpy(pTarget->asTmpObject[iCurPos],		p->sTmpObject);
+		strcpy(pTarget->asTmpIpAddress[iCurPos],	p->sTmpIpAddress);
+		strcpy(pTarget->asTmpContent[iCurPos],		p->sTmpContent);
+		strcpy(pTarget->asTmpCreatedTime[iCurPos],	p->sTmpCreatedTime);
+		strcpy(pTarget->asTmpReceivedTime[iCurPos],	p->sTmpReceivedTime);
+		strcpy(pTarget->asMessageNumber[iCurPos],	p->sMessageNumber);
+		strcpy(pTarget->asEventSource[iCurPos],		p->sEventSource);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==SV_EVENT_TEMP_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				TMP_ID,\n\
+				TMP_DEVICE_NAME,\n\
+				TMP_CATEGORY,\n\
+				TMP_SEVERITY,\n\
+				TMP_OBJECT,\n\
+				TMP_IP_ADDRESS,\n\
+				TMP_CONTENT,\n\
+				TMP_CREATED_TIME,\n\
+				TMP_RECEIVED_TIME,\n\
+				MESSAGE_NUMBER,\n\
+				EVENT_SOURCE)\n\
+			VALUES (\n\
+				to_number(:asTmpID),\n\
+				:asTmpDeviceName,\n\
+				:asTmpCategory,\n\
+				:aiTmpSeverity,\n\
+				:asTmpObject,\n\
+				:asTmpIpAddress,\n\
+				:asTmpContent,\n\
+				to_date(:asTmpCreatedTime,'yyyymmddhh24miss'),\n\
+				to_date(:asTmpReceivedTime,'yyyymmddhh24miss'),\n\
+				:asMessageNumber,\n\
+				:asEventSource\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SV_EVENT_TEMPTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SV_EVENT_TEMP")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE SV_EVENT_TEMPTRG USING
+				:pTarget->asTmpID,
+				:pTarget->asTmpDeviceName,
+				:pTarget->asTmpCategory,
+				:pTarget->aiTmpSeverity,
+				:pTarget->asTmpObject,
+				:pTarget->asTmpIpAddress,
+				:pTarget->asTmpContent,
+				:pTarget->asTmpCreatedTime,
+				:pTarget->asTmpReceivedTime,
+				:pTarget->asMessageNumber,
+				:pTarget->asEventSource;
+		if(CheckSqlResult("Dyn insert into SV_EVENT_TEMP")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据结构缓冲写入ALERT_INFO*/
+int EUpdateStructToUAlertInfo(struct UAlertInfoStruct *p,
+	int iUpdateFlag,struct UAlertInfoStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiAlertID[iCurPos]=			p->iAlertID;
+		
+		strcpy(pTarget->asDeviceName[iCurPos],		p->sDeviceName);
+		strcpy(pTarget->asCategory[iCurPos],		p->sCategory);
+		
+		pTarget->aiLevel1[iCurPos]=			p->iLevel1;
+		
+		strcpy(pTarget->asObjectName[iCurPos],		p->sObjectName);
+		strcpy(pTarget->asDeviceIp[iCurPos],		p->sDeviceIp);
+
+		strcpy(pTarget->asRemark[iCurPos],		p->sRemark);
+		strcpy(pTarget->asCreatedDate[iCurPos],		p->sCreatedDate);
+		strcpy(pTarget->asDealDate[iCurPos],		p->sDealDate);
+		strcpy(pTarget->asAlertSource[iCurPos],		p->sAlertSource);
+		strcpy(pTarget->asMsgID[iCurPos],		p->sMsgID);
+		strcpy(pTarget->asSendState[iCurPos],		p->sSendState);
+		strcpy(pTarget->asSendDate[iCurPos],		p->sSendDate);
+		strcpy(pTarget->asRowID[iCurPos],		p->sRowID);
+
+		iCurPos++;
+	}
+
+	if(iUpdateFlag==TRUE||iCurPos==ALERT_INFO_BUFLEN_UP){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE  %s \n\
+			SET \n\
+				SEND_STATE=	:asSendState,\n\
+				SEND_DATE=  	:asSendDate \n\
+			WHERE \n\
+				ROWID = chartorowid(:asRowID)\n\
+			",sTableName);
+
+		EXEC SQL PREPARE UALERT_INFOTRG FROM :statement;
+		if(CheckSqlResult("Prepare update statement ALERT_INFO")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE UALERT_INFOTRG USING
+				:pTarget->asSendState,
+				:pTarget->asSendDate,
+				:pTarget->asRowID;
+		if(CheckSqlResult("Dyn update ALERT_INFO")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+
+int iGetSvEventTempID()
+{
+	static int  iSvEventTempIDStep=0;
+	static int  iSvEventTempID=0,iBaseSvEventTempID=0;
+
+	if((iSvEventTempID-iBaseSvEventTempID)==iSvEventTempIDStep){
+		if(!iSvEventTempIDStep){
+			EXEC SQL SELECT INCREMENT_BY INTO :iSvEventTempIDStep
+				FROM USER_SEQUENCES
+			WHERE SEQUENCE_NAME ='SV_EVENT_TEMP_S';
+			CheckSqlError("Get SvEventTempID SeqStep");
+		}
+		EXEC SQL SELECT SV_EVENT_TEMP_S.NEXTVAL 
+			INTO :iBaseSvEventTempID FROM DUAL;
+		CheckSqlError("Get Base Value0");
+		iSvEventTempID=iBaseSvEventTempID;
+     	}
+	return iSvEventTempID++;
+}

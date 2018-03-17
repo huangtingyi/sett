@@ -1,0 +1,824 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <wwfile.h>
+#include <wwdir.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwsupp.h>
+#include <wwdb.h>
+#include <list.h>
+#include <expr.h>
+#include <expr_var.h>
+#include <expr_fun.h>
+#include <param_intf.h>
+#include <ticket_field.h>
+
+#include "sett_item.h"
+#include "dbsupp.h"
+#include "stt_ticket.h"
+#include "acctdb_supp.h"
+#include "appsupp.h"
+#include <acctdb_supp.h>
+
+#define MAX_PROC_CNT 500000
+
+struct AcctCtlStruct
+{
+	int iMaxCnt;
+	int iInsCnt;
+	int iUpdCnt;
+	char sDealBeginDate[15];
+	char sDealEndDate[15];
+};
+
+struct AcctCtlStruct ACCTCTL;
+
+char GETTABLE[256],GETEXPR[256],GETITEM[256];
+
+struct SettItemStruct *pSettItemOut=NULL;
+struct SettItemStruct *pSettItemUp=NULL;
+
+int ProcessFile(BINTREE **ppRoot,char sFileName[],char sBackPath[],
+	char sExprName[],char sFileType[],char sSourceID[],char sDateRule[],
+	char sModule[],char sAreaCode[],char sOperType[],
+	char sAppID[],int iTacheID);
+int FileFilter(char sFileName[],char sSourceID[],char sModule[]);
+void AddFileExtNameErr(char sFileName[]);
+void BackupFileList(struct FileControlStruct *ptHead,
+	struct FileControlStruct *pEnd,char sSourcePath[],char sBackPath[]);
+
+int FileFilter(char sFileName[],char sSourceID[],char sModule[])
+{
+
+	char sBaseName[128];
+
+	GetBaseName(sFileName,sBaseName);
+
+/*如果文件刚被修改则不处理*/
+	
+	if(FileModifyDiff(sFileName)<6) return -1;
+
+/**文件汇总过*/
+	if(AcctLogCheck(sBaseName,sSourceID,sModule)==true){
+		printNORMAL("文件%s已汇总，移动到备份目录",sFileName);
+		return 1;
+	}
+
+	return 0;
+}
+
+int SearchLatnByAreaCode(char sAreaCode[],struct LatnStruct **pptCur)
+{
+	struct LatnStruct *ptCur=NULL;
+
+	if(SearchLatn(-1,&ptCur)==FOUND){
+		while(ptCur!=NULL){
+			if(strcmp(sAreaCode,ptCur->sAreaCode)==0){
+				*pptCur=ptCur;
+				return FOUND;
+			}
+			ptCur=ptCur->pNext;
+		}
+	}
+	return NOTFOUND;
+}
+int GetLatnID(char sAreaCode[])
+{
+	struct LatnStruct *ptCur=NULL;
+
+	if(SearchLatnByAreaCode(sAreaCode,&ptCur)==FOUND)
+		return ptCur->iLatnID;
+	return 0;
+
+}
+
+int GetTableName(char sModule[],char sBaseName[],char sAreaCode[],
+	char sGetTable[],char sTableName[])
+{
+	char sCommand[256],sResult[1024];
+
+	strcpy(sTableName,"");
+
+	sprintf(sCommand,"%s %s %s %s",
+		sGetTable,sModule,sBaseName,sAreaCode);
+
+	if(exec2str(sCommand,sResult)!=0) return -1;
+
+	GetSepStrX(sResult,'\t',0,30,sTableName);
+
+	return 0;
+}
+
+int GetExprFile(char sModule[],char sFilter[],
+	char sGetExpr[],char sExprName[])
+{
+	int l;
+	char sCommand[256],sResult[1024],sPath[256];
+
+
+	GetBillHome(sPath);
+
+	sprintf(sCommand,"%s %s \"%s\"",sGetExpr,sModule,sFilter);
+
+	if(exec2str(sCommand,sResult)!=0) return -1;
+
+	strcpy(sExprName,sPath);
+	strcat(sExprName,"expr/");
+	l=strlen(sExprName);
+
+	GetSepStrX(sResult,'\t',0,128,sExprName+l);
+
+	return 0;
+}
+
+int GetItemTableName(char sFileType[],char sModule[],char sAreaCode[],
+	char sGetItem[],char sItemTableName[])
+{
+	char sCommand[256],sResult[1024];
+
+	sprintf(sCommand,"%s %s %s %s",sGetItem,sFileType,sModule,sAreaCode);
+
+	if(exec2str(sCommand,sResult)!=0) return -1;
+
+	GetSepStrX(sResult,'\t',0,128,sItemTableName);
+
+	return 0;
+}
+
+
+int InitAcctCtl()
+{
+	char sPath[256];
+
+	GetBillHome(sPath);
+
+	bzero((void*)&ACCTCTL,sizeof(struct AcctCtlStruct));
+
+	strcpy(ACCTCTL.sDealBeginDate,"21000101000000");
+	strcpy(ACCTCTL.sDealEndDate,"19800101000000");
+
+	sprintf(GETTABLE,"%sshell/gettablename.sh",sPath);
+	sprintf(GETITEM,"%sshell/getitem.sh",sPath);
+	sprintf(GETEXPR,"%sshell/getexprfile.sh",sPath);
+	if(IsFile(GETTABLE)==FALSE){
+		printALERT("文件%s无效.",GETTABLE);
+		return -1;
+	}
+	if(IsFile(GETEXPR)==FALSE){
+		printALERT("文件%s无效.",GETTABLE);
+		return -1;
+	}
+	if(IsFile(GETITEM)==FALSE) strcpy(GETITEM,"");
+
+	return 0;
+}
+
+
+int AcctLogCheck(char sFileName[],char sSourceID[],char sModule[])
+{
+	char	sCondition[128];
+	struct AcctLogStruct Temp;
+
+	sprintf(sCondition," WHERE SOURCE_ID='%s' AND\n\
+			MODULE='%s' AND \n\
+			 FILE_NAME='%s'",
+			sSourceID,sModule,sFileName);
+	return SDGetAcctLogToStruct(&Temp,"ACCT_LOG",sCondition);
+}
+
+int link_acct_item_outup(void **ppData)
+{
+	struct SettItemStruct *pTemp=(struct SettItemStruct *)(*ppData);
+
+	if(pTemp->sRowID[0]==0)
+		InsertList((LIST**)&pSettItemOut,(LIST*)pTemp);
+	else	InsertList((LIST**)&pSettItemUp,(LIST*)pTemp);
+
+	return 0;
+}
+
+int CompileStatExpr(char sExprName[])
+{
+	int l,i;
+	FILE *fp;
+	char	sInput[EXPRLEN];
+	struct OutputExprStruct asVarOutput[SYSVAR_COUNT];
+
+	if(IsFile(sExprName)==FALSE){
+		printf("公式文件%s无效.\n",sExprName);
+		return -1;
+	}
+/*将公式文件读到内存*/
+	if((l=FileSize(sExprName))>=EXPRLEN){
+		printf("参数文件%s大于%d,%d.\n",sExprName,EXPRLEN,l);
+		return -1;
+	}
+	fp=fopen(sExprName,"r");
+	if(fread(sInput,l,1,fp)!=1){
+		printf("读文件%s失败.\n",sExprName);
+		fclose(fp);
+		return -1;
+	}
+	sInput[l]=0;
+	fclose(fp);
+
+/*注册公式函数*/
+	RegPrepVar();
+	RegAcctItemVar();
+	CheckSysVar=CheckAcctItemVar;
+/*编译公式*/
+	if((i=CompileExpr(sInput,asVarOutput,&l))<0){
+		printf("编译公式%s错误::\n%s\n",
+			sExprName,pExprBuf->sErrorMsg);
+		WriteAlertMsg("编译公式%s错误::\n%s\n",
+			sExprName,pExprBuf->sErrorMsg);
+		return -1;
+	}
+	return 0;
+}
+
+int CheckAcctDbCtrl(int iLatnId,char sModule[])
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char sTableName[30],sState[4],sColumnName[30],sTemp[60];
+	EXEC SQL END DECLARE SECTION;
+
+	strcpy(sTableName,"SETT_ITEM");
+	strcpy(sColumnName,"LATN_MODULE");
+
+	sprintf(sTemp,"%d%s",iLatnId,sModule);
+
+	EXEC SQL SELECT STATE INTO :sState
+		FROM ACCTDB_CTRL
+		WHERE TABLE_NAME=:sTableName AND
+		COLUMN_NAME	=:sColumnName AND
+		VALUE		=:sTemp;
+	if(CheckSqlResult("CHECK ACCTDB_CTRL")<0) return -1;
+
+	printf("sTemp=%s,sState=%s\n",sTemp,sState);
+
+	if(strcmp(sState,"A0A")!=0){
+		printf("控制表数据不可用\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+int SetAcctDbCtrl(int iLatnId,char sModule[],char sState[])
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char sTableName[30],sColumnName[30],sTemp[60];
+	EXEC SQL END DECLARE SECTION;
+
+	sModule[3]=0;
+
+	strcpy(sTableName,"SETT_ITEM");
+	strcpy(sColumnName,"LATN_MODULE");
+
+	sprintf(sTemp,"%d%s",iLatnId,sModule);
+
+	EXEC SQL UPDATE ACCTDB_CTRL
+		SET STATE=:sState
+		WHERE TABLE_NAME=:sTableName AND
+		COLUMN_NAME	=:sColumnName AND
+		VALUE		=:sTemp;
+	if(CheckSqlResult("UPDATE ACCTDB_CTRL")<0){
+		WriteAlertPrint("更新ACCTDB_CTRL表 %s 记录失败",sTableName);
+		return -1;
+	}
+	return 0;
+}
+int OutputList2Table(struct SettItemStruct *ptOut,
+	struct SettItemStruct *ptUp,char sTableName[])
+{
+	struct SettItemStructOut TempOut;
+	struct SettItemStructUp TempUp;
+	struct	SettItemStruct *ptCur,*ptPre;
+
+/**输出数据到累帐表**/
+        bzero((void*)&TempOut,sizeof(struct SettItemStructOut));
+        bzero((void*)&TempUp,sizeof(struct SettItemStructUp));
+
+        strcpy(TempOut.sTableName,sTableName);
+        strcpy(TempUp.sTableName,sTableName);
+
+  	ptCur=ptOut;
+	ACCTCTL.iInsCnt=0;
+	while(ptCur!=NULL){
+		ptPre=ptCur;
+		ptCur=ptCur->pNext;
+
+		ptPre->iSettItemID=	iGetAcctItemID();
+		if(EInsertStructToSettItem(ptPre,false,&TempOut)<0){
+			printf("输出帐目错误SETT_ITEM.\n");
+			WriteErrStackAlert();
+			return -1;
+		}
+		ACCTCTL.iInsCnt++;
+
+	}
+	if(EInsertStructToSettItem(NULL,true,&TempOut)<0){
+		printf("输出帐目错误SETT_ITEM_DAY.\n");
+		WriteErrStackAlert();
+		return -1;
+	}
+
+/**更新数据到日帐表**/
+
+	ptCur=ptUp;
+	ACCTCTL.iUpdCnt=0;
+	while(ptCur!=NULL){
+		ptPre=ptCur;
+		ptCur=ptCur->pNext;
+
+		if(EUpdateStructToSettItem(ptPre,false,&TempUp)<0){
+			printf("更新帐目错误SETT_ITEM.\n");
+			WriteErrStackAlert();
+			return -1;
+		}
+		ACCTCTL.iUpdCnt++;
+
+	}
+	if(EUpdateStructToSettItem(NULL,true,&TempUp)<0){
+		printf("更新帐目错误SETT_ITEM.\n");
+		WriteErrStackAlert();
+		return -1;
+	}
+
+	return 0;
+
+}
+
+int AcctItem2Bin(BINTREE *pRoot,char sTableName[])
+{
+	static int iFirstFlag=true;
+        static struct SettItemStruct Temp;
+        static struct SettItemStructIn TempIn;
+
+	static struct SettItemStruct *pHead=NULL;
+
+	if(iFirstFlag==true){
+		TempIn.iBufEmpty=TRUE;
+        	TempIn.iFirstFlag=TRUE;
+		iFirstFlag=false;
+	}
+	strcpy(TempIn.sTableName,sTableName);
+	sprintf(TempIn.sCondition,"\n\
+	WHERE SETT_ITEM_DATE>=to_date('%s','yyyymmddhh24miss') AND\n\
+		SETT_ITEM_DATE<=to_date('%s','yyyymmddhh24miss')\n\
+	",ACCTCTL.sDealBeginDate,ACCTCTL.sDealEndDate);
+
+        /*取出表中记录加载二叉树*/
+        while(EGetSettItemToStruct(&Temp,&TempIn)){
+
+		if(SearchBin(pRoot,&Temp,data_search_bintree_acct_item_e,
+			(void **)&pHead)==FOUND){
+
+			/*如果由于数据异常导致关键字有多条纪录，则只累加一次*/
+			if(pHead->sRowID[0]!=0) continue;
+
+			pHead->iCharge+=	Temp.iCharge;
+			strcpy(pHead->sRowID,	Temp.sRowID);
+		}
+        }
+	return 0;
+}
+int data_search_bintree_acct_item_e(void *pValue,void*pData)
+{
+	struct SettItemStruct *pSource=(struct SettItemStruct *)pValue;
+	struct SettItemStruct *pTarget=(struct SettItemStruct *)pData;
+	int res;
+
+	if((res=pSource->iLatnID-pTarget->iLatnID)!=0) return res;
+	if((res=pSource->iAcctItemTypeID-pTarget->iAcctItemTypeID)!=0) return res;
+	if((res=strcmp(pSource->sUserType,pTarget->sUserType))!=0) return res;
+	if((res=strcmp(pSource->sSourceID,pTarget->sSourceID))!=0) return res;
+	if((res=strcmp(pSource->sSettItemDate,pTarget->sSettItemDate))!=0) return res;
+	if((res=pSource->iOppCarrierID-pTarget->iOppCarrierID)!=0) return res;
+	if((res=pSource->iSettCycleID-pTarget->iSettCycleID)!=0) return res;
+	return 0;
+
+}
+void assign_insert_bintree_acct_item_e(void **ppData,void *pData)
+{
+
+	struct SettItemStruct *pTemp;
+	if((pTemp=(*ppData))==NULL){
+		pTemp=malloc(sizeof(struct SettItemStruct));
+		ERROR_EXIT(pTemp==NULL,"分配SettItem结构错误");
+		memcpy((void*)pTemp,pData,sizeof(struct SettItemStruct));
+		pTemp->pNext=NULL;
+		*ppData=(void*)pTemp;
+		return;
+	}
+	pTemp->iCharge+=((struct SettItemStruct*)pData)->iCharge;
+}
+
+/*文件累帐并插入树*/
+int File2AcctItem(BINTREE **ppRoot,char sFileName[],char sSourceID[],char sModule[],
+	char sExprName[],struct AcctLogStruct *pLog)
+{
+	int	iAcctItemTypeID,iCharge,iCnt=0,iSplitFlag=-1;
+	int	iOppCarrierID=-1,iSettCycleID=-1,iLatnID=-1;
+	char	sState[2],sUserType[128],sBaseName[128];
+	char	sDataDate[15],sAcctSourceID[31];
+
+	static struct SettItemStruct	Temp;
+	struct FileControlStruct *ptHead=NULL,*pTemp,*pList=NULL;
+
+	bzero((void*)pLog,sizeof(struct AcctLogStruct));
+
+	strcpy(sDataDate,"");
+
+/*将文件数据调用函数加载到内存*/
+	if(TxtFileToList(sFileName,&ptHead)<0){
+		printf("加载文件%s到内存失败.\n",sFileName);
+		WriteErrStackAlert();
+		return -1;
+	}
+
+/*作一个循环处理每条话单记录，并将公式的输出账单信息加入树中*/
+	pList=ptHead;
+	while(ptHead!=NULL){
+
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+/*
+		TICKET.iOriLen=	strlen(pTemp->pData);
+		TICKET.sOri[TICKET.iOriLen]=0;
+		strcpy(TICKET.sOri,pTemp->pData);
+*/
+		TICKET.iOriLen=MY_MIN(pTemp->iLen,sizeof(TICKET.sOri)-1);
+		memcpy((void*)(TICKET.sOri),pTemp->pData,TICKET.iOriLen);
+		TICKET.sOri[TICKET.iOriLen]=0;
+
+
+		GetBaseName(sFileName,sBaseName);
+
+		set_str_value("$SOURCE",pExprBuf,sSourceID);
+		set_str_value("$FILENAME",pExprBuf,sBaseName);
+		if(ExecCode(pExprBuf)<0){
+			printf("执行公式%s失败.\n",sExprName);
+			return -1;
+		}
+		get_int_value("latn_id",pExprBuf,&iLatnID);
+		get_int_value("split_flag",pExprBuf,&iSplitFlag);
+		get_str_value("data_date",pExprBuf,sDataDate);
+		get_str_value("user_type",pExprBuf,sUserType);
+		get_int_value("opp_carrier_id",pExprBuf,&iOppCarrierID);
+		get_int_value("sett_cycle_id",pExprBuf,&iSettCycleID);
+		get_str_value("source_id",pExprBuf,sAcctSourceID);
+
+		/*校准字段*/
+		strcpy(sDataDate+8,"000000");
+		sUserType[10]=0;
+		if(strlen(sAcctSourceID)==0)strcpy(sAcctSourceID,"000000");
+		sAcctSourceID[30]=0;
+
+		while(GetAcctItemValue(&iAcctItemTypeID,&iCharge,sState)){
+
+			if(iCharge==0) continue;
+
+			Temp.iSettItemID=	0;
+			Temp.iLatnID=		iLatnID;
+			Temp.iAcctItemTypeID=	iAcctItemTypeID;
+			Temp.iCharge=		iCharge;
+			strcpy(Temp.sSettItemDate,sDataDate);
+
+			GetHostTime(Temp.sCreatedDate);
+			strcpy(Temp.sState,sState);
+			strcpy(Temp.sUserType,sUserType);
+			strcpy(Temp.sSourceID,sAcctSourceID);
+
+			Temp.iOppCarrierID=	iOppCarrierID;
+			Temp.iSettCycleID=	iSettCycleID;
+
+			if(InsertBin(ppRoot,(void *)&Temp,
+				data_search_bintree_acct_item_e,
+				assign_insert_bintree_acct_item_e)<0){
+				WriteAlertMsg("生成BINTREE失败SETT_ITEM_DAY");
+				return -1;
+			}
+
+			/*默认为-1,这也是get_int_value的默认值*/
+			if(strlen(Temp.sUserType)>1&&iSplitFlag==-1){
+				Temp.sUserType[1]=0;
+				if(InsertBin(ppRoot,(void *)&Temp,
+					data_search_bintree_acct_item_e,
+					assign_insert_bintree_acct_item_e)<0){
+					WriteAlertMsg("生成BINTREE失败SETT_ITEM_DAY");
+					return -1;
+				}
+			}
+		}
+
+		/*获取批处理的begin_date和end_date*/
+		if(strcmp(sDataDate,ACCTCTL.sDealEndDate)>0)
+			strcpy(ACCTCTL.sDealEndDate,sDataDate);
+		if(strcmp(sDataDate,ACCTCTL.sDealBeginDate)<0)
+			strcpy(ACCTCTL.sDealBeginDate,sDataDate);
+
+		iCnt++;
+		ACCTCTL.iMaxCnt++;
+	}
+
+	pLog->iCnt=iCnt;
+	GetHostTime(pLog->sDealEndDate);
+
+	strcpy(pLog->sDataDate,sDataDate);
+	if(ChkTime(pLog->sDataDate)<0){
+		strcpy(pLog->sDataDate,pLog->sDealEndDate);
+		strcpy(pLog->sDataDate+8,"000000");
+	}
+
+	if(ChkTime(ACCTCTL.sDealBeginDate)<0)return -1;
+	if(ChkTime(ACCTCTL.sDealEndDate)<0)return -1;
+
+	if(MAX_PROC_CNT!=-1&&ACCTCTL.iMaxCnt>=MAX_PROC_CNT) return 9;
+
+      	listfree(&pList);
+
+	return	0;
+}
+int AcctItem2Db(BINTREE *pRoot,char sTableName[])
+{
+
+	if(pRoot==NULL) return 0;
+
+/*加载累帐表,将加载的数据和平衡二叉树上的数据汇总*/
+	if(AcctItem2Bin(pRoot,sTableName)<0){
+		WriteAlertMsg("生成BINTREE失败");
+		return -1;
+	}
+
+/*将有sRowID的加到UPDATE链表，将无ROWID的加到INSERT链表*/
+	TravelBin(pRoot,link_acct_item_outup);
+
+/**输出数据到统计表**/
+	if(OutputList2Table(pSettItemOut,pSettItemUp,sTableName)<0){
+		WriteAlertMsg("输出数据到统计表出错.\n");
+		return -1;
+	}
+
+	return 0;
+}
+void BackupFileList(struct FileControlStruct *ptHead,
+	struct FileControlStruct *pEnd,char sSourcePath[],char sBackPath[])
+{
+	char	sCommand[256],*pc;
+	char	sTemp[128],sFileName[128],sBackName[128],sBaseName[128];
+	struct FileControlStruct *pTemp;
+
+	if(ptHead==NULL) return;
+
+	while(ptHead!=pEnd){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+
+		strncpy(sTemp,(char*)(pTemp->pData),pTemp->iLen);
+		sTemp[pTemp->iLen]=0;
+
+		/*时间不满足条件的文件不要处理*/
+		if(strlen(sTemp)==0) continue;
+
+		if((pc=strchr(sTemp,'\n'))!=NULL) *pc=0;
+		GetBaseName(sTemp,sBaseName);
+		sprintf(sFileName,"%s%s",sSourcePath,sBaseName);
+		sprintf(sBackName,"%s%s",sBackPath,sBaseName);
+
+		if(strlen(sBackPath)==0)
+			sprintf(sCommand,"rm -f %s",sFileName);
+		else
+			sprintf(sCommand,"mv %s %s",sFileName,sBackName);
+		
+		if(system(sCommand)!=0){
+			WriteAlertMsg("备份%s文件失败",sFileName);
+			return;
+		}
+	}
+}
+
+void AddFileExtNameErr(char sFileName[])
+{
+	execcmd("mv %s %s.err",sFileName,sFileName);
+}
+int WantInst(char sOperType[])
+{
+	if(sOperType[0]=='3') return true;
+	return false;
+}
+int ProcessFile(BINTREE **ppRoot,char sFileName[],char sBackPath[],
+	char sExprName[],char sFileType[],char sSourceID[],char sDateRule[],
+	char sModule[],char sAreaCode[],char sOperType[],
+	char sAppID[],int iTacheID)
+{
+	int iCnt=0,iRet=0;
+	char sType[5],sBaseName[256];
+	char sTableName[31],sDataDate[15];
+
+	struct AcctLogStruct Temp;
+
+	GetBaseName(sFileName,sBaseName);
+	strncpy(sType,		sFileType,1);sType[1]=0;
+
+/*获取DATA_DATE字段*/
+	FileBackupDate(sFileName,sDateRule,sDataDate);
+	if(strcmp(sDataDate,"")==0){
+		if(FileModifyDate(sFileName,sDataDate)!=0){
+			printALERT("文件%s不可访问",sFileName);
+			return 1;
+		}
+	}
+
+	bzero((void*)&Temp,	sizeof(struct AcctLogStruct));
+/*获取改入库的表名*/
+	if(GetTableName(sModule,sBaseName,sAreaCode,GETTABLE,sTableName)!=0){
+
+		printALERT("模块%s,区号%s,文件%s获取表失败",
+			sModule,sAreaCode,sBaseName);
+		return 1;
+	}
+
+	if(WantInst(sOperType)==true){
+/*调用主入库函数入库*/
+		if((iCnt=InsertTicket(sFileName,sTableName,sType))<0){
+			/*避免累账程序重复加载*/
+			AddFileExtNameErr(sFileName);
+			printALERT("对表%s 入库文件%s失败",sTableName,sFileName);
+			return -1;
+		}
+	}
+	else
+		iCnt=FileLine(sFileName);
+
+
+/**汇总文件**/
+	if((iRet=File2AcctItem(ppRoot,sFileName,sSourceID,sModule,sExprName,&Temp))<0){
+		printALERT("汇总文件%s失败.\n",sFileName);
+		return -1;
+	}
+
+
+/*写日志*/
+	Temp.iCnt=iCnt;
+	strcpy(Temp.sTableName, sTableName);
+	strcpy(Temp.sFileType,  sFileType);
+	strcpy(Temp.sSourceID,  sSourceID);
+	strcpy(Temp.sModule,    sModule);
+	strcpy(Temp.sState,     "A");
+	Temp.iByte=     	FileSize(sFileName);
+	strcpy(Temp.sFileName,  sBaseName);
+	GetHostTime(Temp.sDealBeginDate);
+	strcpy(Temp.sDataDate,  sDataDate);
+	strcpy(Temp.sDataDate+8,"000000");
+	strcpy(Temp.sOperType,  sOperType);
+	strcpy(Temp.sAppID,  	sAppID);
+	Temp.iTacheID=		iTacheID;
+
+	GetHostTime(Temp.sDealEndDate);
+
+
+	if(SDInsertStructToAcctLog(&Temp,"ACCT_LOG")<0){
+		printf("写入日志表ACCT_LOG失败.\n");
+		WriteErrStackAlert();
+		return -1;
+	}
+
+	/*达到处理最大数*/
+	if(iRet==9) return iRet;
+
+	return 0;
+}
+
+int AcctDBMain(char sSourceID[],char sSourcePath[],char sFileType[],
+	char sFilter[],char sBackPath[],char sModule[],char sAreaCode[],
+	char sDefTableName[],char sDateRule[],char sOperType[],
+	char sAppID[],int iTacheID)
+{
+	int iLatnID=0,iRet=0;
+	char sFileName[256],sTempName[256],sExprName[256],sItemTableName[32];
+	struct FileControlStruct *ptHead=NULL,*pTemp,*ptLkHead;
+
+	BINTREE *pRoot=NULL; /*文件累帐*/
+
+	strcpy(sItemTableName,sDefTableName);
+
+/*初始化ACCTDB应用位置和公式路径到全局变量*/
+	if(InitAcctCtl()<0) return -1;
+
+	iLatnID=GetLatnID(sAreaCode);
+
+	sModule[3]=0;
+	sSourceID[6]=0;
+
+
+/*检查控制表关键字*/
+	if(CheckAcctDbCtrl(iLatnID,sModule)<0){
+		printALERT("%s 模块有进程锁定 %d 的数据.",sModule,iLatnID);
+		return 0;
+	}
+
+	/*获取统计公式*/
+	if(GetExprFile(sModule,sFilter,GETEXPR,sExprName)!=0){
+		printALERT("模块%s,文件类型%s获取公式文件名失败",sModule,sFilter);
+		return -1;
+	}
+	
+	if(strlen(GETITEM)>0){
+		/*如果必要获取累账目标表*/
+		if(GetItemTableName(sFileType,sModule,sAreaCode,GETITEM,
+			sItemTableName)!=0){
+			printALERT("模块%s,文件类型%s,区号%s获取表失败",sModule,sFileType,sAreaCode);
+			return -1;
+
+		}
+	}
+/*处理编译公式*/
+	RegRateExprFun();
+	if(CompileStatExpr(sExprName)<0){
+		printf("处理公式文件%s失败.\n",sExprName);
+		WriteErrStackAlert();
+		return -1;
+	}
+
+/*生成一个文件列表*/
+	if(dir2list(sSourcePath,sFilter,&ptHead)<0){
+		printALERT("获取目录%s的%s模式的文件列表失败",
+			sSourcePath,sFilter);
+		return -1;
+	}
+
+/*设置控制表关键字*/
+	if(SetAcctDbCtrl(iLatnID,sModule,"A0X")<0) return -1;
+
+	CommitWork();
+
+	ptLkHead=ptHead;
+
+	while(ptHead!=NULL){
+
+		pTemp = ptHead;
+		ptHead = ptHead->pNext;
+
+		strncpy(sFileName,(char*)(pTemp->pData),pTemp->iLen);
+		sFileName[pTemp->iLen]=0;
+		AllTrim(sFileName);
+		
+		sprintf(sTempName,"%s%s",sSourcePath,sFileName);
+		
+		if((iRet=FileFilter(sTempName,sSourceID,sModule))!=0){
+			/*间隔太小不备份，已经处理过备份*/
+			if(iRet==-1)strcpy((char*)(pTemp->pData),"");
+			continue;
+		}
+
+	/*调用通用处理函数*/
+		if((iRet=ProcessFile(&pRoot,sTempName,sBackPath,sExprName,sFileType,
+			sSourceID,sDateRule,sModule,sAreaCode,sOperType,
+			sAppID,iTacheID))<0){
+			RollbackWork();
+			if(SetAcctDbCtrl(iLatnID,sModule,"A0A")<0) return -1;
+			CommitWork();
+			return -1;
+		}
+		if(iRet==1){/*如果某个文件格式问题统计失败，则清除该文件*/
+			strcpy((char*)pTemp->pData,"");
+			AddFileExtNameErr(sFileName);
+			continue;
+		}		
+		/*达到处理最大数*/
+		if(iRet==9) break;
+		
+		WriteProcPrint("处理%s文件完成",sFileName);
+	}
+
+	if(AcctItem2Db(pRoot,sItemTableName)<0){
+		RollbackWork();
+		if(SetAcctDbCtrl(iLatnID,sModule,"A0A")<0) return -1;
+		return -1;
+	}
+
+	DestroyBin(pRoot);
+	DestroyList((LIST*)pSettItemOut);
+	DestroyList((LIST*)pSettItemUp);
+	pSettItemOut=pSettItemUp=NULL;
+
+/*设置控制表关键字*/
+	if(SetAcctDbCtrl(iLatnID,sModule,"A0A")<0) return -1;
+
+	CommitWork();
+
+	/*
+	备份文件，从文件列表开头开始处理，直到已经处理的最后一个文件，
+	即：因为达到最大处理数据量而break或文件列表结束
+	*/
+	BackupFileList(ptLkHead,ptHead,sSourcePath,sBackPath);
+
+	WriteProcPrint("处理目录%s成功，输出帐目数%d,更新帐目数%d",
+		sSourcePath,ACCTCTL.iInsCnt,ACCTCTL.iUpdCnt);
+
+	return 0;
+}
+
+

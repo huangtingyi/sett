@@ -1,0 +1,388 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <list.h>
+#include <hnixs.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwfile.h>
+
+
+struct ReportHeadStruct 
+{
+	struct ReportHeadStruct *pNext;
+	int	iSheet;				/*SplitCtlBySheet初始化*/
+	int	iTitleLine;			/*初始化iTitle行数*/
+	int	iLatnID;			/*TitleCtl2ReportHead初始化*/
+	char	sBillingCycleID[7];
+	char	sTitle[128];			/*SptitAllCtl初始化*/
+	struct ReportBodyStruct *pBody;		/*SptitAllCtl初始化*/
+	struct FileControlStruct *pAllCtl;	/*SplitCtlBySheet初始化*/
+	char	sField[1024];			/*SptitAllCtl初始化*/
+	int	iFieldCnt;			/*TitleCtl2ReportHead初始化*/
+	char	asFieldName[60][60];		/*TitleCtl2ReportHead初始化*/
+	struct FileControlStruct *pBodyCtl;	
+};
+struct ReportBodyStruct
+{
+	struct ReportBodyStruct *pNext;
+	char	sAcctItemName[61];
+	char	sDetailItemName[61];
+	char 	sSettRule[61];
+	int	iTotalCnt;
+	int	iTotalMin;
+	int	iCharge;
+	int	iLine;
+	int	iDistanceCharge;	/*移动交互报表*/
+	int	iTotalDuration;		/*总时长，卫通*/
+	int	iTotalSec;		/*结算时长，卫通*/
+	int	iMoCnt;			/*MO次数*/
+	int	iMtCnt;			/*MT次数*/
+};
+int SheetBegin(struct FileControlStruct *ptHead)
+{
+	int l,iSheet;
+	char sTemp[1024];
+	
+	if(ptHead==NULL) return -1;
+
+	l=MY_MIN(ptHead->iLen,1023);
+	strncpy(sTemp,(char*)ptHead->pData,l);sTemp[l]=0;
+
+	if(strncmp(sTemp,"sheet=",6)!=0) return -1;
+	
+	iSheet=atoi(sTemp+6);
+
+	return iSheet;
+}
+int GetSheet(struct FileControlStruct **pptHead,struct FileControlStruct **pptList)
+{
+	int iSheet;
+	struct FileControlStruct *ptHead=*pptHead,*pTemp;
+	
+	if(ptHead==NULL) return -1;
+	
+	if((iSheet=SheetBegin(ptHead))<0) return -1;
+	
+	pTemp=ptHead;
+	ptHead=ptHead->pNext;
+	
+	free(pTemp);
+
+	/*如果sheet紧接这一个sheet的特殊处理*/
+	if(SheetBegin(ptHead)>=0){
+		*pptList=NULL;
+		*pptHead=ptHead;
+		return iSheet;
+	}
+	
+	pTemp=NULL;
+	*pptList=ptHead;
+
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		if(SheetBegin(ptHead)>=0) break;
+	}
+	if(ptHead==NULL){
+		*pptHead=NULL;
+		return iSheet;
+	}
+	/*设置输出链表*/
+	*pptHead=ptHead;
+	if(pTemp!=NULL)	pTemp->pNext=NULL;
+
+	return iSheet;
+}
+int SplitCtlBySheet(struct FileControlStruct *pCtl,struct ReportHeadStruct **pptHead)
+{
+	int iSheet;
+
+	struct ReportHeadStruct *pTemp;
+	struct FileControlStruct *pAllCtl;
+	
+	*pptHead=NULL;
+
+	while((iSheet=GetSheet(&pCtl,&pAllCtl))>=0){
+		
+		if((pTemp=malloc(sizeof(struct ReportHeadStruct)))==NULL){
+			printf("分配内存 ReportHeadStruct 错误.\n");
+			return -1;
+		}
+		bzero((void*)pTemp,sizeof(struct ReportHeadStruct));
+		
+		pTemp->iSheet=iSheet;
+		pTemp->pAllCtl=pAllCtl;
+		
+		InsertListTail((LIST**)pptHead,(LIST*)pTemp);
+	}
+	return 0;
+}
+int SptitAllCtl(struct FileControlStruct **ppAllCtl,char sTitle[],
+	char sField[],struct FileControlStruct **ppBodyCtl,char sType[])
+{
+	int l,m=0,iTitleLine=0;
+	char sTemp[1024];
+	struct FileControlStruct *ptHead,*pTemp=NULL;
+
+	ptHead=*ppAllCtl;
+	
+	if(ptHead==NULL)return 9999;
+
+	strcpy(sTitle,"");
+	strcpy(sTemp,"");
+	
+
+	while(ptHead!=NULL){
+
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+
+		l=MY_MIN(pTemp->iLen,1023);
+		strncpy(sTemp,(char*)pTemp->pData,l);sTemp[l]=0;
+
+		if(strstr(sTemp,"序号")!=NULL) break;
+		
+		/*只取包含结算报表的标题的行*/
+		if(strstr(sTemp,"结算")!=NULL&&strstr(sTemp,"报表")!=NULL){
+			m+=l;
+			if(m>=127) return -1;
+			strcat(sTitle,sTemp);
+		}
+
+		free(pTemp);
+		iTitleLine++;
+	}
+	
+	if(strstr(sTemp,"序号")==NULL) return -1;
+	
+	strcat(sField,sTemp);
+	
+	if(pTemp==NULL) return -1;
+	
+	*ppBodyCtl=pTemp->pNext;
+	*ppAllCtl=NULL;
+	
+	free(pTemp);
+	
+	return iTitleLine;
+}
+void TitleCtl2ReportHead(char sTitle[],char sField[],
+	struct ReportHeadStruct *pTemp,char sType[])
+{
+	int i=0,iFlag=false;
+	char sTemp[128];
+
+	if(strstr(sTitle,"石家庄")!=NULL)      pTemp->iLatnID=311;
+	else if(strstr(sTitle,  "邯郸")!=NULL) pTemp->iLatnID=310;
+	else if(strstr(sTitle,  "正定")!=NULL) pTemp->iLatnID=311;
+	else if(strstr(sTitle,  "保定")!=NULL) pTemp->iLatnID=312;
+	else if(strstr(sTitle,"张家口")!=NULL) pTemp->iLatnID=313;
+	else if(strstr(sTitle,  "承德")!=NULL) pTemp->iLatnID=314;
+	else if(strstr(sTitle,  "唐山")!=NULL) pTemp->iLatnID=315;
+	else if(strstr(sTitle,  "廊坊")!=NULL) pTemp->iLatnID=316;
+	else if(strstr(sTitle,  "沧州")!=NULL) pTemp->iLatnID=317;
+	else if(strstr(sTitle,  "衡水")!=NULL) pTemp->iLatnID=318;
+	else if(strstr(sTitle,  "邢台")!=NULL) pTemp->iLatnID=319;
+	else if(strstr(sTitle,"秦皇岛")!=NULL) pTemp->iLatnID=335;
+	else pTemp->iLatnID=-1;
+	
+	while(1){
+		GetSepStrX(sField,'\t',i,127,sTemp);
+		if(iFlag==true&&strlen(sTemp)==0) break;
+		
+		if(strstr(sTemp,"序号")!=NULL) iFlag=true;
+		
+		strcpy(pTemp->asFieldName[i],sTemp);
+		i++;
+	}
+	
+	i++;
+	pTemp->iFieldCnt=i;
+}
+void RegularNumber(char sTemp[])
+{
+	ReplaceStr(sTemp,".","");
+	ReplaceStr(sTemp,",","");
+	ReplaceStr(sTemp,"(","");
+	ReplaceStr(sTemp,")","");
+	ReplaceStr(sTemp,"$","");
+	ReplaceStr(sTemp,"￥","");
+}
+int BodyCtl2ReportBodyList(struct FileControlStruct *pBody,int iTitleLine,
+	char sType[],struct ReportBodyStruct **ppBody)
+{
+	int l,offset=0,iLine=iTitleLine;
+	char sLine[1024],sTemp[128];
+	struct ReportBodyStruct *ptLkHead=NULL,*ptPre=NULL,*ptCur;
+	struct FileControlStruct *ptHead,*pTemp;
+	
+	if(strcmp(sType,"CT")==0) offset=1;
+
+	ptHead=pBody;
+
+	while(ptHead!=NULL){
+
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		l=MY_MIN(pTemp->iLen,1023);
+		strncpy(sLine,(char*)pTemp->pData,l);sLine[l]=0;
+		
+		if((ptCur=malloc(sizeof(struct ReportBodyStruct)))==NULL){
+			printf("分配内存 ReportBodyStruct 失败.\n");
+			return -1;
+		}
+		bzero((void*)ptCur,sizeof(struct ReportBodyStruct));
+		
+		GetSepStrX(sLine,'\t',offset+0,60,ptCur->sAcctItemName);
+		if(strlen(ptCur->sAcctItemName)==0&&ptPre!=NULL)
+			strcpy(ptCur->sAcctItemName,ptPre->sAcctItemName);
+
+		GetSepStrX(sLine,'\t',offset+3,60,ptCur->sSettRule);
+		if(strlen(ptCur->sSettRule)==0&&ptPre!=NULL)
+			strcpy(ptCur->sSettRule,ptPre->sSettRule);
+
+		GetSepStrX(sLine,'\t',offset+2,60,ptCur->sDetailItemName);
+		if(strlen(ptCur->sDetailItemName)==0){
+			GetSepStrX(sLine,'\t',offset+1,128,sTemp);
+			if(strcmp(sTemp,"小计")==0){
+				strcpy(ptCur->sSettRule,"");
+				strcpy(ptCur->sDetailItemName,ptCur->sAcctItemName);
+				strcat(ptCur->sDetailItemName,sTemp);
+			}
+			if(strcmp(sTemp,"合计")==0||
+				strcmp(sTemp,"共计")==0||
+				strcmp(sTemp,"总计")==0){
+				strcpy(ptCur->sSettRule,"");
+				strcpy(ptCur->sAcctItemName,"");
+				strcpy(ptCur->sDetailItemName,sTemp);
+			}
+		}
+		
+		/*话单张数*/
+		GetSepStrX(sLine,'\t',offset+4,128,sTemp);
+		RegularNumber(sTemp);
+		ptCur->iTotalCnt=atoi(sTemp);
+
+		/*时长（分钟）*/
+		GetSepStrX(sLine,'\t',offset+5,128,sTemp);
+		RegularNumber(sTemp);
+		ptCur->iTotalMin=atoi(sTemp);
+
+		/*结算费用(元）*/
+		GetSepStrX(sLine,'\t',offset+6,128,sTemp);
+		RegularNumber(sTemp);
+		ptCur->iCharge=atoi(sTemp);
+		
+		ptCur->iLine=iLine++;
+		
+		InsertListTail((LIST**)&ptLkHead,(LIST*)ptCur);
+		
+		ptPre=ptCur;
+	}
+	
+	*ppBody=ptLkHead;
+	return 0;
+		
+}
+int Output2TxtFile(struct ReportHeadStruct *ptHead,char sReportID[],
+	char sType[],char sTargetName[])
+{
+	int iCnt=0;
+	char sRecord[1024];
+	struct ReportHeadStruct *pTemp;
+	struct ReportBodyStruct *ptCur,*ptPre;
+	struct FileControlStruct *ptLkHead=NULL;
+	
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		ptCur=pTemp->pBody;
+		while(ptCur!=NULL){
+			ptPre=ptCur;
+			ptCur=ptCur->pNext;
+			
+			sprintf(sRecord,"%-6s%-60s%-60s%09d%09d%-60s%012d%4d%-6s%02d%03d",
+				sReportID,ptPre->sAcctItemName,
+				ptPre->sDetailItemName,ptPre->iTotalCnt,
+				ptPre->iTotalMin,ptPre->sSettRule,ptPre->iCharge,
+				pTemp->iLatnID,pTemp->sBillingCycleID,
+				pTemp->iSheet,ptPre->iLine);
+
+			if(item2list(&ptLkHead,(void*)sRecord,strlen(sRecord))<0)
+				return -1;
+		}
+	}
+	
+	ReverseList((LIST**)&ptLkHead);
+	
+	if((iCnt=list2fileln(&ptLkHead,sTargetName))<0) return -1;
+	
+	return iCnt;
+}
+
+int main(int argc,char *argv[])
+{       
+	int iCnt;
+	char sSourceName[128],sTargetName[128],sReportID[20],sType[10];
+	struct FileControlStruct *pCtl=NULL;
+	struct ReportHeadStruct *ptLkHead,*ptHead,*pTemp;
+	
+        if(argc!=5){
+                printf("Usage: cvrpt sourcename type reportid targetname.\n");
+                exit(1);
+        }
+
+	strcpy(sSourceName,argv[1]);
+	strcpy(sType,argv[2]);
+	strcpy(sReportID,argv[3]);
+	strcpy(sTargetName,argv[4]);
+
+	/*将文件读到InHead结构链表*/
+	if(TxtFileToList(sSourceName,&pCtl)<0){
+		printf("文件%s加载到内存错误.\n",sSourceName);
+		return -1;
+	}
+	
+	/***根据sheet=x sheet=y分割 sheet*/
+	if(SplitCtlBySheet(pCtl,&ptLkHead)<0) return -1;
+
+	
+	ptHead=ptLkHead;
+	
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+
+		/*将AllCtl链表根据不同逻辑，分割链表中的title和body*/	
+		pTemp->iTitleLine=SptitAllCtl(&(pTemp->pAllCtl),pTemp->sTitle,
+			pTemp->sField,&(pTemp->pBodyCtl),sType);
+
+		/*对没内容的SHEET直接删除*/
+		if(pTemp->iTitleLine==9999) continue;
+		
+		if(pTemp->iTitleLine<0){
+			printf("SptitAllCtl错误 %d\n",pTemp->iSheet);
+			return -1;
+		}
+		
+		/*将TitleCtl转换出需要的元素*/
+		TitleCtl2ReportHead(pTemp->sTitle,pTemp->sField,pTemp,sType);
+		
+		/*将BodyCtl转换出需要的元素到链表*/
+		if(BodyCtl2ReportBodyList(pTemp->pBodyCtl,pTemp->iTitleLine,
+			sType,&(pTemp->pBody))<0) return -1;
+	}
+	
+	/*将OutHead链表输出到文件*/
+	if((iCnt=Output2TxtFile(ptLkHead,sReportID,sType,sTargetName))<0)
+		return -1;
+	
+	printf("将文件%s转换为%s文件成功,生成%d条纪录.\n",
+		sSourceName,sTargetName,iCnt);
+
+	return 0;
+}
+

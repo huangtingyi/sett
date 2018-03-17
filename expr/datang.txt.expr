@@ -1,0 +1,94 @@
+{
+/*声明输出部分*/
+goto aa;
+	setfilefmt("txt");
+	initdate(300);
+	setfmt(t_call_type,	"00","%02d",posp("0:2"));
+	setfmt(t_imsi,		" ","%-15s",posp("2:15"));
+	setfmt(t_calling_nbr,	" ","%-15s",posp("17:15"));
+	setfmt(t_called_nbr,	" ","%-24s",posp("32:24"));
+	setfmt(t_start_date,	" ","%-8s",posp("56:8"));
+	setfmt(t_start_time,	" ","%-6s",posp("64:6"));
+	setfmt(t_duration,	" ","%06d",posp("70:6"));
+	setfmt(t_msc,		" ","%-10s",posp("76:10"));
+	setfmt(t_trunk_in,	" ","%-8s",posp("86:8"));
+	setfmt(t_trunk_out,	" ","%-8s",posp("94:8"));
+	setfmt(t_lac,		" ","%-4s",posp("102:4"));
+	setfmt(t_cell_id,	" ","%-4s",posp("106:4"));
+	setfmt(t_other_lac,	" ","%-4s",posp("110:4"));
+	setfmt(t_other_cell_id,	" ","%-4s",posp("114:4"));
+	setfmt(t_service_type,	" ","%-3s",posp("118:3"));
+	setfmt(t_service_code,	" ","%-4s",posp("121:4"));
+	setfmt(t_third_party,	" ","%-15s",posp("125:15"));
+	setfmt(t_msrn,		" ","%-15s",posp("140:15"));	
+aa:
+	ticketvalid=1;
+	
+	t=IA5STRING(getfixpos(t_ori,fixp("0:15")));
+	temp=substr(t,0,1);
+		
+	if(temp<"0"||temp>"9"){ticketvalid=-1;return;}
+		
+	t_call_type=06;
+	t_imsi="";
+	t_calling_nbr=IA5STRING(getfixpos(t_ori,fixp("0:15")));
+	t_called_nbr=IA5STRING(getfixpos(t_ori,fixp("17:24")));
+	temp=IA5STRING(getfixpos(t_ori,fixp("42:4")));
+	t_start_date=temp;
+	temp=IA5STRING(getfixpos(t_ori,fixp("47:2")));
+	t_start_date=t_start_date+temp;
+	temp=IA5STRING(getfixpos(t_ori,fixp("50:2")));
+	t_start_date=t_start_date+temp;
+	
+	temp=IA5STRING(getfixpos(t_ori,fixp("55:2")));
+	t_start_time=temp;
+	temp=IA5STRING(getfixpos(t_ori,fixp("58:2")));
+	t_start_time=t_start_time+temp;
+	temp=IA5STRING(getfixpos(t_ori,fixp("61:2")));
+	t_start_time=t_start_time+temp;
+	
+	t_duration=atoi(IA5STRING(getfixpos(t_ori,fixp("81:6"))));
+	temp=IA5STRING(getfixpos(t_ori,fixp("88:4")));
+	t_lac=lpad(trimx(temp," "),"0",4);
+	temp=IA5STRING(getfixpos(t_ori,fixp("95:4")));
+	t_cell_id=lpad(trimx(temp," "),"0",4);
+	t_other_lac="";
+	t_other_cell_id="";
+	t_temp=t_ori+102;
+	t1=IA5STRING(getseppos(t_temp,sepp("0:*")));
+	t2=IA5STRING(getseppos(t_temp,sepp("1:*")));
+	t_trunk_in=lpad(itoh(atoi(t1)),"0",2)+lpad(itoh(atoi(t2)),"0",2);
+//	t_trunk_in=IA5STRING(getfixpos(t_ori,fixp("102:6")));
+	t_temp=t_ori+109;
+	t1=IA5STRING(getseppos(t_temp,sepp("0:*")));
+	t2=IA5STRING(getseppos(t_temp,sepp("1:*")));
+	t_trunk_out=lpad(itoh(atoi(t1)),"0",2)+lpad(itoh(atoi(t2)),"0",2);
+//	t_trunk_out=IA5STRING(getfixpos(t_ori,fixp("109:6")));
+	t_third_party="";
+	/*t_msc=IA5STRING(getfixpos(t_ori,fixp("116:8")));*/
+	t_msc=$MSC;
+	t_msrn="";
+
+/*字段校正部分*/
+	if(maxdatadate(t_start_date)<0){ticketvalid=-1;return;}
+		
+	if(llike(t_called_nbr,"0086"))/*去掉0086*/
+		t_called_nbr=substr(t_called_nbr,4,20);
+	if(llike(t_called_nbr,"86")&&strlen(t_called_nbr)>9)
+		t_called_nbr=substr(t_called_nbr,2,22);
+	if(llike(t_called_nbr,"013")&&strlen(t_called_nbr)==12)
+		t_called_nbr=substr(t_called_nbr,1,11);
+	l=length($AREACODE);
+	if(length(t_called_nbr)>12&&l!=0){
+		if(llike(t_called_nbr,$AREACODE))
+			t_called_nbr=substr(t_called_nbr,l,20);
+		else if(llike(t_called_nbr,"0"+$AREACODE))
+			t_called_nbr=substr(t_called_nbr,l+1,20);
+	}
+	if(llike(t_calling_nbr,"0086"))/*去掉0086*/
+		t_calling_nbr=substr(t_calling_nbr,4,20);
+	if(llike(t_calling_nbr,"86")&&strlen(t_calling_nbr)>9)
+		t_calling_nbr=substr(t_calling_nbr,2,22);
+	if(llike(t_calling_nbr,"013")&&strlen(t_calling_nbr)==12)
+		t_calling_nbr=substr(t_calling_nbr,1,11);
+}	

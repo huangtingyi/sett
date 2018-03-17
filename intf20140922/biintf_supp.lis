@@ -1,0 +1,15 @@
+
+Pro*C/C++: Release 11.2.0.3.0 - Production on Sat Oct 12 11:21:21 2013
+
+Copyright (c) 1982, 2011, Oracle and/or its affiliates.  All rights reserved.
+
+Error at line 181, column 20 in file biintf_supp.pc
+   181                  EXEC SQL DECLARE BIINTF_STT_CR CURSOR FOR BIINTF_STT_SC
+        R;
+   181  ...................1
+   181  PCC-W-02332, attempted to redefine SQL identifier
+Error at line 458, column 20 in file biintf_supp.pc
+   458                  EXEC SQL DECLARE BIINTF_TLL_CR CURSOR FOR BIINTF_TLL_SC
+        R;
+   458  ...................1
+   458  PCC-W-02332, attempted to redefine SQL identifier

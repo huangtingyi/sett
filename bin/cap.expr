@@ -1,0 +1,62 @@
+{
+/*声明输出部分*/
+goto aa;
+	setfilefmt("bin24:l{8:2}:0");
+	initdate(300);
+
+	setfmt(st_capture_time   	," ","%-s",posp("0:15"  ));
+	setfmt(st_source_mac_addr	," ","%-s",posp("15:18" ));
+	setfmt(st_target_mac_addr	," ","%-s",posp("33:18" ));
+	setfmt(st_protocal_no		," ","%-s",posp("51:5"  ));
+	setfmt(st_source_ip		," ","%-s",posp("56:16" ));
+	setfmt(st_target_ip		," ","%-s",posp("72:16" ));
+	setfmt(st_source_port		," ","%-s",posp("88:8"  ));
+	setfmt(st_target_port		," ","%-s",posp("96:8"  ));
+	setfmt(st_tns_type		," ","%-s",posp("104:3" ));
+	setfmt(st_tns_cmdstr		," ","%-s",posp("107:5" ));
+	setfmt(it_cdr_len		," ","%d",posp("112:8"));
+	
+	setfmt(st_tns_add_info		," ","%-s",posp("120:30"));	
+aa:
+	ticketvalid=1;
+	
+	st_capture_time		=adddt("19700102000000",HEX_TBCD_INT4B(getfixpos(t_ori,fixp("0:4")))-86400);
+				
+	st_source_mac_addr	=
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("16:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("17:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("18:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("19:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("20:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("21:1")));				
+        st_target_mac_addr	=
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("22:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("23:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("24:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("25:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("26:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("27:1")));
+        st_protocal_no		=HEX_OCTET_STRING(getfixpos(t_ori,fixp("28:2")));
+        
+        st_source_ip		=
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("42:1"))))+"."+
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("43:1"))))+"."+
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("44:1"))))+"."+
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("45:1"))));
+        st_target_ip		=
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("46:1"))))+"."+
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("47:1"))))+"."+
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("48:1"))))+"."+
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("49:1"))));
+        			
+        st_source_port		=itoa(HEX_OCTET_INT4B(getfixpos(t_ori,fixp("50:2"))));
+      
+        st_target_port		=itoa(HEX_OCTET_INT4B(getfixpos(t_ori,fixp("52:2"))));
+               
+        st_tns_type		=HEX_OCTET_STRING(getfixpos(t_ori,fixp("74:1"))); 
+        st_tns_cmdstr		=HEX_OCTET_STRING(getfixpos(t_ori,fixp("80:2")));
+
+        st_tns_add_info		=IA5STRING(getfixpos(t_ori,fixp("149:21")));
+                
+        it_cdr_len		=HEX_TBCD_INT4B(getfixpos(t_ori,fixp("8:2")));		
+}

@@ -1,0 +1,653 @@
+Precompiling settle_supp.pc.
+  
+  Pro*C/C++: Release 11.2.0.3.0 - Production on Sat Jan 18 14:49:22 2014
+  
+  Copyright (c) 1982, 2011, Oracle and/or its affiliates.  All rights reserved.
+  
+  System default option values taken from: /opt/oracle/product/11.2.0/dbhome_1/precomp/admin/pcscfg.cfg
+  
+  Syntax error at line 2774, column 7, file settle_supp.pc:
+  Error at line 2774, column 7 in file settle_supp.pc
+  Number);
+  ......1
+  PCC-S-02201, Encountered the symbol ")" when expecting one of the following:
+  
+     ; , = ( [
+  The symbol "(" was substituted for ")" to continue.
+  
+  Syntax error at line 2775, column 12, file settle_supp.pc:
+  Error at line 2775, column 12 in file settle_supp.pc
+                  AllTrim(p->sCallingRoamAreaCode);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2776, column 12, file settle_supp.pc:
+  Error at line 2776, column 12 in file settle_supp.pc
+                  AllTrim(p->sCalledRoamAreaCode);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2777, column 12, file settle_supp.pc:
+  Error at line 2777, column 12 in file settle_supp.pc
+                  AllTrim(p->sTotalDueAmount);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2778, column 12, file settle_supp.pc:
+  Error at line 2778, column 12 in file settle_supp.pc
+                  AllTrim(p->sUpFlux);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2779, column 12, file settle_supp.pc:
+  Error at line 2779, column 12 in file settle_supp.pc
+                  AllTrim(p->sDuration);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2780, column 12, file settle_supp.pc:
+  Error at line 2780, column 12 in file settle_supp.pc
+                  AllTrim(p->sDownFlux);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2781, column 12, file settle_supp.pc:
+  Error at line 2781, column 12 in file settle_supp.pc
+                  AllTrim(p->sFileName);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2782, column 12, file settle_supp.pc:
+  Error at line 2782, column 12 in file settle_supp.pc
+                  AllTrim(p->sTotalFlux);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2783, column 12, file settle_supp.pc:
+  Error at line 2783, column 12 in file settle_supp.pc
+                  AllTrim(p->sStatus);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2784, column 12, file settle_supp.pc:
+  Error at line 2784, column 12 in file settle_supp.pc
+                  AllTrim(p->sCurrBalance);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2785, column 12, file settle_supp.pc:
+  Error at line 2785, column 12 in file settle_supp.pc
+                  AllTrim(p->sRateKey1);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2786, column 12, file settle_supp.pc:
+  Error at line 2786, column 12 in file settle_supp.pc
+                  AllTrim(p->sRateKey2);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2787, column 12, file settle_supp.pc:
+  Error at line 2787, column 12 in file settle_supp.pc
+                  AllTrim(p->sRateKey3);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2788, column 12, file settle_supp.pc:
+  Error at line 2788, column 12 in file settle_supp.pc
+                  AllTrim(p->sExceptionType);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2789, column 12, file settle_supp.pc:
+  Error at line 2789, column 12 in file settle_supp.pc
+                  AllTrim(p->sOrigUsageTypeID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2790, column 12, file settle_supp.pc:
+  Error at line 2790, column 12 in file settle_supp.pc
+                  AllTrim(p->sStlAmount);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2791, column 12, file settle_supp.pc:
+  Error at line 2791, column 12 in file settle_supp.pc
+                  AllTrim(p->sPostFlag);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2792, column 12, file settle_supp.pc:
+  Error at line 2792, column 12 in file settle_supp.pc
+                  AllTrim(p->sTableName);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2793, column 12, file settle_supp.pc:
+  Error at line 2793, column 12 in file settle_supp.pc
+                  AllTrim(p->sCallingCompanyID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2794, column 12, file settle_supp.pc:
+  Error at line 2794, column 12 in file settle_supp.pc
+                  AllTrim(p->sCalledCompanyID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2795, column 12, file settle_supp.pc:
+  Error at line 2795, column 12 in file settle_supp.pc
+                  AllTrim(p->sSwitchCompanyID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2796, column 12, file settle_supp.pc:
+  Error at line 2796, column 12 in file settle_supp.pc
+                  AllTrim(p->sProvinceID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2797, column 12, file settle_supp.pc:
+  Error at line 2797, column 12 in file settle_supp.pc
+                  AllTrim(p->sDurationMinnum);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2798, column 12, file settle_supp.pc:
+  Error at line 2798, column 12 in file settle_supp.pc
+                  AllTrim(p->sDurationSec6);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2799, column 12, file settle_supp.pc:
+  Error at line 2799, column 12 in file settle_supp.pc
+                  AllTrim(p->sInTrunkGroup);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2800, column 12, file settle_supp.pc:
+  Error at line 2800, column 12 in file settle_supp.pc
+                  AllTrim(p->sOutTrunkGroup);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2801, column 12, file settle_supp.pc:
+  Error at line 2801, column 12 in file settle_supp.pc
+                  AllTrim(p->sCallingNumberCompanyID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2802, column 12, file settle_supp.pc:
+  Error at line 2802, column 12 in file settle_supp.pc
+                  AllTrim(p->sCalledNumberCompanyID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2803, column 12, file settle_supp.pc:
+  Error at line 2803, column 12 in file settle_supp.pc
+                  AllTrim(p->sCallingGroupID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2804, column 12, file settle_supp.pc:
+  Error at line 2804, column 12 in file settle_supp.pc
+                  AllTrim(p->sCalledGroupID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2805, column 12, file settle_supp.pc:
+  Error at line 2805, column 12 in file settle_supp.pc
+                  AllTrim(p->sStlObject);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2806, column 12, file settle_supp.pc:
+  Error at line 2806, column 12 in file settle_supp.pc
+                  AllTrim(p->sProdPropID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2807, column 12, file settle_supp.pc:
+  Error at line 2807, column 12 in file settle_supp.pc
+                  AllTrim(p->sCallingSubType);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2808, column 12, file settle_supp.pc:
+  Error at line 2808, column 12 in file settle_supp.pc
+                  AllTrim(p->sCalledSubType);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2809, column 12, file settle_supp.pc:
+  Error at line 2809, column 12 in file settle_supp.pc
+                  AllTrim(p->sPreCallType);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2810, column 12, file settle_supp.pc:
+  Error at line 2810, column 12 in file settle_supp.pc
+                  AllTrim(p->sTurnCode);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2811, column 12, file settle_supp.pc:
+  Error at line 2811, column 12 in file settle_supp.pc
+                  AllTrim(p->sTurnCodeCompanyID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2812, column 12, file settle_supp.pc:
+  Error at line 2812, column 12 in file settle_supp.pc
+                  AllTrim(p->sTurnCodeProvinceID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2813, column 12, file settle_supp.pc:
+  Error at line 2813, column 12 in file settle_supp.pc
+                  AllTrim(p->sTurnCodeOperationTypeGrade);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2814, column 12, file settle_supp.pc:
+  Error at line 2814, column 12 in file settle_supp.pc
+                  AllTrim(p->sTurnType);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2815, column 12, file settle_supp.pc:
+  Error at line 2815, column 12 in file settle_supp.pc
+                  AllTrim(p->sTurnCdrID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2816, column 12, file settle_supp.pc:
+  Error at line 2816, column 12 in file settle_supp.pc
+                  AllTrim(p->sSecondCallingNumber);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2817, column 12, file settle_supp.pc:
+  Error at line 2817, column 12 in file settle_supp.pc
+                  AllTrim(p->sSecondCallingAreaCode);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2818, column 12, file settle_supp.pc:
+  Error at line 2818, column 12 in file settle_supp.pc
+                  AllTrim(p->sSecondCallingGroupID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2819, column 12, file settle_supp.pc:
+  Error at line 2819, column 12 in file settle_supp.pc
+                  AllTrim(p->sSecondCallingCompanyID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2820, column 12, file settle_supp.pc:
+  Error at line 2820, column 12 in file settle_supp.pc
+                  AllTrim(p->sPreCallParentCdrID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2821, column 12, file settle_supp.pc:
+  Error at line 2821, column 12 in file settle_supp.pc
+                  AllTrim(p->sPreCallSubCdrID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2822, column 12, file settle_supp.pc:
+  Error at line 2822, column 12 in file settle_supp.pc
+                  AllTrim(p->sPreCallSubCdrNum);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2823, column 12, file settle_supp.pc:
+  Error at line 2823, column 12 in file settle_supp.pc
+                  AllTrim(p->sPreCallSubCdrSeq);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2824, column 12, file settle_supp.pc:
+  Error at line 2824, column 12 in file settle_supp.pc
+                  AllTrim(p->sPreCallUsageEventID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2825, column 12, file settle_supp.pc:
+  Error at line 2825, column 12 in file settle_supp.pc
+                  AllTrim(p->sTurnParentCdrID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2826, column 12, file settle_supp.pc:
+  Error at line 2826, column 12 in file settle_supp.pc
+                  AllTrim(p->sTurnSubCdrID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2827, column 12, file settle_supp.pc:
+  Error at line 2827, column 12 in file settle_supp.pc
+                  AllTrim(p->sTurnSubCdrNum);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2828, column 12, file settle_supp.pc:
+  Error at line 2828, column 12 in file settle_supp.pc
+                  AllTrim(p->sTurnSubCdrSeq);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2829, column 12, file settle_supp.pc:
+  Error at line 2829, column 12 in file settle_supp.pc
+                  AllTrim(p->sTurnUsageEventID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2830, column 12, file settle_supp.pc:
+  Error at line 2830, column 12 in file settle_supp.pc
+                  AllTrim(p->sInTrunkGenre);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2831, column 12, file settle_supp.pc:
+  Error at line 2831, column 12 in file settle_supp.pc
+                  AllTrim(p->sOutTrunkGenre);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2832, column 12, file settle_supp.pc:
+  Error at line 2832, column 12 in file settle_supp.pc
+                  AllTrim(p->sInTrunkNetType);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2833, column 12, file settle_supp.pc:
+  Error at line 2833, column 12 in file settle_supp.pc
+                  AllTrim(p->sOutTrunkNetType);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2834, column 12, file settle_supp.pc:
+  Error at line 2834, column 12 in file settle_supp.pc
+                  AllTrim(p->sCallingNumberType);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2835, column 12, file settle_supp.pc:
+  Error at line 2835, column 12 in file settle_supp.pc
+                  AllTrim(p->sCalledNumberType);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2836, column 12, file settle_supp.pc:
+  Error at line 2836, column 12 in file settle_supp.pc
+                  AllTrim(p->sCallingDomainID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2837, column 12, file settle_supp.pc:
+  Error at line 2837, column 12 in file settle_supp.pc
+                  AllTrim(p->sCalledDomainID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2838, column 12, file settle_supp.pc:
+  Error at line 2838, column 12 in file settle_supp.pc
+                  AllTrim(p->sSecondSubType);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2839, column 12, file settle_supp.pc:
+  Error at line 2839, column 12 in file settle_supp.pc
+                  AllTrim(p->sSecondCallingRoamnumber);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2840, column 12, file settle_supp.pc:
+  Error at line 2840, column 12 in file settle_supp.pc
+                  AllTrim(p->sViewCall);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2841, column 12, file settle_supp.pc:
+  Error at line 2841, column 12 in file settle_supp.pc
+                  AllTrim(p->sGroupID);
+  ...........1
+  PCC-S-02201, Encountered the symbol "->" when expecting one of the following:
+  
+     , )
+  The symbol ", was inserted before "->" to continue.
+  
+  Syntax error at line 2843, column 9, file settle_supp.pc:
+  Error at line 2843, column 9 in file settle_supp.pc
+          iCurPos++;
+  ........1
+  PCC-S-02201, Encountered the symbol "++" when expecting one of the following:
+  
+     ; , = ( [
+  
+  Syntax error at line 0, column 0, file settle_supp.pc:
+  Error at line 0, column 0 in file settle_supp.pc
+  PCC-S-02201, Encountered the symbol "<eof>" when expecting one of the following:
+  
+     ; { } ( * & + - ~ ! ^ ++ -- ... auto, break, case, char,
+     const, continue, default, do, double, enum, extern, float,
+     for, goto, if, int, long, ulong_varchar, OCIBFileLocator
+     OCIBlobLocator, OCIClobLocator, OCIDateTime,
+     OCIExtProcContext, OCIInterval, OCIRowid, OCIDate, OCINumber,
+     OCIRaw, OCIString, register, return, short, signed, sizeof,
+     sql_context, sql_cursor, static, struct, switch, typedef,
+     union, unsigned, utext, uvarchar, varchar, void, volatile,
+     while, an identifier, a typedef name, a precompiled header,
+     a quoted string, a numeric constant, exec oracle,
+     exec oracle begin, exec, exec sql, exec sql begin,
+     exec sql type, exec sql var, exec sql include,
+  
+  Error at line 0, column 0 in file settle_supp.pc
+  PCC-F-02102, Fatal error while doing C preprocessing
+Compiling settle_supp.c.
+  cc: error 1913: `settle_supp.c' does not exist or cannot be read
+Linking getMidStatTable.
+  cc: warning 1913: `settle_supp.o' does not exist or cannot be read
+  ld: I/O error, file "settle_supp.o": No such file or directory
+  Fatal error.

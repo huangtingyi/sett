@@ -1,0 +1,21 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+RECORD_TYPE         position(1  :2  ),    
+MSG_TYPE            position(3  :5  ),    
+SP_PROV_CODE        position(6  :8  ),   
+SMG                 position(9  :13 ), 
+SP_CODE             position(14 :18 ),  
+FW_SMG              position(19 :23 ),  
+FW_SMG_PROV         position(24 :26 ),  
+START_TIME          position(27 :40 ),  
+MSG_CNT             position(41 :50 ), 
+BASE_FEE            position(51 :62 ),
+INFO_FEE            position(63 :74 ),
+HOME_PROV_CODE      position(75 :77 ),
+FILE_TYPE           position(78 :80 ),
+RESERVE1            position(81 :110),
+STATE               position(111:113)
+)
+

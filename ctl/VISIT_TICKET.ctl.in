@@ -1,0 +1,30 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+CALL_TYPE      		position(1:2),  
+MSISDN         		position(3:17),
+CALLED_CODE    		position(18:22), 
+OTHER_PARTY    		position(23:46), 
+VISIT_AREA_CODE		position(47:51), 
+ROAM_FEE       		position(52:56), 
+TOLL_FEE       		position(57:63), 
+ADD_FEE        		position(64:68), 
+DURATION       		position(69:74), 
+START_TIME     		position(75:88), 
+HOME_AREA_CODE 		position(89:93), 
+ROAM_TYPE      		position(94:94), 
+DISTANCE_TYPE  		position(95:95), 
+USER_TYPE      		position(96:96), 
+IMSI           		position(97:111),
+MSRN           		position(112:126),
+MSC            		position(127:141),
+LAC            		position(142:146),
+CELL_ID        		position(147:151),
+THIRD_PARTY    		position(152:163),
+SERVICE_TYPE   		position(164:166),
+SERVICE_CODE   		position(167:170),
+CAL            		position(171:171),
+SUPPLEMENT_CODE		position(172:186)
+)
+

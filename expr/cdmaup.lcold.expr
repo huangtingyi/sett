@@ -1,0 +1,101 @@
+{
+
+goto aa;
+	setfilefmt("txt");
+	initdate(300);
+$AREACODE="";
+setfmt(st_calltype         ," ",  "%-2s"	,posp("0:2"   ));
+setfmt(st_callingnbr       ," ",  "%-15s"	,posp("2:15"  ));
+setfmt(st_minimsi          ," ",  "%-15s"	,posp("17:15" ));
+setfmt(st_esn              ," ",  "%-15s"	,posp("32:15" ));
+setfmt(st_callednbr        ," ",  "%-21s"	,posp("47:21" ));
+setfmt(st_tldn             ," ",  "%-15s"	,posp("68:15" ));
+setfmt(st_thirdnbr         ," ",  "%-21s"	,posp("83:21" ));
+setfmt(st_starttime        ," ",  "%-14s"	,posp("104:14"));
+setfmt(st_duration         ," ",  "%-6s" 	,posp("118:6" ));
+setfmt(st_switchid         ," ",  "%-10s"	,posp("124:10"));
+setfmt(st_laca             ," ",  "%-5s" 	,posp("134:5" ));
+setfmt(st_cella            ," ",  "%-5s" 	,posp("139:5" ));
+setfmt(st_lacb             ," ",  "%-5s" 	,posp("144:5" ));
+setfmt(st_cellb            ," ",  "%-5s" 	,posp("149:5" ));
+setfmt(st_valueraise       ," ",  "%-2s" 	,posp("154:2" ));
+setfmt(st_endreason        ," ",  "%-1s" 	,posp("156:1" ));
+setfmt(st_deformityflag    ," ",  "%-1s" 	,posp("157:1" ));
+setfmt(st_basecharge       ," ",  "%-8s" 	,posp("158:8" ));
+setfmt(st_baseduration     ," ",  "%-6s" 	,posp("166:6" ));
+setfmt(st_morerateflag     ," ",  "%-1s" 	,posp("172:1" ));
+setfmt(st_landcharge       ," ",  "%-8s" 	,posp("173:8" ));
+setfmt(st_landduration     ," ",  "%-6s" 	,posp("181:6" ));
+setfmt(st_landmoreflag     ," ",  "%-1s" 	,posp("187:1" ));
+setfmt(st_infocharge       ," ",  "%-8s" 	,posp("188:8" ));
+setfmt(st_othercharge      ," ",  "%-8s" 	,posp("196:8" ));
+setfmt(st_calledcity       ," ",  "%-3s" 	,posp("204:3" ));
+setfmt(st_calledprovince   ," ",  "%-3s" 	,posp("207:3" ));
+setfmt(st_callednation     ," ",  "%-3s" 	,posp("210:3" ));
+setfmt(st_landtype         ," ",  "%-1s" 	,posp("213:1" ));
+setfmt(st_landnettype      ," ",  "%-1s" 	,posp("214:1" ));
+setfmt(st_roamtype         ," ",  "%-1s" 	,posp("215:1" ));
+setfmt(st_callingcity      ," ",  "%-3s" 	,posp("216:3" ));
+setfmt(st_servicetype      ," ",  "%-3s" 	,posp("219:3" ));
+setfmt(st_servicecode      ," ",  "%-4s" 	,posp("222:4" ));
+setfmt(st_usertype         ," ",  "%-1s" 	,posp("226:1" ));
+aa:
+	ticketvalid=1;
+
+	st_calltype  		=IA5STRING(getseppos(t_ori,sepp("1:,")));
+	if(st_calltype=="00"){ticketvalid=-1;return;}/*非法呼叫类型*/
+
+	st_callingnbr   	=IA5STRING(getseppos(t_ori,sepp("4:,")));
+	st_minimsi      	=IA5STRING(getseppos(t_ori,sepp("3:,")));
+	st_esn          	=IA5STRING(getseppos(t_ori,sepp("47:,")));
+	st_callednbr    	=IA5STRING(getseppos(t_ori,sepp("5:,")));
+	st_tldn         	=IA5STRING(getseppos(t_ori,sepp("13:,")));
+	st_thirdnbr     	=IA5STRING(getseppos(t_ori,sepp("53:,")));
+	st_starttime    	=IA5STRING(getseppos(t_ori,sepp("6:,")))+
+				IA5STRING(getseppos(t_ori,sepp("7:,")));
+	st_duration     	=IA5STRING(getseppos(t_ori,sepp("8:,")));
+	st_switchid     	=IA5STRING(getseppos(t_ori,sepp("14:,")));
+	st_laca         	=lpad(itoa(atoi(IA5STRING(getseppos(t_ori,sepp("15:,"))))),"0",5);
+	st_cella        	=lpad(itoa(atoi(IA5STRING(getseppos(t_ori,sepp("16:,"))))),"0",5);
+	st_lacb         	=lpad(itoa(atoi(IA5STRING(getseppos(t_ori,sepp("17:,"))))),"0",5);
+	st_cellb        	=lpad(itoa(atoi(IA5STRING(getseppos(t_ori,sepp("18:,"))))),"0",5);
+	st_valueraise   	="0";
+	st_endreason    	=IA5STRING(getseppos(t_ori,sepp("50:,")));
+	st_deformityflag	="0";
+	temp			=IA5STRING(getseppos(t_ori,sepp("36:,")));
+	a=rplx(temp,".","");
+	b=substr(rplx(temp," ",""),-3,3);
+	st_basecharge   	=itoa(atoi(a)*1000+atoi(b));
+	st_baseduration 	=itoa((atoi(st_duration)+59)/60*60);
+	st_morerateflag 	="0";
+	temp			=IA5STRING(getseppos(t_ori,sepp("37:,")));
+	a=rplx(temp,".","");
+	b=substr(rplx(temp," ",""),-3,3);
+	st_landcharge		=itoa(atoi(a)*1000+atoi(b));
+	st_landduration 	=itoa((atoi(st_duration)+5)/6*6);
+	st_landmoreflag 	="0";
+	st_infocharge   	="0";
+	st_othercharge  	="0";
+	st_calledcity   	=IA5STRING(getseppos(t_ori,sepp("28:,")));
+	st_calledprovinc	=IA5STRING(getseppos(t_ori,sepp("29:,")));
+	st_callednation 	=IA5STRING(getseppos(t_ori,sepp("30:,")));
+	st_landtype     	="";
+	st_landnettype  	=IA5STRING(getseppos(t_ori,sepp("35:,")));
+	st_roamtype     	=IA5STRING(getseppos(t_ori,sepp("31:,")));
+	st_callingcity  	=IA5STRING(getseppos(t_ori,sepp("27:,")));
+	
+	usertype=	IA5STRING(getseppos(t_ori,sepp("32:,")));
+	if(usertype=="A7"||usertype=="B7"){ticketvalid=-1;return;}
+	
+	if(st_call_type=="03"){
+		st_servicetype="002";
+		i	=atoi(IA5STRING(getseppos(t_ori,sepp("54:,"))));
+		st_servicecode=di2s(i,pi2s("1:'0021':2:'0029':3:'002A':4:'002B':'0020'"));
+	}
+	else{
+		st_servicetype="000";
+		st_servicecode="0011";
+	}
+	tempdate=substr(st_starttime,0,8);
+	if(maxdatadate(tempdate)<0){ticketvalid=-1;return;}
+}

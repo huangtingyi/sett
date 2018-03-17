@@ -1,0 +1,21 @@
+#define TRANSLATEABC 	\
+	t_msc="8613900001";
+x=tks(3,t_msc);
+TRANSLATEABC;
+y=test1(1,"abc");
+int tks(int a,string b)
+{
+	a=5;
+	b="abc";
+	return ;
+}
+int tks11(int a,string b)
+{
+	a=5;
+	b="abc";
+	return ;
+}
+int test1(int x,string y)
+{
+	return x+strlen(y);
+}

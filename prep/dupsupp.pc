@@ -1,0 +1,641 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <wwfile.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <list.h>
+#include <wwdb.h>
+
+#include "dupsupp.h"
+
+/*批量数据动态从DUP_TICKET中用结构缓冲方式取数据*/
+int EGetDupTicketToStruct(struct DupTicketStruct *p,
+	struct DupTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(CALL_TYPE,'-1'),\n\
+				nvl(MSISDN,'-1'),\n\
+				nvl(OTHER_PARTY,'-1'),\n\
+				nvl(HOUR,'-1'),\n\
+				nvl(MISS,'-1'),\n\
+				nvl(DURATION,'-1'),\n\
+				nvl(SOURCE_ID,'-1')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE DUP_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE DUP_TICKETSCR DUP_TICKETCR");
+
+		EXEC SQL DECLARE DUP_TICKETCR CURSOR FOR DUP_TICKETSCR;
+		CheckSqlError("Declare DUP_TICKETCR");
+
+		EXEC SQL OPEN DUP_TICKETCR;
+		CheckSqlError("Open DUP_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE DUP_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH DUP_TICKETCR INTO
+			:pSource->asCallType,
+			:pSource->asMsisdn,
+			:pSource->asOtherParty,
+			:pSource->asHour,
+			:pSource->asMiss,
+			:pSource->asDuration,
+			:pSource->asSourceID;
+		CheckSqlError("Fetch DUP_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE DUP_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=DUP_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sCallType,	pSource->asCallType[iCurPos]);
+		strcpy(p->sMsisdn,	pSource->asMsisdn[iCurPos]);
+		strcpy(p->sOtherParty,	pSource->asOtherParty[iCurPos]);
+		strcpy(p->sHour,	pSource->asHour[iCurPos]);
+		strcpy(p->sMiss,	pSource->asMiss[iCurPos]);
+		strcpy(p->sDuration,	pSource->asDuration[iCurPos]);
+		strcpy(p->sSourceID,	pSource->asSourceID[iCurPos]);
+
+		AllTrim(p->sCallType);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sHour);
+		AllTrim(p->sMiss);
+		AllTrim(p->sDuration);
+		AllTrim(p->sSourceID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+int CreateDupTicketTable(char sTableName[],char sTablespaceName[])
+{
+	int i,l;
+	char statement[8192];
+
+/*生成建表表头文件*/
+	l=sprintf(statement,"CREATE TABLE %s \n\
+		PARTITION BY RANGE(HOUR)\n\
+		(",sTableName);
+/*生成分区子句子*/
+	for(i=0;i<23;i++){
+		l+=sprintf(statement+l,"\n\
+partition PART%02d values less than ('%02d') tablespace %s,",
+			i,i+1,sTablespaceName);
+	}
+/*生成最末语句*/
+	l+=sprintf(statement+l,"\n\
+partition PART%02d values less than (MAXVALUE) tablespace %s\n\
+	)\n\
+	AS SELECT * FROM PARAM.TEMPLATE_DUP_TICKET WHERE 1=0",
+		i,sTablespaceName);
+
+
+	return ExecSql(statement);
+}
+
+/**对表DUP_TICKET的链表释放函数**/
+void DestroyDupTicket(struct DupTicketStruct *ptHead)
+{
+	struct DupTicketStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+int InitDupTicket(char sDataDate[],char sModule[],char sTablespaceName[],
+	struct DupTicketStruct **pptHead)
+{
+	int iCnt=0;
+	char sTempDate[15],sHour[3];
+	static struct DupTicketStruct *pTemp,*ptHead=NULL;
+	struct DupTicketStruct Temp;
+	struct DupTicketStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyDupTicket(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	
+	strncpy(sTempDate,sDataDate,8);sTempDate[8]=0;
+	strncpy(sHour,sDataDate+8,2);sHour[2]=0;
+	
+	bzero((void*)&TempIn,sizeof(struct DupTicketStructIn));
+	sprintf(TempIn.sTableName,"DUP_TICKET_%s_%s",
+		sModule,sTempDate);
+	sprintf(TempIn.sCondition,"PARTITION (PART%s)",sHour);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+/*如果表不存在则建一下*/
+	if(TableExist(TempIn.sTableName)!=TRUE){
+		if(CreateDupTicketTable(TempIn.sTableName,sTablespaceName)<0)
+			return -1;
+	}
+
+	/*获取数据循环部分**/
+	while(EGetDupTicketToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		strcpy(Temp.sStartTime,sTempDate);
+		strcat(Temp.sStartTime,Temp.sHour);
+		strcat(Temp.sStartTime,Temp.sMiss);
+
+		if((pTemp=(struct DupTicketStruct*)
+			malloc(sizeof(struct DupTicketStruct)))==NULL){
+
+			DestroyDupTicket(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct DupTicketStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		iCnt++;
+/*
+		if((iCnt%10000)==0)
+			WriteProcMsg("加载表DUP_TICKET记录数%d",iCnt);
+*/
+	}
+
+/*	WriteProcMsg("加载表DUP_TICKET完毕总记录数%d",iCnt);*/
+
+	return iCnt;
+}
+
+/*批量数据结构缓冲写入DUP_TICKET*/
+int EInsertStructToDupTicket(struct DupTicketStruct *p,
+	int iInsertFlag,struct DupTicketStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asCallType[iCurPos],	p->sCallType);
+		strcpy(pTarget->asMsisdn[iCurPos],	p->sMsisdn);
+		strcpy(pTarget->asOtherParty[iCurPos],	p->sOtherParty);
+		strcpy(pTarget->asHour[iCurPos],	p->sHour);
+		strcpy(pTarget->asMiss[iCurPos],	p->sMiss);
+		strcpy(pTarget->asDuration[iCurPos],	p->sDuration);
+		strcpy(pTarget->asSourceID[iCurPos],	p->sSourceID);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==DUP_TICKET_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				CALL_TYPE,\n\
+				MSISDN,\n\
+				OTHER_PARTY,\n\
+				HOUR,\n\
+				MISS,\n\
+				DURATION,\n\
+				SOURCE_ID)\n\
+			VALUES (\n\
+				:asCallType,\n\
+				:asMsisdn,\n\
+				:asOtherParty,\n\
+				:asHour,\n\
+				:asMiss,\n\
+				:asDuration,\n\
+				:asSourceID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE DUP_TICKETTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement DUP_TICKET")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE DUP_TICKETTRG USING
+				:pTarget->asCallType,
+				:pTarget->asMsisdn,
+				:pTarget->asOtherParty,
+				:pTarget->asHour,
+				:pTarget->asMiss,
+				:pTarget->asDuration,
+				:pTarget->asSourceID;
+		if(CheckSqlResult("Dyn insert into DUP_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据动态从HOUR_NODE中用结构缓冲方式取数据*/
+int EGetHourNodeToStruct(struct HourNodeStruct *p,
+	struct HourNodeStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				MODULE,\n\
+				to_char(DATA_DATE,'yyyymmddhh24miss'),\n\
+				nvl(MIN_ACROSS_BEGIN_TIME,-1),\n\
+				nvl(MAX_ACROSS_END_TIME,-1),\n\
+				nvl(RECORD_CNT,-1),\n\
+				nvl(NODE_CNT,-1),\n\
+				nvl(READ_TIMES,-1),\n\
+				nvl(WRITE_TIMES,-1),\n\
+				nvl(REBUILD_TIMES,-1),\n\
+				STATE\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE HOUR_NODESCR FROM :statement;
+		CheckSqlError(" PREPARE HOUR_NODESCR HOUR_NODECR");
+
+		EXEC SQL DECLARE HOUR_NODECR CURSOR FOR HOUR_NODESCR;
+		CheckSqlError("Declare HOUR_NODECR");
+
+		EXEC SQL OPEN HOUR_NODECR;
+		CheckSqlError("Open HOUR_NODECR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE HOUR_NODECR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH HOUR_NODECR INTO
+			:pSource->asModule,
+			:pSource->asDataDate,
+			:pSource->aiMinAcrossBeginTime,
+			:pSource->aiMaxAcrossEndTime,
+			:pSource->aiRecordCnt,
+			:pSource->aiNodeCnt,
+			:pSource->aiReadTimes,
+			:pSource->aiWriteTimes,
+			:pSource->aiRebuildTimes,
+			:pSource->asState;
+		CheckSqlError("Fetch HOUR_NODECR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE HOUR_NODECR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=HOUR_NODE_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sModule,	pSource->asModule[iCurPos]);
+		strcpy(p->sDataDate,	pSource->asDataDate[iCurPos]);
+
+		p->iMinAcrossBeginTime=	pSource->aiMinAcrossBeginTime[iCurPos];
+		p->iMaxAcrossEndTime=	pSource->aiMaxAcrossEndTime[iCurPos];
+
+		p->iRecordCnt=		pSource->aiRecordCnt[iCurPos];
+		p->iNodeCnt=		pSource->aiNodeCnt[iCurPos];
+		p->iReadTimes=		pSource->aiReadTimes[iCurPos];
+		p->iWriteTimes=		pSource->aiWriteTimes[iCurPos];
+		p->iRebuildTimes=	pSource->aiRebuildTimes[iCurPos];
+
+		strcpy(p->sState,	pSource->asState[iCurPos]);
+
+		AllTrim(p->sModule);
+		AllTrim(p->sDataDate);
+		AllTrim(p->sState);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/**对表HOUR_NODE的链表释放函数**/
+void DestroyHourNode(struct HourNodeStruct *ptHead)
+{
+	struct HourNodeStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+int InitHourNode(char sModule[],char sBeginDate[],char sEndDate[],
+	struct HourNodeStruct **pptHead)
+{
+	int iCnt=0;
+	static struct HourNodeStruct *pTemp,*ptHead=NULL;
+	struct HourNodeStruct Temp;
+	struct HourNodeStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyHourNode(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct HourNodeStructIn));
+	sprintf(TempIn.sTableName,"HOUR_NODE");
+	sprintf(TempIn.sCondition," WHERE MODULE ='%s' AND \n\
+		to_char(DATA_DATE,'yyyymmddhh24miss')>='%s' AND\n\
+		to_char(DATA_DATE,'yyyymmddhh24miss')<'%s'",
+		sModule,sBeginDate,sEndDate);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetHourNodeToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct HourNodeStruct*)
+			malloc(sizeof(struct HourNodeStruct)))==NULL){
+
+			DestroyHourNode(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct HourNodeStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表HOUR_NODE记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表HOUR_NODE完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+
+/*批量数据结构缓冲写入HOUR_NODE*/
+int EInsertStructToHourNode(struct HourNodeStruct *p,
+	int iInsertFlag,struct HourNodeStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asModule[iCurPos],	p->sModule);
+		strcpy(pTarget->asDataDate[iCurPos],	p->sDataDate);
+
+		pTarget->aiMinAcrossBeginTime[iCurPos]=	p->iMinAcrossBeginTime;
+		pTarget->aiMaxAcrossEndTime[iCurPos]=	p->iMaxAcrossEndTime;
+
+		pTarget->aiRecordCnt[iCurPos]=		p->iRecordCnt;
+		pTarget->aiNodeCnt[iCurPos]=		p->iNodeCnt;
+		pTarget->aiReadTimes[iCurPos]=		p->iReadTimes;
+		pTarget->aiWriteTimes[iCurPos]=		p->iWriteTimes;
+		pTarget->aiRebuildTimes[iCurPos]=	p->iRebuildTimes;
+
+		strcpy(pTarget->asState[iCurPos],	p->sState);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==HOUR_NODE_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				MODULE,\n\
+				DATA_DATE,\n\
+				MIN_ACROSS_BEGIN_TIME,\n\
+				MAX_ACROSS_END_TIME,\n\
+				RECORD_CNT,\n\
+				NODE_CNT,\n\
+				READ_TIMES,\n\
+				WRITE_TIMES,\n\
+				REBUILD_TIMES,\n\
+				STATE)\n\
+			VALUES (\n\
+				:asModule,\n\
+				to_date(:asDataDate,'yyyymmddhh24miss'),\n\
+				:aiMinAcrossBeginTime,\n\
+				:aiMaxAcrossEndTime,\n\
+				:aiRecordCnt,\n\
+				:aiNodeCnt,\n\
+				:aiReadTimes,\n\
+				:aiWriteTimes,\n\
+				:aiRebuildTimes,\n\
+				:asState\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE HOUR_NODETRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement HOUR_NODE")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE HOUR_NODETRG USING
+				:pTarget->asModule,
+				:pTarget->asDataDate,
+				:pTarget->aiMinAcrossBeginTime,
+				:pTarget->aiMaxAcrossEndTime,
+				:pTarget->aiRecordCnt,
+				:pTarget->aiNodeCnt,
+				:pTarget->aiReadTimes,
+				:pTarget->aiWriteTimes,
+				:pTarget->aiRebuildTimes,
+				:pTarget->asState;
+		if(CheckSqlResult("Dyn insert into HOUR_NODE")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+int EUpdateStructToHourNode(struct HourNodeStruct *p,
+	int iUpdateFlag,struct HourNodeStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+	
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asModule[iCurPos],	p->sModule);
+		strcpy(pTarget->asDataDate[iCurPos],	p->sDataDate);
+
+		pTarget->aiMinAcrossBeginTime[iCurPos]=	p->iMinAcrossBeginTime;
+		pTarget->aiMaxAcrossEndTime[iCurPos]=	p->iMaxAcrossEndTime;
+
+		pTarget->aiRecordCnt[iCurPos]=		p->iRecordCnt;
+		pTarget->aiNodeCnt[iCurPos]=		p->iNodeCnt;
+		pTarget->aiReadTimes[iCurPos]=		p->iReadTimes;
+		pTarget->aiWriteTimes[iCurPos]=		p->iWriteTimes;
+		pTarget->aiRebuildTimes[iCurPos]=	p->iRebuildTimes;
+
+		strcpy(pTarget->asState[iCurPos],	p->sState);
+		
+		iCurPos++;
+	}
+
+	if(iUpdateFlag==TRUE||iCurPos==HOUR_NODE_BUFLEN_UP){
+
+/* INSERT */
+		char statement[4096];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE %s\n\
+			SET \n\
+				MIN_ACROSS_BEGIN_TIME=	:aiMinAcrossBeginTime,\n\
+				MAX_ACROSS_END_TIME=    :aiMaxAcrossEndTime,\n\
+				RECORD_CNT=        	:aiRecordCnt,\n\
+				NODE_CNT=               :aiNodeCnt,\n\
+				READ_TIMES=         	:aiReadTimes,\n\
+				WRITE_TIMES=        	:aiWriteTimes,\n\
+				REBUILD_TIMES=         	:aiRebuildTimes,\n\
+				STATE=             	:asState\n\
+			WHERE \n\
+				MODULE= 		:asModule AND\n\
+				DATA_DATE=to_date(:asDataDate,'yyyymmddhh24miss')\n\
+			",sTableName);
+
+		EXEC SQL PREPARE HOUR_NODEUCR FROM :statement;
+		if(CheckSqlResult("Prepare update statement HOUR_NODE")<0)
+			return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE HOUR_NODEUCR USING
+				:pTarget->aiMinAcrossBeginTime,
+				:pTarget->aiMaxAcrossEndTime,
+				:pTarget->aiRecordCnt,
+				:pTarget->aiNodeCnt,
+				:pTarget->aiReadTimes,
+				:pTarget->aiWriteTimes,
+				:pTarget->aiRebuildTimes,
+				:pTarget->asState,
+				:pTarget->asModule,
+				:pTarget->asDataDate;
+		if(CheckSqlResult("Dyn update HOUR_NODE")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+

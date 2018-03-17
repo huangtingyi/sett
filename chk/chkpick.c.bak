@@ -1,0 +1,211 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <wwlog.h>
+#include <wwfile.h>
+#include <wwtiny.h>
+#include <wwdb.h>
+
+#include <dbsupp.h>
+
+void print_param();
+void CheckSeq(int aiSeq[],int iLen, int iMinSeq,int iMaxSeq ,
+	struct FileControlStruct **ppErr,struct FileControlStruct **ppRepeat);
+
+/*生成目标文件*/
+int main(int argc,char *argv[])
+{
+
+#define MAXSEQNUM	1000
+
+	int aiSeq[MAXSEQNUM];
+	
+	int i,l,iRet=0,iMaxSeq=0,iMinSeq=0;
+		
+	char sSourceID[20],sDate[15],sHostTime[15];
+	char sTemp[18],sBeginDate[15],sEndDate[15];
+	
+	struct PickLogStruct Temp;
+	struct PickLogStructIn TempIn;
+	
+	struct FileControlStruct *pErr=NULL,*pRepeat=NULL,*pPos=NULL;
+				
+	if(argc !=5 ){
+		print_param(argv);
+		return -1;		
+	}
+	
+/*初始化参数部分*/
+	strcpy(sSourceID,argv[1]);	
+	strcpy(sTemp,argv[2]); 
+	if(strncmp(sTemp,"D",1)==0){
+		strncpy(sBeginDate,sTemp+1,8);sBeginDate[8]=0;
+		strncpy(sEndDate,sTemp+9,8);sEndDate[8]=0;
+	}
+	else{
+		strncpy(sDate,sTemp,8); 
+		sDate[8]=0;
+	}
+	
+	
+	iMinSeq = atoi(argv[3]);
+	iMaxSeq = atoi(argv[4]);
+	
+/**检查参数合法性*******/
+	if (iMaxSeq <= iMinSeq)	{
+		printf("最大序列号参数必须大于最小序列号参数.\n");
+		return -1;
+	}		
+	if (strstr(sDate,"-n") != NULL){
+		GetHostTime(sHostTime);
+		strncpy(sDate,sHostTime,8); sDate[8]=0;
+	}
+	
+	if(IniConnect("dataconnstr")<0){
+		printf("无法连接数据库.\n");
+		return -1;
+	}
+	
+	bzero((void*)&TempIn,sizeof(struct PickLogStructIn));
+
+	sprintf(TempIn.sTableName,"PICK_LOG");
+
+	if (strncmp(sTemp,"D",1)==0){
+		sprintf(TempIn.sCondition,"\n\
+			WHERE SOURCE_ID='%s' AND \n\
+			to_char(DEAL_END_DATE,'yyyymmdd')>='%s' AND\n\
+			to_char(DEAL_END_DATE,'yyyymmdd')<='%s'\n\
+			ORDER BY DEAL_END_DATE",sSourceID,sBeginDate,sEndDate);
+	}
+	else{
+		sprintf(TempIn.sCondition,"\n\
+			WHERE SOURCE_ID='%s' AND \n\
+			to_char(DEAL_END_DATE,'yyyymmdd')='%s'\n\
+			ORDER BY DEAL_END_DATE",sSourceID,sDate);
+	}
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	while(EGetPickLogToStruct(&Temp,&TempIn)){
+		aiSeq[i]=Temp.iSeq;
+		i++;
+		if(i>=MAXSEQNUM){
+			i=0;
+			CheckSeq(aiSeq,i,iMinSeq,iMaxSeq,&pErr,&pRepeat);
+		}
+	}
+	if(i<MAXSEQNUM)
+		CheckSeq(aiSeq,i,iMinSeq,iMaxSeq,&pErr,&pRepeat);
+	
+	DisconnectDatabase();
+	
+	/*输出不连续的元素*/
+	
+	if (pErr!=NULL){
+		iRet = -1;
+		pPos = pErr;
+		printf("有不连续的序列 ");
+		while (pPos->pNext !=NULL){
+			printf("%d ", *((int *)pPos->pData));
+			pPos=pPos->pNext;	
+		}
+		printf("%d\n", *((int *)pPos->pData));	
+	}
+	
+	/*输出有重复的元素*/
+	if (pRepeat!=NULL){
+		iRet = -1;
+		
+		pPos = pRepeat;
+		printf("有重复的序列 ");
+		while (pPos->pNext !=NULL){
+			printf("%d ", *((int *)pPos->pData));
+			pPos=pPos->pNext;	
+		}
+		printf("%d\n", *((int *)pPos->pData));	
+	}
+	
+	/*正常输出*/	
+	if(iRet==1)  printf("没有要检查的采集点数据!\n");
+	
+	/*释放内存*/
+	listfree(&pErr);
+	listfree(&pRepeat);
+					
+	return 0;
+}
+
+/*检查数据组的元素连续性,把重复出现和非连续的元素放在链表中*/
+
+void CheckSeq(int aiSeq[],int iLen, int iMinSeq,int iMaxSeq ,
+	struct FileControlStruct **ppErr,struct FileControlStruct **ppRepeat)
+{
+	int i=0,iErrCnt=0,iErrNum=0,iMaxCnt=0;
+
+	while (i<iLen-1){
+		if(aiSeq[i+1]==aiSeq[i]+1){
+			i++;
+			continue;
+			
+		/*有重复的情况*/			
+		}
+		else if (aiSeq[i+1]==aiSeq[i]) {
+			
+			item2listtail(ppRepeat,aiSeq+i,sizeof(int));
+			while(aiSeq[i+1]==aiSeq[i])i++;
+		
+		/*有异常的情况*/				
+		}
+		else if(aiSeq[i+1]>aiSeq [i]){
+			
+			iErrCnt=aiSeq[i+1]-aiSeq[i]-1;
+
+			while(iErrCnt > 0){				
+				iErrNum = aiSeq[i+1] - iErrCnt ;				
+				item2listtail(ppErr,&iErrNum,sizeof(int));
+				iErrCnt--;
+			}
+			
+		/*已经达到最大序列情况*/					
+		}
+		else if(aiSeq[i+1]<aiSeq [i]) {	
+		
+			if (aiSeq[i]!=iMaxSeq) {
+				iErrCnt = iMaxSeq - aiSeq[i] -1;
+				while(iErrCnt >= 0){
+				
+					iMaxCnt++;
+					if(iMaxCnt > 10) break; /*防止太多了*/
+					
+					iErrNum = iMaxSeq - iErrCnt ;				
+					item2listtail(ppErr,&iErrNum,sizeof(int));
+					iErrCnt--;
+				}	
+			}
+			
+			if(aiSeq[i+1] != iMinSeq) {
+				iErrCnt = aiSeq[i+1] - iMinSeq -1;
+				while(iErrCnt > 0){			
+				
+					iMaxCnt++;
+					if(iMaxCnt > 10) break; /*防止太多了*/
+						
+					iErrNum = aiSeq[i+1] - iErrCnt ;				
+					item2listtail(ppErr,&iErrNum,sizeof(int));
+					iErrCnt--;
+				}
+			}
+		}
+		i++;						
+	}
+		
+}
+
+void print_param(char *argv[])
+{
+	printf("Usage %s sourceid date minseq maxseq.\n",argv[0]);
+	printf("date参数说明:\n");
+	printf("	Ddate1date2 要检查date1到date2,yyyymmdd格式\n");
+	printf("	-n 	忽略date参数,用当前系统时间检查\n");
+	printf("	date 	要检查日期,yyyymmdd格式\n");
+		
+}

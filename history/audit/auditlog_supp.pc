@@ -1,0 +1,1271 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdir.h>
+#include <wwdb.h>
+#include <list.h>
+#include <expr.h>
+#include <expr_var.h>
+#include <expr_fun.h>
+#include <gen_supp.h>
+#include <param_intf.h>
+#include "base_supp.h"
+#include "dbsupp.h"
+#include "stt_ticket.h"
+#include "auditlog_supp.h"
+
+/*批量数据动态从BILLING_PROC_LOG中用结构缓冲方式取数据*/
+int EGetBillingProcLogToStruct(struct BillingProcLogStruct *p,
+	struct BillingProcLogStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				FILE_NAME,\n\
+				SPLIT_STR,\n\
+				BYTE,\n\
+				CNT,\n\
+				to_char(nvl(DEAL_BEGIN_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_END_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(FILE_TYPE,' '),\n\
+				nvl(APP_CODE,' '),\n\
+				nvl(APP_ID,' '),\n\
+				nvl(TACHE_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE BILLING_PROC_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE BILLING_PROC_LOGSCR BILLING_PROC_LOGCR");
+
+		EXEC SQL DECLARE BILLING_PROC_LOGCR CURSOR FOR
+			BILLING_PROC_LOGSCR;
+		CheckSqlError("Declare BILLING_PROC_LOGCR");
+
+		EXEC SQL OPEN BILLING_PROC_LOGCR;
+		CheckSqlError("Open BILLING_PROC_LOGCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE BILLING_PROC_LOGCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH BILLING_PROC_LOGCR INTO
+			:pSource->aiInputID,
+			:pSource->asSourceID,
+			:pSource->asModule,
+			:pSource->asFileName,
+			:pSource->asSplitStr,
+			:pSource->aiByte,
+			:pSource->aiCnt,
+			:pSource->asDealBeginDate,
+			:pSource->asDealEndDate,
+			:pSource->asFileType,
+			:pSource->asAppCode,
+			:pSource->asAppID,
+			:pSource->aiTacheID;
+		CheckSqlError("Fetch BILLING_PROC_LOGCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE BILLING_PROC_LOGCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=BILLING_PROC_LOG_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iInputID=			pSource->aiInputID[iCurPos];
+
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sModule,		pSource->asModule[iCurPos]);
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sSplitStr,		pSource->asSplitStr[iCurPos]);
+
+		p->iByte=			pSource->aiByte[iCurPos];
+		p->iCnt=			pSource->aiCnt[iCurPos];
+
+		strcpy(p->sDealBeginDate,	pSource->asDealBeginDate[iCurPos]);
+		strcpy(p->sDealEndDate,		pSource->asDealEndDate[iCurPos]);
+		strcpy(p->sFileType,		pSource->asFileType[iCurPos]);
+		strcpy(p->sAppCode,		pSource->asAppCode[iCurPos]);
+		strcpy(p->sAppID,		pSource->asAppID[iCurPos]);
+
+		p->iTacheID=			pSource->aiTacheID[iCurPos];
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sModule);
+		AllTrim(p->sFileName);
+		AllTrim(p->sSplitStr);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sFileType);
+		AllTrim(p->sAppCode);
+		AllTrim(p->sAppID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从ACCT_LOG中用结构缓冲方式取数据*/
+int EGetAcctLogToStruct(struct AcctLogStruct *p,
+	struct AcctLogStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				STATE,\n\
+				BYTE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				TABLE_NAME,\n\
+				to_char(DEAL_BEGIN_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_END_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DATA_DATE,'yyyymmddhh24miss'),\n\
+				OPER_TYPE,\n\
+				nvl(FILE_TYPE,' '),\n\
+				nvl(APP_ID,' '),\n\
+				nvl(TACHE_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE ACCT_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE ACCT_LOGSCR ACCT_LOGCR");
+
+		EXEC SQL DECLARE ACCT_LOGCR CURSOR FOR ACCT_LOGSCR;
+		CheckSqlError("Declare ACCT_LOGCR");
+
+		EXEC SQL OPEN ACCT_LOGCR;
+		CheckSqlError("Open ACCT_LOGCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE ACCT_LOGCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH ACCT_LOGCR INTO
+			:pSource->asSourceID,
+			:pSource->asModule,
+			:pSource->asState,
+			:pSource->aiByte,
+			:pSource->aiCnt,
+			:pSource->asFileName,
+			:pSource->asTableName,
+			:pSource->asDealBeginDate,
+			:pSource->asDealEndDate,
+			:pSource->asDataDate,
+			:pSource->asOperType,
+			:pSource->asFileType,
+			:pSource->asAppID,
+			:pSource->aiTacheID;
+		CheckSqlError("Fetch ACCT_LOGCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE ACCT_LOGCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=ACCT_LOG_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sModule,		pSource->asModule[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+
+		p->iByte=			pSource->aiByte[iCurPos];
+		p->iCnt=			pSource->aiCnt[iCurPos];
+
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sTableName,		pSource->asTableName[iCurPos]);
+		strcpy(p->sDealBeginDate,	pSource->asDealBeginDate[iCurPos]);
+		strcpy(p->sDealEndDate,		pSource->asDealEndDate[iCurPos]);
+		strcpy(p->sDataDate,		pSource->asDataDate[iCurPos]);
+		strcpy(p->sOperType,		pSource->asOperType[iCurPos]);
+		strcpy(p->sFileType,		pSource->asFileType[iCurPos]);
+		strcpy(p->sAppID,		pSource->asAppID[iCurPos]);
+
+		p->iTacheID=			pSource->aiTacheID[iCurPos];
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sModule);
+		AllTrim(p->sState);
+		AllTrim(p->sFileName);
+		AllTrim(p->sTableName);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sDataDate);
+		AllTrim(p->sOperType);
+		AllTrim(p->sFileType);
+		AllTrim(p->sAppID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从UPDATA_PROC_LOG中用结构缓冲方式取数据*/
+int EGetUpdataProcLogToStruct(struct UpdataProcLogStruct *p,
+	struct UpdataProcLogStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				ORI_FILE_NAME,\n\
+				CUR_FILE_NAME,\n\
+				BYTE,\n\
+				REC_CNT,\n\
+				to_char(FILE_DATE,'yyyymmddhh24miss'),\n\
+				nvl(APP_ID,' '),\n\
+				nvl(TACHE_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE UPDATA_PROC_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE UPDATA_PROC_LOGSCR UPDATA_PROC_LOGCR");
+
+		EXEC SQL DECLARE UPDATA_PROC_LOGCR CURSOR FOR UPDATA_PROC_LOGSCR;
+		CheckSqlError("Declare UPDATA_PROC_LOGCR");
+
+		EXEC SQL OPEN UPDATA_PROC_LOGCR;
+		CheckSqlError("Open UPDATA_PROC_LOGCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE UPDATA_PROC_LOGCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH UPDATA_PROC_LOGCR INTO
+			:pSource->asOriFileName,
+			:pSource->asCurFileName,
+			:pSource->aiByte,
+			:pSource->aiRecCnt,
+			:pSource->asFileDate,
+			:pSource->asAppID,
+			:pSource->aiTacheID;
+		CheckSqlError("Fetch UPDATA_PROC_LOGCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE UPDATA_PROC_LOGCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=UPDATA_PROC_LOG_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sOriFileName,	pSource->asOriFileName[iCurPos]);
+		strcpy(p->sCurFileName,	pSource->asCurFileName[iCurPos]);
+
+		p->iByte=		pSource->aiByte[iCurPos];
+		p->iRecCnt=		pSource->aiRecCnt[iCurPos];
+
+		strcpy(p->sFileDate,	pSource->asFileDate[iCurPos]);
+		strcpy(p->sAppID,	pSource->asAppID[iCurPos]);
+
+		p->iTacheID=		pSource->aiTacheID[iCurPos];
+
+		AllTrim(p->sOriFileName);
+		AllTrim(p->sCurFileName);
+		AllTrim(p->sFileDate);
+		AllTrim(p->sAppID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从UPDATA_LOG中用结构缓冲方式取数据*/
+int EGetUpdataLogToStruct(struct UpdataLogStruct *p,
+	struct UpdataLogStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				UPDATA_ID,\n\
+				FILE_TYPE,\n\
+				FILE_NAME,\n\
+				to_char(BEGIN_TIME,'yyyymmddhh24miss'),\n\
+				to_char(END_TIME,'yyyymmddhh24miss'),\n\
+				REC_CNT,\n\
+				TOTAL_CHARGE,\n\
+				to_char(DATA_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_BEGIN_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_END_DATE,'yyyymmddhh24miss'),\n\
+				nvl(APP_ID,' '),\n\
+				nvl(TACHE_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE UPDATA_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE UPDATA_LOGSCR UPDATA_LOGCR");
+
+		EXEC SQL DECLARE UPDATA_LOGCR CURSOR FOR UPDATA_LOGSCR;
+		CheckSqlError("Declare UPDATA_LOGCR");
+
+		EXEC SQL OPEN UPDATA_LOGCR;
+		CheckSqlError("Open UPDATA_LOGCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE UPDATA_LOGCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH UPDATA_LOGCR INTO
+			:pSource->aiUpdataID,
+			:pSource->asFileType,
+			:pSource->asFileName,
+			:pSource->asBeginTime,
+			:pSource->asEndTime,
+			:pSource->aiRecCnt,
+			:pSource->aiTotalCharge,
+			:pSource->asDataDate,
+			:pSource->asDealBeginDate,
+			:pSource->asDealEndDate,
+			:pSource->asAppID,
+			:pSource->aiTacheID;
+		CheckSqlError("Fetch UPDATA_LOGCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE UPDATA_LOGCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=UPDATA_LOG_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iUpdataID=			pSource->aiUpdataID[iCurPos];
+
+		strcpy(p->sFileType,		pSource->asFileType[iCurPos]);
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sBeginTime,		pSource->asBeginTime[iCurPos]);
+		strcpy(p->sEndTime,		pSource->asEndTime[iCurPos]);
+
+		p->iRecCnt=			pSource->aiRecCnt[iCurPos];
+		p->iTotalCharge=		pSource->aiTotalCharge[iCurPos];
+
+		strcpy(p->sDataDate,		pSource->asDataDate[iCurPos]);
+		strcpy(p->sDealBeginDate,	pSource->asDealBeginDate[iCurPos]);
+		strcpy(p->sDealEndDate,		pSource->asDealEndDate[iCurPos]);
+		strcpy(p->sAppID,		pSource->asAppID[iCurPos]);
+
+		p->iTacheID=			pSource->aiTacheID[iCurPos];
+
+		AllTrim(p->sFileType);
+		AllTrim(p->sFileName);
+		AllTrim(p->sBeginTime);
+		AllTrim(p->sEndTime);
+		AllTrim(p->sDataDate);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sAppID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/**对表PREP_LOG的链表释放函数**/
+void DestroyPrepLog(struct PrepLogStruct *ptHead)
+{
+	struct PrepLogStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+
+/**对表PREP_PROC_LOG的链表释放函数**/
+void DestroyPrepProcLog(struct PrepProcLogStruct *ptHead)
+{
+	struct PrepProcLogStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+
+/**对表BILLING_LOG的链表释放函数**/
+void DestroyBillingLog(struct BillingLogStruct *ptHead)
+{
+	struct BillingLogStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+
+/**对表BILLING_PROC_LOG的链表释放函数**/
+void DestroyBillingProcLog(struct BillingProcLogStruct *ptHead)
+{
+	struct BillingProcLogStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+
+/**对表ACCT_LOG的链表释放函数**/
+void DestroyAcctLog(struct AcctLogStruct *ptHead)
+{
+	struct AcctLogStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+
+/**对表UPDATA_PROC_LOG的链表释放函数**/
+void DestroyUpdataProcLog(struct UpdataProcLogStruct *ptHead)
+{
+	struct UpdataProcLogStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+
+/**对表UPDATA_LOG的链表释放函数**/
+void DestroyUpdataLog(struct UpdataLogStruct *ptHead)
+{
+	struct UpdataLogStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+
+/*批量数据结构缓冲写入LOG_AUDIT_DETAIL*/
+int EInsertStructToLogAuditDetail(struct LogAuditDetailStruct *p,
+	int iInsertFlag,struct LogAuditDetailStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiFlowID[iCurPos]=		p->iFlowID;
+		pTarget->aiPreTacheID[iCurPos]=		p->iPreTacheID;
+		pTarget->aiTacheID[iCurPos]=		p->iTacheID;
+
+		strcpy(pTarget->asSourceID[iCurPos],	p->sSourceID);
+		strcpy(pTarget->asFileName[iCurPos],	p->sFileName);
+
+		pTarget->aiByte[iCurPos]=		p->iByte;
+		pTarget->aiCnt[iCurPos]=		p->iCnt;
+
+		strcpy(pTarget->asType[iCurPos],	p->sType);
+		strcpy(pTarget->asBeginDate[iCurPos],	p->sBeginDate);
+		strcpy(pTarget->asEndDate[iCurPos],	p->sEndDate);
+		strcpy(pTarget->asDataDate[iCurPos],	p->sDataDate);
+
+		pTarget->aiStaffID[iCurPos]=		p->iStaffID;
+
+		strcpy(pTarget->asSerialNbr[iCurPos],	p->sSerialNbr);
+
+		iCurPos++;
+}
+
+	if(iInsertFlag==TRUE||iCurPos==LOG_AUDIT_DETAIL_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				FLOW_ID,\n\
+				PRE_TACHE_ID,\n\
+				TACHE_ID,\n\
+				SOURCE_ID,\n\
+				FILE_NAME,\n\
+				BYTE,\n\
+				CNT,\n\
+				TYPE,\n\
+				BEGIN_DATE,\n\
+				END_DATE,\n\
+				DATA_DATE,\n\
+				STAFF_ID,\n\
+				SERIAL_NBR)\n\
+			VALUES (\n\
+				:aiFlowID,\n\
+				:aiPreTacheID,\n\
+				:aiTacheID,\n\
+				:asSourceID,\n\
+				:asFileName,\n\
+				:aiByte,\n\
+				:aiCnt,\n\
+				:asType,\n\
+				to_date(:asBeginDate,'yyyymmddhh24miss'),\n\
+				to_date(:asEndDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDataDate,'yyyymmddhh24miss'),\n\
+				:aiStaffID,\n\
+				:asSerialNbr\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE LOG_AUDIT_DETAILTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement LOG_AUDIT_DETAIL")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE LOG_AUDIT_DETAILTRG USING
+				:pTarget->aiFlowID,
+				:pTarget->aiPreTacheID,
+				:pTarget->aiTacheID,
+				:pTarget->asSourceID,
+				:pTarget->asFileName,
+				:pTarget->aiByte,
+				:pTarget->aiCnt,
+				:pTarget->asType,
+				:pTarget->asBeginDate,
+				:pTarget->asEndDate,
+				:pTarget->asDataDate,
+				:pTarget->aiStaffID,
+				:pTarget->asSerialNbr;
+		if(CheckSqlResult("Dyn insert into LOG_AUDIT_DETAIL")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*批量数据结构缓冲写入LOG_AUDIT*/
+int EInsertStructToLogAudit(struct LogAuditStruct *p,
+	int iInsertFlag,struct LogAuditStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiFlowID[iCurPos]=		p->iFlowID;
+		pTarget->aiPreTacheID[iCurPos]=		p->iPreTacheID;
+		pTarget->aiTacheID[iCurPos]=		p->iTacheID;
+
+		strcpy(pTarget->asType[iCurPos],	p->sType);
+		strcpy(pTarget->asSourceID[iCurPos],	p->sSourceID);
+
+		pTarget->aiCnt[iCurPos]=		p->iCnt;
+		pTarget->aiAbnoCnt[iCurPos]=		p->iAbnoCnt;
+
+		strcpy(pTarget->asBeginDate[iCurPos],	p->sBeginDate);
+		strcpy(pTarget->asEndDate[iCurPos],	p->sEndDate);
+		strcpy(pTarget->asDataDate[iCurPos],	p->sDataDate);
+
+		pTarget->aiStaffID[iCurPos]=		p->iStaffID;
+
+		strcpy(pTarget->asSerialNbr[iCurPos],	p->sSerialNbr);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==LOG_AUDIT_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				FLOW_ID,\n\
+				PRE_TACHE_ID,\n\
+				TACHE_ID,\n\
+				TYPE,\n\
+				SOURCE_ID,\n\
+				CNT,\n\
+				ABNO_CNT,\n\
+				BEGIN_DATE,\n\
+				END_DATE,\n\
+				DATA_DATE,\n\
+				STAFF_ID,\n\
+				SERIAL_NBR)\n\
+			VALUES (\n\
+				:aiFlowID,\n\
+				:aiPreTacheID,\n\
+				:aiTacheID,\n\
+				:asType,\n\
+				:asSourceID,\n\
+				:aiCnt,\n\
+				:aiAbnoCnt,\n\
+				to_date(:asBeginDate,'yyyymmddhh24miss'),\n\
+				to_date(:asEndDate,'yyyymmddhh24miss'),\n\
+				to_date(:asDataDate,'yyyymmddhh24miss'),\n\
+				:aiStaffID,\n\
+				:asSerialNbr\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE LOG_AUDITTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement LOG_AUDIT")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE LOG_AUDITTRG USING
+				:pTarget->aiFlowID,
+				:pTarget->aiPreTacheID,
+				:pTarget->aiTacheID,
+				:pTarget->asType,
+				:pTarget->asSourceID,
+				:pTarget->aiCnt,
+				:pTarget->aiAbnoCnt,
+				:pTarget->asBeginDate,
+				:pTarget->asEndDate,
+				:pTarget->asDataDate,
+				:pTarget->aiStaffID,
+				:pTarget->asSerialNbr;
+		if(CheckSqlResult("Dyn insert into LOG_AUDIT")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+int MountPickLog(struct PickLogStruct **pptHead,char sCondition[])
+{
+	int iCnt=0;
+	static struct PickLogStruct *pTemp,*ptHead=NULL;
+	struct PickLogStruct Temp;
+	struct PickLogStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyPickLog(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct PickLogStructIn));
+	sprintf(TempIn.sTableName,"PICK_LOG");
+/*	sprintf(TempIn.sCondition," ");*/
+	strcpy(TempIn.sCondition,sCondition);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetPickLogToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct PickLogStruct*)
+			malloc(sizeof(struct PickLogStruct)))==NULL){
+
+			DestroyPickLog(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct PickLogStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表PICK_LOG记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表PICK_LOG完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+
+int MountPrepLog(struct PrepLogStruct **pptHead,char sCondition[])
+{
+	int iCnt=0;
+	static struct PrepLogStruct *pTemp,*ptHead=NULL;
+	struct PrepLogStruct Temp;
+	struct PrepLogStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyPrepLog(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct PrepLogStructIn));
+	sprintf(TempIn.sTableName,"PREP_LOG");
+/*	sprintf(TempIn.sCondition," ");*/
+	strcpy(TempIn.sCondition,sCondition);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetPrepLogToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct PrepLogStruct*)
+			malloc(sizeof(struct PrepLogStruct)))==NULL){
+
+			DestroyPrepLog(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct PrepLogStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表PREP_LOG记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表PREP_LOG完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+
+int MountPrepProcLog(struct PrepProcLogStruct **pptHead,char sCondition[])
+{
+	int iCnt=0;
+	static struct PrepProcLogStruct *pTemp,*ptHead=NULL;
+	struct PrepProcLogStruct Temp;
+	struct PrepProcLogStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyPrepProcLog(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct PrepProcLogStructIn));
+	sprintf(TempIn.sTableName,"PREP_PROC_LOG");
+/*	sprintf(TempIn.sCondition," ");*/
+	strcpy(TempIn.sCondition,sCondition);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetPrepProcLogToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct PrepProcLogStruct*)
+			malloc(sizeof(struct PrepProcLogStruct)))==NULL){
+
+			DestroyPrepProcLog(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct PrepProcLogStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表PREP_PROC_LOG记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表PREP_PROC_LOG完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+
+int MountBillingLog(struct BillingLogStruct **pptHead,char sCondition[])
+{
+	int iCnt=0;
+	static struct BillingLogStruct *pTemp,*ptHead=NULL;
+	struct BillingLogStruct Temp;
+	struct BillingLogStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyBillingLog(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct BillingLogStructIn));
+	sprintf(TempIn.sTableName,"BILLING_LOG");
+/*	sprintf(TempIn.sCondition," ");*/
+	strcpy(TempIn.sCondition,sCondition);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetBillingLogToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct BillingLogStruct*)
+			malloc(sizeof(struct BillingLogStruct)))==NULL){
+
+			DestroyBillingLog(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct BillingLogStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表BILLING_LOG记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表BILLING_LOG完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+
+int MountBillingProcLog(struct BillingProcLogStruct **pptHead,char sCondition[])
+{
+	int iCnt=0;
+	static struct BillingProcLogStruct *pTemp,*ptHead=NULL;
+	struct BillingProcLogStruct Temp;
+	struct BillingProcLogStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyBillingProcLog(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct BillingProcLogStructIn));
+	sprintf(TempIn.sTableName,"BILLING_PROC_LOG");
+/*	sprintf(TempIn.sCondition," ");*/
+	strcpy(TempIn.sCondition,sCondition);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetBillingProcLogToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct BillingProcLogStruct*)
+			malloc(sizeof(struct BillingProcLogStruct)))==NULL){
+
+			DestroyBillingProcLog(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct BillingProcLogStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表BILLING_PROC_LOG记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表BILLING_PROC_LOG完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+
+int MountAcctLog(struct AcctLogStruct **pptHead,char sTableName[],char sCondition[])
+{
+	int iCnt=0;
+	static struct AcctLogStruct *pTemp,*ptHead=NULL;
+	struct AcctLogStruct Temp;
+	struct AcctLogStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyAcctLog(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct AcctLogStructIn));
+	sprintf(TempIn.sTableName,"%s",sTableName);
+	/*sprintf(TempIn.sCondition," ");*/
+	strcpy(TempIn.sCondition,sCondition);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetAcctLogToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct AcctLogStruct*)
+			malloc(sizeof(struct AcctLogStruct)))==NULL){
+
+			DestroyAcctLog(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct AcctLogStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表%s记录数%d",TempIn.sTableName,iCnt);
+	}
+
+	WriteProcMsg("加载表%s完毕总记录数%d",TempIn.sTableName,iCnt);
+
+	return iCnt;
+}
+
+int MountUpdataProcLog(struct UpdataProcLogStruct **pptHead,char sCondition[])
+{
+	int iCnt=0;
+	static struct UpdataProcLogStruct *pTemp,*ptHead=NULL;
+	struct UpdataProcLogStruct Temp;
+	struct UpdataProcLogStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyUpdataProcLog(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct UpdataProcLogStructIn));
+	sprintf(TempIn.sTableName,"UPDATA_PROC_LOG");
+	/*sprintf(TempIn.sCondition," ");*/
+	strcpy(TempIn.sCondition,sCondition);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetUpdataProcLogToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct UpdataProcLogStruct*)
+			malloc(sizeof(struct UpdataProcLogStruct)))==NULL){
+
+			DestroyUpdataProcLog(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct UpdataProcLogStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表%s记录数%d",TempIn.sTableName,iCnt);
+	}
+
+	WriteProcMsg("加载表%s完毕总记录数%d",TempIn.sTableName,iCnt);
+
+	return iCnt;
+}
+
+int MountUpdataLog(struct UpdataLogStruct **pptHead,char sCondition[])
+{
+	int iCnt=0;
+	static struct UpdataLogStruct *pTemp,*ptHead=NULL;
+	struct UpdataLogStruct Temp;
+	struct UpdataLogStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyUpdataLog(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct UpdataLogStructIn));
+	sprintf(TempIn.sTableName,"UPDATA_LOG");
+	/*sprintf(TempIn.sCondition," ");*/
+	strcpy(TempIn.sCondition,sCondition);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetUpdataLogToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct UpdataLogStruct*)
+			malloc(sizeof(struct UpdataLogStruct)))==NULL){
+
+			DestroyUpdataLog(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct UpdataLogStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表%s记录数%d",TempIn.sTableName,iCnt);
+	}
+
+	WriteProcMsg("加载表%s完毕总记录数%d",TempIn.sTableName,iCnt);
+
+	return iCnt;
+}
+
+int InsertLogAuditDetail(struct LogAuditDetailStruct *ptHead)
+{
+	int iCnt=0;
+/*	char sTableName[30];*/
+	struct LogAuditDetailStruct *pTemp;
+	struct LogAuditDetailStructOut TempOut;
+
+	bzero((void*)&TempOut,sizeof(struct LogAuditDetailStructOut));
+	strcpy(TempOut.sTableName,"LOG_AUDIT_DETAIL");
+
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+
+		if(EInsertStructToLogAuditDetail(pTemp,FALSE,&TempOut)<0){
+			printf("写数据库表%s时出错.\n",TempOut.sTableName);
+			return -1;
+		}
+		iCnt++;
+	}
+	if(EInsertStructToLogAuditDetail(NULL,TRUE,&TempOut)<0){
+		printf("写数据库表%s时出错.\n",TempOut.sTableName);
+		return -1;
+	}
+	return 0;
+}
+
+int InsertLogAudit(struct LogAuditStruct *ptHead)
+{
+	int iCnt=0;
+/*	char sTableName[30];*/
+	struct LogAuditStruct *pTemp;
+	struct LogAuditStructOut TempOut;
+
+	bzero((void*)&TempOut,sizeof(struct LogAuditStructOut));
+	strcpy(TempOut.sTableName,"LOG_AUDIT");
+
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+
+		if(EInsertStructToLogAudit(pTemp,FALSE,&TempOut)<0){
+			printf("写数据库表%s时出错.\n",TempOut.sTableName);
+			return -1;
+		}
+		iCnt++;
+	}
+	if(EInsertStructToLogAudit(NULL,TRUE,&TempOut)<0){
+		printf("写数据库表%s时出错.\n",TempOut.sTableName);
+		return -1;
+	}
+	return 0;
+}
+                                                                                      

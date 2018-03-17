@@ -1,0 +1,13 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+SETT_CARRIER_ID      position(1 :4 ),    
+TICKET_TYPE_ID       position(5 :8 ),    
+CALLING_NBR          position(9 :32),   
+CALLED_NBR           position(33:56), 
+START_TIME           position(57:70),  
+DURATION             position(71:76),  
+NET_INCOME_MNT       position(77:88)
+)
+

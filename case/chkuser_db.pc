@@ -1,0 +1,109 @@
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdir.h>
+#include <list.h>
+#include <wwfile.h>
+#include <wwdb.h>
+#include <bintree.h>
+#include <dbsupp.h>
+#include <stt_ticket.h>
+#include "chkuser.h"
+
+/*批量数据动态从YZ_MSISDN中用结构缓冲方式取数据*/
+int EGetYzMsisdnToStruct(struct YzMsisdnStruct *p,struct YzMsisdnStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[4096];
+
+		sprintf(statement,"\
+			SELECT \
+				MSISDN,\
+				STATE\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE YZ_MSISDNSCR FROM :statement;
+		CheckSqlError(" PREPARE YZ_MSISDNSCR YZ_MSISDNCR");
+
+		EXEC SQL DECLARE YZ_MSISDNCR CURSOR FOR YZ_MSISDNSCR;
+		CheckSqlError("Declare YZ_MSISDNCR");
+
+		EXEC SQL OPEN YZ_MSISDNCR;
+		CheckSqlError("Open YZ_MSISDNCR;");
+
+		pSource->iFirstFlag = FALSE;
+		pSource->iBufEmpty = TRUE;
+		pSource->iFetchRecNum = 0;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH YZ_MSISDNCR INTO
+			:pSource->asMsisdn,
+			:pSource->asState;
+		CheckSqlError("Fetch YZ_MSISDNCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE YZ_MSISDNCR;
+
+			return FALSE;
+		}
+
+		if((pSource->iEndFlag=(pSource->iRecCnt!=YZ_MSISDN_BUFLEN_IN))!=0)
+			pSource->iRecCnt++;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sMsisdn,	pSource->asMsisdn[iCurPos]);
+		strcpy(p->sState,	pSource->asState[iCurPos]);
+
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sState);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt){
+
+		if(pSource->iEndFlag){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE YZ_MSISDNCR;
+
+			return FALSE;
+		}
+		pSource->iBufEmpty=TRUE;
+	}
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}

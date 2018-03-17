@@ -1,0 +1,170 @@
+{
+/*声明输出部分*/
+goto aa;
+	setfilefmt("bin0:l{4:4}:0");
+//	setfilefmt("bin302:100:0");
+	initdate(300);
+
+	setfix(0);
+	
+	setfmt(st_block_type   		," ","%-s,",posp("0:9"  ));
+	setfmt(it_block_len   		," ","%-d,",posp("9:6"  ));
+	setfmt(st_source_mac_addr	," ","%-s,",posp("15:18" ));
+	setfmt(st_target_mac_addr	," ","%-s,",posp("33:18" ));
+	setfmt(st_protocal_no		," ","%-s,",posp("51:5"  ));
+	setfmt(st_source_ip		," ","%-s,",posp("56:16" ));
+	setfmt(st_target_ip		," ","%-s,",posp("72:16" ));
+	setfmt(st_source_port		," ","%-s,",posp("88:8"  ));
+	setfmt(st_target_port		," ","%-s,",posp("96:8"  ));
+
+	setfmt(it_tns_len		," ","%-d,",posp("104:7" ));
+	setfmt(st_tns_type		," ","%-s,",posp("111:3" ));
+
+	setfmt(st_tns_cmdstr		," ","%-s,",posp("114:5" ));
+	
+	setfmt(st_ip_frag_off		," ","%-s,",posp("119:5"));
+	setfmt(st_tcp_critical_pt	," ","%-s\n",posp("124:5"));
+
+	setfmt(st_tns_add_info		," ","%-s",posp("129:2048"));
+aa:
+	ticketvalid=1;
+	
+	st_block_type		=HEX_OCTET_STRING(getfixpos(t_ori,fixp("0:4")));
+	it_block_len		=HEX_TBCD_INT4B(getfixpos(t_ori,fixp("4:4")));
+	
+	st_capture_time		="";
+		
+	st_source_mac_addr	=
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("28:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("29:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("30:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("31:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("32:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("33:1")));				
+        st_target_mac_addr	=
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("34:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("35:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("36:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("37:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("38:1")))+":"+
+				HEX_OCTET_STRING(getfixpos(t_ori,fixp("39:1")));
+        st_protocal_no		=HEX_OCTET_STRING(getfixpos(t_ori,fixp("40:2")));
+        
+        st_source_ip		=
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("54:1"))))+"."+
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("55:1"))))+"."+
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("56:1"))))+"."+
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("57:1"))));
+        st_target_ip		=
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("58:1"))))+"."+
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("59:1"))))+"."+
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("60:1"))))+"."+
+        			itoa(HEX_TBCD_INT4B(getfixpos(t_ori,fixp("61:1"))));
+        			
+        st_source_port		=itoa(HEX_OCTET_INT4B(getfixpos(t_ori,fixp("62:2"))));
+        st_target_port		=itoa(HEX_OCTET_INT4B(getfixpos(t_ori,fixp("64:2"))));
+        
+        
+        it_tns_len		=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("82:2")));
+
+        st_tns_type		=HEX_OCTET_STRING(getfixpos(t_ori,fixp("86:1")));
+         
+        st_tns_cmdstr		=HEX_OCTET_STRING(getfixpos(t_ori,fixp("92:2")));
+                        
+        st_tns_add_info		=
+        			HEX_OCTET_STRING(getfixpos(t_ori,fixp("82:12")));
+
+        st_ip_frag_off		=HEX_OCTET_STRING(getfixpos(t_ori,fixp("48:2")));
+        st_tcp_critical_pt	=HEX_OCTET_STRING(getfixpos(t_ori,fixp("80:2")));
+        
+
+        if(st_tns_cmdstr!="1169"&&
+        	st_tns_cmdstr!="0376"&&
+        	st_tns_cmdstr!="0373"&&
+        	st_tns_cmdstr!="035E"&&
+        	st_tns_type!="01") ticketvalid=-1;
+
+//	if(st_tns_cmdstr!="0376"&&st_tns_cmdstr&&!="0373")ticketvalid=-1;
+
+//	if(st_tns_cmdstr!="1169"&&st_tns_cmdstr!="035E")ticketvalid=-1;
+
+	if(st_tns_type=="01"){
+		st_tns_add_info=cut(t_ori,140,it_block_len-140)+"!!!"+itoa(it_block_len);
+	}
+	else if(st_tns_cmdstr=="0376"||st_tns_cmdstr=="0373"){
+		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("111:1")));
+		st_tns_add_info=substr(IA5STRING(getfixpos(t_ori,fixp("112:8"))),0,len);
+		
+		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("123:1")));
+		tmp=substr(IA5STRING(getfixpos(t_ori,fixp("124:18"))),0,len);
+		st_tns_add_info=st_tns_add_info+","+tmp;
+		
+		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("141:1")));
+		tmp=substr(IA5STRING(getfixpos(t_ori,fixp("142:20"))),0,len);
+		st_tns_add_info=st_tns_add_info+","+tmp;
+		
+		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("161:1")));
+		tmp=substr(IA5STRING(getfixpos(t_ori,fixp("162:18"))),0,len);		
+		st_tns_add_info=st_tns_add_info+","+tmp;
+
+
+		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("181:1")));
+		tmp=substr(IA5STRING(getfixpos(t_ori,fixp("182:18"))),0,len);		
+		st_tns_add_info=st_tns_add_info+","+tmp;
+		
+		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("198:1")));
+		tmp=substr(IA5STRING(getfixpos(t_ori,fixp("199:16"))),0,len);
+		st_tns_add_info=st_tns_add_info+","+tmp;
+		
+		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("215:1")));
+		tmp=substr(IA5STRING(getfixpos(t_ori,fixp("216:30"))),0,len);
+		st_tns_add_info=st_tns_add_info+","+tmp;
+		
+		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("245:1")));
+		tmp=substr(IA5STRING(getfixpos(t_ori,fixp("246:12"))),0,len);
+		st_tns_add_info=st_tns_add_info+","+tmp;
+
+		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("258:1")));
+		tmp=substr(IA5STRING(getfixpos(t_ori,fixp("259:15"))),0,len);
+		st_tns_add_info=st_tns_add_info+","+tmp;
+		
+		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("276:1")));
+		tmp=substr(IA5STRING(getfixpos(t_ori,fixp("277:13"))),0,len);
+		st_tns_add_info=st_tns_add_info+","+tmp;
+
+		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("289:1")));
+		tmp=substr(IA5STRING(getfixpos(t_ori,fixp("290:13"))),0,len);
+		st_tns_add_info=st_tns_add_info+","+tmp;
+	
+
+	}
+	else if (st_tns_cmdstr=="1169"||
+		st_tns_cmdstr=="035E"){
+
+		off=getsqloff(t_ori,128,it_block_len);
+		if(off>=128){
+			st_tns_add_info=cut(t_ori,off,it_block_len-off)+"!!!"+itoa(off);
+			tmp=getsqlfmtstr(st_tns_add_info);
+			st_tns_add_info=st_tns_add_info+"\n"+tmp;
+
+		}
+		else	
+			st_tns_add_info="!!!"+itoa(off)+"|||"+itoa(it_block_len);
+			
+/*		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("133:1")));
+		if(len!=254)
+			st_tns_add_info=cut(t_ori,134,len)+":::"+itoa(len)+"!!!"+itoa(off);
+		else	st_tns_add_info=cut(t_ori,134,it_block_len-134)+"!!!"+itoa(off);
+*/
+/*		len=HEX_OCTET_INT4B(getfixpos(t_ori,fixp("160:1")));
+		if(len!=254)
+			st_tns_add_info=cut(t_ori,161,len)+":::"+itoa(len);
+		else	st_tns_add_info=cut(t_ori,161,2048);
+*/
+/*
+		tmp=substr(IA5STRING(getfixpos(t_ori,fixp("290:13"))),0,len);
+		st_tns_add_info=st_tns_add_info+","+tmp;
+*/		
+	}
+	ticketvalid=1;
+}

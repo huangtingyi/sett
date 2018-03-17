@@ -1,0 +1,261 @@
+{
+/*声明输出部分*/
+goto aa;
+	setfilefmt("bin0:l{0:2}:0");
+	initdate(300);
+	setfmt(t_call_type,	"00","%02d",posp("0:2"));
+	setfmt(t_imsi,		" ","%-15s",posp("2:15"));
+	setfmt(t_calling_nbr,	" ","%-15s",posp("17:15"));
+	setfmt(t_called_nbr,	" ","%-24s",posp("32:24"));
+	setfmt(t_start_date,	" ","%-8s",posp("56:8"));
+	setfmt(t_start_time,	" ","%-6s",posp("64:6"));
+	setfmt(t_duration,	" ","%06d",posp("70:6"));
+	setfmt(t_msc,		" ","%-10s",posp("76:10"));
+	setfmt(t_trunk_in,	" ","%-8s",posp("86:8"));
+	setfmt(t_trunk_out,	" ","%-8s",posp("94:8"));
+	setfmt(t_lac,		" ","%-4s",posp("102:4"));
+	setfmt(t_cell_id,	" ","%-4s",posp("106:4"));
+	setfmt(t_other_lac,	" ","%-4s",posp("110:4"));
+	setfmt(t_other_cell_id,	" ","%-4s",posp("114:4"));
+	setfmt(t_service_type,	" ","%-3s",posp("118:3"));
+	setfmt(t_service_code,	" ","%-4s",posp("121:4"));
+	setfmt(t_third_party,	" ","%-15s",posp("125:15"));
+	setfmt(t_msrn,		" ","%-15s",posp("140:15"));
+	setfmt(st_esn,		" ","%-15s",posp("155:15" ));
+	setfmt(st_reserve,	" ","%-10s",posp("170:10" ));
+aa:
+	ticketvalid=1;
+/*字段解码部分*/
+	t_ticket_type=	OCTET_INT4B(getfixpos(t_ori,fixp("2:1")));
+	t_call_type=	di2i(t_ticket_type,
+	pi2i("0x01:01:0x02:02:0x03:03:0x04:05:0x0B:04:0x0C:09:0x0D:04:0x0E:09:00"));
+
+	if(t_ticket_type==02){
+
+		t_imsi=TBCD_STRING(getfixpos(t_ori,fixp("38:8")));
+		t_calling_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("54:7")));
+		t_called_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("28:12")));
+		
+		start_date=HEX_OCTET_STRING(getfixpos(t_ori,fixp("108:4")));
+		start_time=HEX_OCTET_STRING(getfixpos(t_ori,fixp("105:3")));
+		duration=HEX_OCTET_STRING(getfixpos(t_ori,fixp("125:3")));
+		
+		t_third_party=	"";
+		t_msrn=		"";
+		t_msc=		"";
+		
+		trunk_in=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("68:2")));
+		trunk_out=	"";
+		
+		alac=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("72:2")));
+		acellid=HEX_OCTET_STRING(getfixpos(t_ori,fixp("74:2")));
+
+		blac=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("86:2")));
+		bcellid=HEX_OCTET_STRING(getfixpos(t_ori,fixp("88:2")));
+
+	}else if (t_ticket_type == 01){ /*主叫*/
+
+		t_imsi=TBCD_STRING(getfixpos(t_ori,fixp("28:8")));
+		t_calling_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("44:7")));
+		t_called_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("87:12")));
+
+		start_date=HEX_OCTET_STRING(getfixpos(t_ori,fixp("139:4")));
+		start_time=HEX_OCTET_STRING(getfixpos(t_ori,fixp("136:3")));
+		duration=HEX_OCTET_STRING(getfixpos(t_ori,fixp("156:3")));
+		
+		t_third_party=	"";
+
+		t_msrn=		"";
+		t_msc=		"";
+
+		trunk_in=	"";
+		trunk_out=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("117:2")));
+
+		alac=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("99:2")));
+		acellid=HEX_OCTET_STRING(getfixpos(t_ori,fixp("101:2")));
+
+		blac=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("113:2")));
+		bcellid=HEX_OCTET_STRING(getfixpos(t_ori,fixp("115:2")));
+
+	}else if (t_ticket_type == 04){ /*ROAMING*/
+		t_imsi= TBCD_STRING(getfixpos(t_ori,fixp("38:8")));
+		t_calling_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("28:12")));
+		t_called_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("46:12")));
+
+
+		start_date=HEX_OCTET_STRING(getfixpos(t_ori,fixp("94:4")));
+		start_time=HEX_OCTET_STRING(getfixpos(t_ori,fixp("91:3")));
+		duration=HEX_OCTET_STRING(getfixpos(t_ori,fixp("111:3")));
+	
+		t_third_party=	"";
+		t_msrn=	TBCD_STRING(getfixpos(t_ori,fixp("58:12")));
+		t_msc=		"";
+		
+		trunk_in=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("70:2")));
+		trunk_out=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("74:2")));
+
+		alac=	"";
+
+		acellid="";
+
+		blac=	"";
+
+		bcellid="";
+
+	}else if (t_ticket_type == 03){/*呼转*/
+		t_imsi=TBCD_STRING(getfixpos(t_ori,fixp("29:8")));
+		t_calling_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("37:7")));
+		t_called_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("78:12")));
+
+		start_date=HEX_OCTET_STRING(getfixpos(t_ori,fixp("132:4")));
+		start_time=HEX_OCTET_STRING(getfixpos(t_ori,fixp("129:3")));
+		duration=HEX_OCTET_STRING(getfixpos(t_ori,fixp("150:3")));
+		
+		t_third_party=	TBCD_STRING(getfixpos(t_ori,fixp("65:12")));
+
+		t_msrn=		"";
+		t_msc=		"";
+		
+		trunk_in=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("88:2")));
+		trunk_out=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("110:2")));
+
+		alac=	"";
+
+		acellid="";
+
+		blac=	"";
+
+		bcellid="";
+
+	}else if(t_ticket_type == 11){ /*POC*/
+
+		t_imsi="";
+		t_calling_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("29:12")));
+		t_called_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("42:12")));
+
+		start_date=HEX_OCTET_STRING(getfixpos(t_ori,fixp("68:4")));
+		start_time=HEX_OCTET_STRING(getfixpos(t_ori,fixp("65:3")));
+		duration=HEX_OCTET_STRING(getfixpos(t_ori,fixp("86:3")));
+		
+		t_third_party="";
+
+		t_msrn=		"";
+		t_msc=		"";
+		
+		trunk_in=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("54:2")));
+		trunk_out=	"";
+
+		alac=	"";
+
+		acellid="";
+
+		blac=	"";
+
+		bcellid="";
+	}else if (t_ticket_type == 12){ /*PTC*/
+		t_imsi="";
+		t_calling_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("29:7")));
+		t_called_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("42:12")));
+
+		start_date=HEX_OCTET_STRING(getfixpos(t_ori,fixp("68:4")));
+		start_time=HEX_OCTET_STRING(getfixpos(t_ori,fixp("65:3")));
+		duration=HEX_OCTET_STRING(getfixpos(t_ori,fixp("86:3")));
+		
+		t_third_party="";
+
+		t_msrn=		"";
+		t_msc=		"";
+
+		trunk_in=	"";
+		trunk_out=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("54:2")));
+		
+		alac=	"";
+		acellid="";
+		blac=	"";
+		bcellid="";
+	}else if (t_ticket_type == 13){ /*PBxo*/
+		t_imsi="";
+		t_calling_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("29:12")));
+		t_called_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("42:12")));
+
+		start_date=HEX_OCTET_STRING(getfixpos(t_ori,fixp("68:4")));
+		start_time=HEX_OCTET_STRING(getfixpos(t_ori,fixp("65:3")));
+		duration=HEX_OCTET_STRING(getfixpos(t_ori,fixp("85:3")));
+
+		t_third_party="";
+
+		t_msrn=		"";
+		t_msc=		"";
+
+		trunk_in=	"";
+		trunk_out=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("54:2")));
+
+		alac=	"";
+		acellid="";
+		blac=	"";
+		bcellid="";
+	}else if (t_ticket_type == 14){ /*PBxt*/
+		t_imsi="";
+		t_calling_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("29:12")));
+		t_called_nbr=	TBCD_STRING(getfixpos(t_ori,fixp("42:12")));
+
+		start_date=HEX_OCTET_STRING(getfixpos(t_ori,fixp("68:4")));
+		start_time=HEX_OCTET_STRING(getfixpos(t_ori,fixp("65:3")));
+		duration=HEX_OCTET_STRING(getfixpos(t_ori,fixp("86:3")));
+
+		t_third_party="";
+
+		t_msrn=		"";
+		t_msc=		"";
+
+		trunk_in=	"";
+		trunk_out=	HEX_OCTET_STRING(getfixpos(t_ori,fixp("54:2")));
+
+		alac=	"";
+		acellid="";
+		blac=	"";
+		bcellid="";
+	}else {
+		ticketvalid = -1;
+	}
+
+t_start_date=substr(start_date,6,2)+substr(start_date,4,2)+
+		substr(start_date,2,2)+substr(start_date,0,2);
+t_start_time=substr(start_time,4,2)+
+		substr(start_time,2,2)+substr(start_time,0,2);
+t_duration=  atoi(substr(duration,4,2)+substr(duration,2,2)+substr(duration,0,2));
+
+t_trunk_in=	lpad(substr(trunk_in,2,2)+substr(trunk_in,0,2),"0",4);
+t_trunk_out=	lpad(substr(trunk_out,2,2)+substr(trunk_out,0,2),"0",4);
+t_lac=		substr(alac,4,2)+substr(alac,2,2)+substr(alac,0,2);
+t_cell_id=	substr(acellid,4,2)+substr(acellid,2,2)+substr(acellid,0,2);
+t_other_lac=	substr(blac,4,2)+substr(blac,2,2)+substr(blac,0,2);
+t_other_cell_id=substr(bcellid,4,2)+substr(bcellid,2,2)+substr(bcellid,0,2);
+
+
+	if(t_call_type==03)
+		t_service_type="002";
+	else
+		t_service_type="000";
+
+
+
+	if(ticketvalid!=-1){
+		if(maxdatadate(t_start_date)<0)	ticketvalid=-1;
+	}
+
+/*字段校正部分*/
+	if(t_call_type!=03) t_service_code="0011";
+	t_msc=$MSC;
+	t_msrn=fmt86a13(t_msrn);
+	t_called_nbr=fmt86a13(t_called_nbr);
+	l=length($AREACODE);
+	if(length(t_called_nbr)>12&&l!=0){
+		if(llike(t_called_nbr,$AREACODE+"0"))
+			t_called_nbr=substr(t_called_nbr,l,20);
+		else if(llike(t_called_nbr,"0"+$AREACODE+"0"))
+			t_called_nbr=substr(t_called_nbr,l+1,20);
+	}
+	t_calling_nbr=fmt86a13(t_calling_nbr);
+	t_third_party=fmt86a13(t_third_party);
+}

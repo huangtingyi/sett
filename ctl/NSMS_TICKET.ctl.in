@@ -1,0 +1,43 @@
+Load data
+append into table $(TABLE_NAME)
+TRAILING NULLCOLS 
+(
+TICKET_TYPE_ID         position(1  :4  ),    
+CALL_TYPE              position(5  :6  ),    
+HOME_AREA_CODE         position(7  :11 ),   
+MSISDN                 position(12 :26 ), 
+CALLED_CODE            position(27 :31 ),  
+OTHER_PARTY            position(32 :55 ),  
+START_TIME             position(56 :69 ),  
+MSG_LEN                position(70 :73 ),  
+MSG_ID                 position(74 :103), 
+OPP_MSG_ID             position(104:133),
+SUB_TYPE               position(134:134),
+SMSC                   position(135:149),
+SMG                    position(150:164),
+TSMG                   position(165:179),
+USER_TYPE              position(180:180),
+CALLED_TYPE            position(181:182),
+SP_ACC_NBR             position(183:192),
+SP_SERVICE_CODE        position(193:202),
+SP_CODE                position(203:212),
+BASE_FEE               position(213:220),
+INFO_FEE               position(221:228),
+RENT_FEE               position(229:236),
+OTHER_FEE              position(237:244),
+IN_FEE                 position(245:252),
+OUT_FEE                position(253:260),
+ORI_CALL_TYPE          position(261:262),
+RESERVE                position(263:272),
+SP_PROV_CODE           position(273:275),
+HOME_PROV_CODE         position(276:278),
+SCP_FLAG               position(279:279),
+CALLING_TYPE_ID        position(280:283),
+BILL_TYPE              position(284:284),
+ERR_CODE               position(285:288),
+FILE_NAME              position(289:307),
+MODULE                 position(308:310),
+AREA_CODE              position(311:315),
+STATE                  position(316:316)
+)
+

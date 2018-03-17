@@ -1,0 +1,411 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <hnixs.h>
+#include <list.h>
+#include <wwlog.h>
+#include <wwcoding.h>
+#include <wwtiny.h>
+#include <wwfile.h>
+#include <wwdb.h>
+#include <wwdbf.h>
+
+struct FileCtrlStruct
+{
+	char sDataDate[9];
+	char sFileName[256];
+	int iColNum;
+	int iRecCnt;
+	FILE *fp;
+};
+
+#define MAXFP 100
+static struct FileCtrlStruct FpList[MAXFP];
+static int iCurFpCnt=0;
+
+
+/* 输入结构缓冲申明*/
+struct ChkTicketStructIn{
+
+#ifndef CHK_TICKET_BUFLEN_IN
+#define CHK_TICKET_BUFLEN_IN		300
+#endif
+
+	struct ChkTicketStructIn *pNext;
+
+	int iBufEmpty;
+	int iCurPos;
+	int iFetchRecNum;
+	int iEndFlag;
+	int iRecCnt;
+	int iFirstFlag;
+	char sTableName[31];
+	char sCondition[1024];
+	int     aiTicketTypeID[CHK_TICKET_BUFLEN_IN];
+	char    asMsisdn[CHK_TICKET_BUFLEN_IN][16];
+	char    asOtherParty[CHK_TICKET_BUFLEN_IN][25];
+	char    asVisitAreaCode[CHK_TICKET_BUFLEN_IN][6];
+	char    asMsc[CHK_TICKET_BUFLEN_IN][11];
+	char    asTrunkIn[CHK_TICKET_BUFLEN_IN][8];
+	char    asTrunkOut[CHK_TICKET_BUFLEN_IN][8];
+	char    asStartDate[CHK_TICKET_BUFLEN_IN][9];
+	char    asStartTime[CHK_TICKET_BUFLEN_IN][7];
+	int     aiDuration[CHK_TICKET_BUFLEN_IN];
+	int     aiFee[CHK_TICKET_BUFLEN_IN];
+};
+
+/*单个结构申明*/
+struct ChkTicketStruct{
+
+	struct ChkTicketStruct *pNext;
+	int     iTicketTypeID;
+	char    sMsisdn[16];
+	char    sOtherParty[25];
+	char    sVisitAreaCode[6];
+	char    sMsc[11];
+	char    sTrunkIn[8];
+	char    sTrunkOut[8];
+	char    sStartDate[9];
+	char    sStartTime[7];
+	int     iDuration;
+	int     iFee;
+	struct ChkTicketStruct *pLoadNext;
+};
+
+/*批量数据动态从CHK_TICKET中用结构缓冲方式取数据*/
+int EGetChkTicketToStruct(struct ChkTicketStruct *p,
+	struct ChkTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(TICKET_TYPE_ID,-1),\n\
+				nvl(MSISDN,'-1'),\n\
+				nvl(OTHER_PARTY,'-1'),\n\
+				nvl(VISIT_AREA_CODE,'-1'),\n\
+				nvl(MSC,'-1'),\n\
+				nvl(TRUNK_IN,'-1'),\n\
+				nvl(TRUNK_OUT,'-1'),\n\
+				nvl(START_DATE,'-1'),\n\
+				nvl(START_TIME,'-1'),\n\
+				nvl(DURATION,-1),\n\
+				nvl(FEE,-1)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE CHK_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE CHK_TICKETSCR CHK_TICKETCR");
+
+		EXEC SQL DECLARE CHK_TICKETCR CURSOR FOR CHK_TICKETSCR;
+		CheckSqlError("Declare CHK_TICKETCR");
+
+		EXEC SQL OPEN CHK_TICKETCR;
+		CheckSqlError("Open CHK_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE CHK_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH CHK_TICKETCR INTO
+			:pSource->aiTicketTypeID,
+			:pSource->asMsisdn,
+			:pSource->asOtherParty,
+			:pSource->asVisitAreaCode,
+			:pSource->asMsc,
+			:pSource->asTrunkIn,
+			:pSource->asTrunkOut,
+			:pSource->asStartDate,
+			:pSource->asStartTime,
+			:pSource->aiDuration,
+			:pSource->aiFee;
+		CheckSqlError("Fetch CHK_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE CHK_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=CHK_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sOtherParty,		pSource->asOtherParty[iCurPos]);
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+		strcpy(p->sMsc,			pSource->asMsc[iCurPos]);
+		strcpy(p->sTrunkIn,		pSource->asTrunkIn[iCurPos]);
+		strcpy(p->sTrunkOut,		pSource->asTrunkOut[iCurPos]);
+		strcpy(p->sStartDate,		pSource->asStartDate[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iFee=			pSource->aiFee[iCurPos];
+
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sVisitAreaCode);
+		AllTrim(p->sMsc);
+		AllTrim(p->sTrunkIn);
+		AllTrim(p->sTrunkOut);
+		AllTrim(p->sStartDate);
+		AllTrim(p->sStartTime);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+void InitDbfField(char sFieldName[],char sType[],int iLen,
+	struct FDbfFieldStruct *p)
+{
+	bzero((void*)p,sizeof(struct FDbfFieldStruct));
+
+	strncpy(p->sFieldName,sFieldName,10);
+
+	p->cFieldType=sType[0];
+	p->cFieldLen= iLen;
+	if(sType[0]=='C') p->cPointLen=0;
+	else		p->cPointLen=4;
+}
+int CreateDbfFieldArray(struct FDbfFieldStruct asDbfField[])
+{
+	int i=0;
+
+	InitDbfField("TICKET_TYPE_ID",	"N",20,&asDbfField[i++]);
+	InitDbfField("MSISDN",		"C",20,&asDbfField[i++]);
+	InitDbfField("OTHER_PARTY",	"C",20,&asDbfField[i++]);
+	InitDbfField("VISIT_AREA_CODE",	"C",20,&asDbfField[i++]);
+	InitDbfField("MSC",		"C",20,&asDbfField[i++]);
+	InitDbfField("TRUNK_IN",	"C",20,&asDbfField[i++]);
+	InitDbfField("TRUNK_OUT",	"C",20,&asDbfField[i++]);
+	InitDbfField("START_DATE",	"C",20,&asDbfField[i++]);
+	InitDbfField("START_TIME",	"C",20,&asDbfField[i++]);
+	InitDbfField("DURATION",	"N",20,&asDbfField[i++]);
+	InitDbfField("FEE",		"N",20,&asDbfField[i++]);
+
+	return i;
+}
+void CreateDbfHead(int iRecCnt,int iColNum,struct FDbfHeadStruct *p)
+{
+	int iHeadLen,iRecLen;
+	char sHostTime[15],sTemp[5];
+
+	p->cIdentify=0x03;
+
+	GetHostTime(sHostTime);
+
+	strncpy(sTemp,sHostTime,4);sTemp[4]=0;
+	p->sModifyDate[0]=atoi(sTemp)-1900;
+	strncpy(sTemp,sHostTime+4,2);sTemp[2]=0;
+	p->sModifyDate[1]=atoi(sTemp);
+	strncpy(sTemp,sHostTime+6,2);sTemp[2]=0;
+	p->sModifyDate[2]=atoi(sTemp);
+
+	int4b2lmem(iRecCnt,(unsigned char*)p->sRecCnt);
+
+	iHeadLen=sizeof(struct FDbfHeadStruct)+
+		iColNum*sizeof(struct FDbfFieldStruct)+1;
+	int4b2lmem(iHeadLen,(unsigned char*)p->sHeadLen);
+
+	iRecLen=iColNum*20+1;
+	int4b2lmem(iRecLen,(unsigned char*)p->sRecLen);
+}
+
+int CloseDbfFile(struct FDbfHeadStruct *pDbfHead)
+{
+	int i;
+	char sFileName[256],sRecBuf[10];
+	struct FileCtrlStruct *pFileCtrl;
+
+	for(i=0;i<iCurFpCnt;i++){
+
+		pFileCtrl = &(FpList[i]);
+
+		strcpy(sFileName,pFileCtrl->sFileName);
+		sRecBuf[0]=0x1a;
+		if(fwrite((void*)sRecBuf,1,1,pFileCtrl->fp)!=1){
+			printf("将文件尾标志写到文件%s失败.\n",sFileName);
+			return -1;
+		}
+		if(fseek(pFileCtrl->fp,0,SEEK_SET)!=0){
+			printf("定位文件%s到文件头失败.\n",sFileName);
+			return -1;
+		}
+
+		CreateDbfHead(pFileCtrl->iRecCnt,pFileCtrl->iColNum,pDbfHead);
+
+		if(fwrite((void*)pDbfHead,sizeof(struct FDbfHeadStruct),1,
+			pFileCtrl->fp)!=1){
+			printf("将文件头控制到文件%s失败.\n",sFileName);
+			return -1;
+		}
+
+		fclose(pFileCtrl->fp);
+
+		WriteProcPrint("生成文件%s生成成功,记录数%d",
+			sFileName,pFileCtrl->iRecCnt);
+	}
+
+	return 0;
+
+}
+
+/*根据sDataDate取得文件fp，如果当前文件未打开，
+	则以sFileName及sDataDate为文件打开文件写.*/
+struct FileCtrlStruct *GetDbfFile(char sDataDate[],char sFileNamePrefix[],
+	struct FDbfFieldStruct asDbfField[])
+{
+	int i;
+	char sFileName[256],sRecBuf[10];
+	struct FileCtrlStruct *pFileCtrl=NULL;
+
+	for(i=0;i<iCurFpCnt;i++){
+		if(strcmp(sDataDate,(FpList[i]).sDataDate)==0)
+			return &(FpList[i]);
+	}
+
+	if(iCurFpCnt>MAXFP) return NULL;
+
+	pFileCtrl = &(FpList[iCurFpCnt]);
+
+	strcpy(pFileCtrl->sDataDate,sDataDate);
+
+	sprintf(sFileName,"%s.%s.dbf",sFileNamePrefix,sDataDate);
+	strcpy(pFileCtrl->sFileName,sFileName);
+	if((pFileCtrl->fp=fopen(sFileName,"w"))==NULL){
+		printf("打开文件%s失败.\n",sFileName);
+		return NULL;
+	}
+
+	pFileCtrl->iColNum=CreateDbfFieldArray(asDbfField);
+
+	if(fseek(pFileCtrl->fp,sizeof(struct FDbfHeadStruct),SEEK_SET)!=0){
+		printf("定位文件%s失败.\n",sFileName);
+		return NULL;
+	}
+	if(fwrite((void*)&(asDbfField[0]),sizeof(struct FDbfFieldStruct),
+		pFileCtrl->iColNum,pFileCtrl->fp)!=pFileCtrl->iColNum){
+		printf("将文件字段控制信息写到文件%s失败.\n",sFileName);
+		return NULL;
+	}
+	sRecBuf[0]=0x0d;
+	if(fwrite((void*)sRecBuf,1,1,pFileCtrl->fp)!=1){
+		printf("将文件控制头结束标志写到文件%s失败.\n",sFileName);
+		return NULL;
+	}
+	iCurFpCnt++;
+	
+	return pFileCtrl;
+
+}
+
+int main(int argc,char *argv[])
+{
+	int	l;
+	char	sTableName[31],sFileName[81],sRecBuf[8192],sCondition[256];
+	struct FDbfHeadStruct DbfHead;
+	struct FDbfFieldStruct asDbfField[256];
+	struct FileCtrlStruct *pFileCtrl=NULL;
+
+	struct ChkTicketStruct Temp;
+	struct ChkTicketStructIn TempIn;
+
+	if(argc!=4){
+		printf("usage %s table_name file_name wherecause\n",argv[0]);
+		return -1;
+	}
+
+	InitAppRes(argv[0]);
+
+	strncpy(sTableName,argv[1],30);sTableName[30]=0;
+	strncpy(sFileName,argv[2],80);sFileName[80]=0;
+	strncpy(sCondition,argv[3],255);sCondition[255]='0';
+
+	if(ConnectDataDB()<0){
+		printf("连结数据库失败.\n");
+		return -1;
+	}
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct ChkTicketStructIn));
+	sprintf(TempIn.sTableName,sTableName);
+	sprintf(TempIn.sCondition,sCondition);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	while(EGetChkTicketToStruct(&Temp,&TempIn)==true){
+
+		Temp.sOtherParty[20]=0;
+		l=sprintf(sRecBuf," %20.4f%-20s%-20s%-20s%-20s%-20s%-20s%-20s\
+%-20s%20.4f%20.4f",(float)Temp.iTicketTypeID,Temp.sMsisdn,Temp.sOtherParty,
+			Temp.sVisitAreaCode,Temp.sMsc,Temp.sTrunkIn,
+			Temp.sTrunkOut,Temp.sStartDate,Temp.sStartTime,
+			(float)Temp.iDuration,(float)Temp.iFee);
+		pFileCtrl=GetDbfFile(Temp.sStartDate,sFileName,asDbfField);
+		if (pFileCtrl==NULL){
+			printf("打开DBF文件%s写失败.\n",pFileCtrl->sFileName);
+			return -1;
+		}
+		if(fwrite((void*)sRecBuf,l,1,pFileCtrl->fp)!=1){
+			printf("将文件记录写到文件%s失败.\n",pFileCtrl->sFileName);
+			return -1;
+		}
+		if((++pFileCtrl->iRecCnt%10000)==0)
+			WriteProcPrint("生成%s到文件%s记录数%d",sTableName,
+				pFileCtrl->sFileName,pFileCtrl->iRecCnt);
+
+	}
+
+	CloseDbfFile( &DbfHead );
+
+	DisconnectDatabase();
+
+	return 0;
+}

@@ -1,0 +1,622 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <list.h>
+#include <hnixs.h>
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwfile.h>
+#include <wwdb.h>
+
+/* 输入结构缓冲申明*/
+struct MyTabColumnsStructIn{
+
+#ifndef MY_TAB_COLUMNS_BUFLEN_IN
+#define MY_TAB_COLUMNS_BUFLEN_IN		300
+#endif
+
+	struct MyTabColumnsStructIn *pNext;
+
+	int iBufEmpty;
+	int iCurPos;
+	int iFetchRecNum;
+	int iEndFlag;
+	int iRecCnt;
+	int iFirstFlag;
+	char sTableName[31];
+	char sCondition[1024];
+	char    asOwner[MY_TAB_COLUMNS_BUFLEN_IN][31];
+	char    asTableName[MY_TAB_COLUMNS_BUFLEN_IN][31];
+	char    asColumnName[MY_TAB_COLUMNS_BUFLEN_IN][31];
+	char    asDataType[MY_TAB_COLUMNS_BUFLEN_IN][31];
+	int     aiDataLength[MY_TAB_COLUMNS_BUFLEN_IN];
+	int     aiDataPrecision[MY_TAB_COLUMNS_BUFLEN_IN];
+	int     aiDataScale[MY_TAB_COLUMNS_BUFLEN_IN];
+	char    asNullable[MY_TAB_COLUMNS_BUFLEN_IN][2];
+	int     aiColumnID[MY_TAB_COLUMNS_BUFLEN_IN];
+};
+
+
+/*单个结构申明*/
+struct MyTabColumnsStruct{
+
+	struct MyTabColumnsStruct *pNext;
+	char    sOwner[31];
+	char    sTableName[31];
+	char	sColumnName[31];
+	char    sDataType[31];
+	int     iDataLength;
+	int     iDataPrecision;
+	int     iDataScale;
+	char    sNullable[2];
+	int     iColumnID;
+	struct MyTabColumnsStruct *pLoadNext;
+};
+struct MyTabStruct{
+	struct MyTabStruct *pNext;
+	char	sOwner[31];
+	char	sTableName[31];
+	struct	MyTabColumnsStruct *pHead;
+};
+
+/*批量数据动态从MY_TAB_COLUMNS中用结构缓冲方式取数据*/
+int EGetMyTabColumnsToStruct(struct MyTabColumnsStruct *p,
+	struct MyTabColumnsStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(OWNER,' '),\n\
+				nvl(TABLE_NAME,' '),\n\
+				nvl(COLUMN_NAME,' '),\n\
+				nvl(DATA_TYPE,' '),\n\
+				nvl(DATA_LENGTH,-1),\n\
+				nvl(DATA_PRECISION,-1),\n\
+				nvl(DATA_SCALE,0),\n\
+				nvl(NULLABLE,' '),\n\
+				nvl(COLUMN_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE MY_TAB_COLUMNSSCR FROM :statement;
+		CheckSqlError(" PREPARE MY_TAB_COLUMNSSCR MY_TAB_COLUMNSCR");
+
+		EXEC SQL DECLARE MY_TAB_COLUMNSCR CURSOR FOR MY_TAB_COLUMNSSCR;
+		CheckSqlError("Declare MY_TAB_COLUMNSCR");
+
+		EXEC SQL OPEN MY_TAB_COLUMNSCR;
+		CheckSqlError("Open MY_TAB_COLUMNSCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE MY_TAB_COLUMNSCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH MY_TAB_COLUMNSCR INTO
+			:pSource->asOwner,
+			:pSource->asTableName,
+			:pSource->asColumnName,
+			:pSource->asDataType,
+			:pSource->aiDataLength,
+			:pSource->aiDataPrecision,
+			:pSource->aiDataScale,
+			:pSource->asNullable,
+			:pSource->aiColumnID;
+		CheckSqlError("Fetch MY_TAB_COLUMNSCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE MY_TAB_COLUMNSCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=MY_TAB_COLUMNS_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sOwner,	pSource->asOwner[iCurPos]);
+		strcpy(p->sTableName,	pSource->asTableName[iCurPos]);
+		strcpy(p->sColumnName,	pSource->asColumnName[iCurPos]);
+		strcpy(p->sDataType,	pSource->asDataType[iCurPos]);
+
+		p->iDataLength=		pSource->aiDataLength[iCurPos];
+		p->iDataPrecision=	pSource->aiDataPrecision[iCurPos];
+		p->iDataScale=		pSource->aiDataScale[iCurPos];
+
+		strcpy(p->sNullable,	pSource->asNullable[iCurPos]);
+
+		p->iColumnID=		pSource->aiColumnID[iCurPos];
+
+		AllTrim(p->sOwner);
+		AllTrim(p->sTableName);
+		AllTrim(p->sColumnName);
+		AllTrim(p->sDataType);
+		AllTrim(p->sNullable);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/**对表MY_TAB_COLUMNS的链表释放函数**/
+void DestroyMyTabColumns(struct MyTabColumnsStruct *ptHead)
+{
+	struct MyTabColumnsStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+
+int InitMyTabColumns(char sUser[],struct MyTabColumnsStruct **pptHead)
+{
+	int iCnt=0;
+	static struct MyTabColumnsStruct *pTemp,*ptHead=NULL;
+	struct MyTabColumnsStruct Temp;
+	struct MyTabColumnsStructIn TempIn;
+
+	*pptHead=NULL;
+/*这里不能释放内部链表**/
+/*	DestroyMyTabColumns(ptHead);*/
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct MyTabColumnsStructIn));
+	sprintf(TempIn.sTableName,"ALL_TAB_COLUMNS");
+	sprintf(TempIn.sCondition,"WHERE OWNER IN('%s') ",sUser);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetMyTabColumnsToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct MyTabColumnsStruct*)
+			malloc(sizeof(struct MyTabColumnsStruct)))==NULL){
+
+			DestroyMyTabColumns(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct MyTabColumnsStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表MY_TAB_COLUMNS记录数%d",iCnt);
+	}
+
+	WriteProcMsg("加载表MY_TAB_COLUMNS完毕总记录数%d",iCnt);
+
+	return iCnt;
+}
+int SearchMyTabList(struct MyTabStruct *ptHead,char sOwner[],char sTableName[],
+	struct MyTabStruct **pptCur)
+{
+	*pptCur=NULL;
+
+	while(ptHead!=NULL){
+		if((strcmp(sOwner,ptHead->sOwner)==0||strcmp(sOwner,"")==0)&&
+			strcmp(sTableName,ptHead->sTableName)==0){
+			*pptCur=ptHead;
+			return FOUND;
+		}
+		ptHead=ptHead->pNext;
+	}
+	return NOTFOUND;
+}
+int comp_list_table_name(LIST *pValue,LIST *pHead)
+{
+	int res=0;
+	struct MyTabStruct *pSource=(struct MyTabStruct *)pValue;
+	struct MyTabStruct *pTarget=(struct MyTabStruct *)pHead;
+	
+	if((res=strcmp(pSource->sOwner,pTarget->sOwner))!=0) return res;
+	
+	return strcmp(pSource->sTableName,pTarget->sTableName);
+
+}
+int comp_list_column_id(LIST *pValue,LIST *pHead)
+{
+	struct MyTabColumnsStruct *pSource=(struct MyTabColumnsStruct *)pValue;
+	struct MyTabColumnsStruct *pTarget=(struct MyTabColumnsStruct *)pHead;
+
+	return pSource->iColumnID-pTarget->iColumnID;
+}
+int CreateMyTabList(struct MyTabColumnsStruct *ptCur,struct MyTabStruct **pptHead)
+{
+	struct MyTabStruct *ptLkHead=NULL,*pTemp;
+	struct MyTabColumnsStruct *ptPre;
+	
+	while(ptCur!=NULL){
+
+		ptPre=ptCur;
+		ptCur=ptCur->pNext;
+		
+		if(SearchMyTabList(ptLkHead,ptPre->sOwner,ptPre->sTableName,
+			&pTemp)==NOTFOUND){
+			if((pTemp=(struct MyTabStruct*)malloc(
+				sizeof(struct MyTabStruct)))==NULL) return -1;
+			bzero((void*)pTemp,sizeof(struct MyTabStruct));
+			strcpy(pTemp->sOwner,ptPre->sOwner);
+			strcpy(pTemp->sTableName,ptPre->sTableName);
+			InsertListSort((LIST**)&ptLkHead,(LIST*)pTemp,
+				comp_list_table_name);
+		}
+		InsertListSort((LIST**)&(pTemp->pHead),(LIST*)ptPre,
+			comp_list_column_id);
+	}
+	*pptHead=ptLkHead;
+	return 0;
+}
+void CreateTabDiffList(struct MyTabStruct **ppListA,struct MyTabStruct *pListB,
+	struct MyTabStruct **pptListDiff)
+{
+	struct MyTabStruct *ptHead=(*ppListA),*pTemp,*ptLkHead=NULL,*pNoUse;
+	
+	while(ptHead!=NULL){
+	
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+
+/*找到了只在ListA而不在LISTB的记录*/
+		if(SearchMyTabList(pListB,"",pTemp->sTableName,
+			&pNoUse)==NOTFOUND){
+			DeleteList((LIST**)ppListA,(LIST*)pTemp);
+			InsertListSort((LIST**)&ptLkHead,(LIST*)pTemp,
+				comp_list_table_name);
+		}
+	}
+	*pptListDiff=ptLkHead;
+}
+int SearchMyTabColumnsList(struct MyTabColumnsStruct *ptHead,
+	char sColumnName[])
+{
+	while(ptHead!=NULL){
+		if(strcmp(sColumnName,ptHead->sColumnName)==0) return FOUND;
+		ptHead=ptHead->pNext;
+	}
+	return NOTFOUND;
+}
+int comp_my_tab_columns_all(struct MyTabColumnsStruct *p1,struct MyTabColumnsStruct *p2)
+{
+	int res=0;
+
+	if((res=strcmp(p1->sTableName,p2->sTableName))!=0) return res;
+	if((res=strcmp(p1->sColumnName,p2->sColumnName))!=0) return res;
+	if((res=strcmp(p1->sDataType,p2->sDataType))!=0) return res;
+	if((res=p1->iDataLength-p2->iDataLength)!=0) return res;
+	if((res=p1->iDataPrecision-p2->iDataPrecision)!=0) return res;
+	if((res=p1->iDataScale-p2->iDataScale)!=0) return res;
+	if((res=strcmp(p1->sNullable,p2->sNullable))!=0) return res;
+	return p1->iColumnID-p2->iColumnID;
+}
+
+int SearchMyColAll(struct MyTabColumnsStruct *ptHead,struct MyTabColumnsStruct *p)
+{
+	while(ptHead!=NULL){
+		if(comp_my_tab_columns_all(p,ptHead)==0) return FOUND;
+		ptHead=ptHead->pNext;
+	}
+	return NOTFOUND;
+}
+int comp_my_tab_columns_list(struct MyTabColumnsStruct *pSource,
+	struct MyTabColumnsStruct *pTarget,char sMessage[])
+{
+	struct MyTabColumnsStruct *ptHead,*pTemp;
+	strcpy(sMessage,"");
+
+	if(CountList((LIST*)pSource)!=CountList((LIST*)pTarget)) return 1;
+	
+	ptHead=pSource;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		if(SearchMyColAll(pTarget,pTemp)==NOTFOUND) return 1;
+	}
+	return 0;
+}
+void CreateInsertStatement(struct MyTabColumnsStruct *pVersion,
+	struct MyTabColumnsStruct *pOnline,char statement[])
+{
+	int l=0;
+	char	sColumnName[31];
+	struct MyTabColumnsStruct *ptHead,*pTemp;
+	
+	strcpy(statement,"");
+
+	if(pVersion==NULL||pOnline==NULL) return;
+	l+=sprintf(statement+l,"INSERT INTO %s.%s(\n",
+		pOnline->sOwner,pOnline->sTableName);
+	
+	ptHead=pVersion;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		if(ptHead!=NULL)
+			l+=sprintf(statement+l,"\t%s,\n",pTemp->sColumnName);
+		else
+			l+=sprintf(statement+l,"\t%s)\n SELECT \n",
+				pTemp->sColumnName);
+	}
+	
+	ptHead=pVersion;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		if(SearchMyTabColumnsList(pOnline,pTemp->sColumnName)!=FOUND){
+			if(strcmp(pTemp->sDataType,"DATE")==0){
+				strcpy(sColumnName,"SYSDATE");
+				if(strcmp(pTemp->sColumnName,"EFF_DATE")==0)
+			strcpy(sColumnName,"to_date('19900101','yyyymmdd')");
+				if(strcmp(pTemp->sColumnName,"EXP_DATE")==0)
+			strcpy(sColumnName,"to_date('20300101','yyyymmdd')");
+			}
+			else if(strcmp(pTemp->sDataType,"NUMBER")==0){
+				strcpy(sColumnName,"0");
+				if(strcmp(pTemp->sColumnName,"SEQ_NBR")==0)
+					strcpy(sColumnName,"1");
+				if(pTemp==pVersion&&
+					RLike(pTemp->sColumnName,"_ID"))
+					strcpy(sColumnName,"HEAD_ID_SEQ.NEXTVAL");
+			}
+			else if(strcmp(pTemp->sDataType,"VARCHAR2")==0||
+				strcmp(pTemp->sDataType,"VARCHAR")==0||
+				strcmp(pTemp->sDataType,"CHAR")==0)
+				strcpy(sColumnName,"\' \'");
+			else
+				strcpy(sColumnName,"NULL");
+		}
+		else
+			strcpy(sColumnName,pTemp->sColumnName);
+
+				
+		if(ptHead!=NULL)
+			l+=sprintf(statement+l,"\t%s,\n",sColumnName);
+		else
+			l+=sprintf(statement+l,"\t%s FROM %s.%s_BAK;\n",
+				sColumnName,pOnline->sOwner,pVersion->sTableName);
+	}
+
+}
+int CreateDiffTabSql(struct MyTabStruct *pListA,struct MyTabStruct *pListV,
+	char sFileName[])
+{
+	int iCnt=0;
+	char sMessage[16384],statement[16384];
+	struct MyTabStruct *ptHead=pListA,*pTemp,*ptCur;
+	
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+/*如果没找到说明逻辑错误*/
+		if(SearchMyTabList(pListV,"",pTemp->sTableName,
+			&ptCur)==NOTFOUND) return -1;
+		
+		if(comp_my_tab_columns_list(pTemp->pHead,ptCur->pHead,
+			sMessage)!=0){
+			if(PrintLog(sFileName,"RENAME %s TO %s_BAK ---in '%s';\n",
+				pTemp->sTableName,pTemp->sTableName,
+				pTemp->sOwner)<0) return -1;
+			if(PrintLog(sFileName,"CREATE TABLE %s.%s as \n\
+SELECT * FROM %s.%s WHERE 1=0;\n",pTemp->sOwner,pTemp->sTableName,
+				ptCur->sOwner,ptCur->sTableName)<0) return -1;
+/*看一下是否有必要导数据*/
+			if(PrintLog(sFileName,"SELECT COUNT(*) FROM %s.%s_BAK;\n",
+				pTemp->sOwner,pTemp->sTableName)<0) return -1;
+
+			if(PrintLog(sFileName,"--这里是将系统的数据导入表导入新表脚本\n")<0)
+				return -1;
+			CreateInsertStatement(ptCur->pHead,pTemp->pHead,statement);
+			if(PrintLog(sFileName,"%s",statement)<0) return -1;
+			
+			iCnt++;
+		}
+	}
+	return iCnt;
+}
+
+int CreateDiffTabList(struct MyTabStruct *pListA,struct MyTabStruct *pListV,
+	char sFileName[])
+{
+	int iCnt=0;
+	char sMessage[16384],statement[16384];
+	struct MyTabStruct *ptHead=pListA,*pTemp,*ptCur;
+	
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+/*如果没找到说明逻辑错误*/
+		if(SearchMyTabList(pListV,"",pTemp->sTableName,
+			&ptCur)==NOTFOUND) return -1;
+		
+		if(comp_my_tab_columns_list(pTemp->pHead,ptCur->pHead,
+			sMessage)!=0){
+			if(PrintLog(sFileName,"%s\n",pTemp->sTableName)<0) return -1;			
+			iCnt++;
+		}
+	}
+	return iCnt;
+}
+int CreateOnlineDropSql(struct MyTabStruct *pListA,char sFileName[])
+{
+	struct MyTabStruct *ptHead,*pTemp;
+	
+	ptHead=pListA;
+	
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		if(PrintLog(sFileName,"DROP TABLE %s.%s;\n",
+			pTemp->sOwner,pTemp->sTableName)<0) return -1;
+	}
+	return CountList((LIST*)pListA);
+}
+int CreateVersionAddSql(struct MyTabStruct *pListV,char sUserA[],
+	char sFileName[])
+{
+	struct MyTabStruct *ptHead,*pTemp;
+	
+	ptHead=pListV;
+	
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		if(PrintLog(sFileName,"CREATE TABLE %s.%s as \n\
+SELECT * FROM %s.%s;\n",sUserA,pTemp->sTableName,
+			pTemp->sOwner,pTemp->sTableName)<0) return -1;
+	}
+
+	return CountList((LIST*)pListV);
+}
+
+int main(int argc,char *argv[])
+{
+	int iDiffCnt=0,iOnlineAdd=0,iVersionAdd=0;
+	char	sUserA[31],sUserV[31],sFileName[256],sCommand[256];
+	struct MyTabColumnsStruct *pTemp=NULL;
+	struct MyTabStruct *pUserAList=NULL,*pUserVList=NULL;
+	struct MyTabStruct *pUserADiff=NULL,*pUserVDiff=NULL;
+
+	if(argc!=3){
+		printf("usage %s usera userv\n",argv[0]);
+		return -1;
+	}
+
+	InitAppRes(argv[0]);
+	
+	strncpy(sUserA,argv[1],30);sUserA[30]=0;
+	strncpy(sUserV,argv[2],30);sUserV[30]=0;
+	Upper(sUserA);Upper(sUserV);
+	if(strcmp(sUserA,sUserV)==0){
+		printf("两个用户一样，不能比较.\n");
+		return -1;
+	}
+	sprintf(sFileName,"%s_%s.sql",sUserV,sUserA);
+	Lower(sFileName);
+
+	if(ConnectDataDB()<0){
+		printf("连结数据库失败.\n");
+		return -1;
+	}
+	pTemp=NULL;
+	if(InitMyTabColumns(sUserA,&pTemp)<0){
+		printf("加载用户%s的记录失败.\n",sUserA);
+		return -1;
+	}
+	if(CreateMyTabList(pTemp,&pUserAList)<0){
+		printf("生成UserAList失败.\n");
+		return -1;
+	}
+	pTemp=NULL;
+	if(InitMyTabColumns(sUserV,&pTemp)<0){
+		printf("加载用户%s的记录失败.\n",sUserV);
+		return -1;
+	}
+	if(CreateMyTabList(pTemp,&pUserVList)<0){
+		printf("生成UserVList失败.\n");
+		return -1;
+	}
+/*生成在线多出的表*/
+	CreateTabDiffList(&pUserAList,pUserVList,&pUserADiff);
+/*生成版本中多的表*/
+	CreateTabDiffList(&pUserVList,pUserAList,&pUserVDiff);
+	
+/*先清空文件*/
+	sprintf(sCommand,"cat /dev/null > %s ",sFileName);
+	system(sCommand);
+
+/*生成相同表校正脚本*/
+	PrintLog(sFileName,"---以下是相同表表结构校正脚本.\n");
+
+	if((iDiffCnt=CreateDiffTabSql(pUserAList,pUserVList,sFileName))<0){
+		printf("生成相同表校正脚本失败.\n");
+		return -1;
+	}
+/*生成在线冗余表清除脚本*/
+	PrintLog(sFileName,"---以下是在线冗余表清除脚本.\n");
+
+	if((iOnlineAdd=CreateOnlineDropSql(pUserADiff,sFileName))<0){
+		printf("生成在线冗余表清除脚本失败.\n");
+		return -1;
+	}
+/*生成在线增加表脚本*/
+	PrintLog(sFileName,"---以下是在线增加表的脚本.\n");
+	
+	if((iVersionAdd=CreateVersionAddSql(pUserVDiff,sUserA,sFileName))<0){
+		printf("生成在线增加表脚本.\n");
+		return -1;
+	}
+
+	PrintLog(sFileName,"---以下是生成表结构差异表列表.\n");
+/*生成表结构差异表列表*/
+	if(CreateDiffTabList(pUserAList,pUserVList,sFileName)<0){
+		printf("生成差异表列表错误.\n");
+		return -1;
+	}
+
+	DisconnectDatabase();
+	printf("数据库表结构比对成功,版本有%d个表,在线有%d个表,\n\
+	其中有%d个表，表结构完全相同,有%d个表表结构差异.\n\
+	在线系统多出%d个表,版本增加%d个表,\n\
+	调整表结构脚本在%s文件中.\n",
+		CountList((LIST*)pUserVList)+iVersionAdd,
+		CountList((LIST*)pUserAList)+iOnlineAdd,
+		CountList((LIST*)pUserVList)-iDiffCnt,iDiffCnt,
+		iOnlineAdd,iVersionAdd,sFileName);
+	return 0;
+}

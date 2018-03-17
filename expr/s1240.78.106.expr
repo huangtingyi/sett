@@ -1,0 +1,87 @@
+{
+/*声明输出部分*/
+goto aa;
+	setfilefmt("blk20:{0:1}<16:78:64:106>:0");
+	initdate(300);
+	setfmt(t_call_type,	"00","%02d",posp("0:2"));
+	setfmt(t_imsi,		" ","%-15s",posp("2:15"));
+	setfmt(t_calling_nbr,	" ","%-15s",posp("17:15"));
+	setfmt(t_called_nbr,	" ","%-24s",posp("32:24"));
+	setfmt(t_start_date,	" ","%-8s",posp("56:8"));
+	setfmt(t_start_time,	" ","%-6s",posp("64:6"));
+	setfmt(t_duration,	" ","%06d",posp("70:6"));
+	setfmt(t_msc,		" ","%-10s",posp("76:10"));
+	setfmt(t_trunk_in,	" ","%-8s",posp("86:8"));
+	setfmt(t_trunk_out,	" ","%-8s",posp("94:8"));
+	setfmt(t_lac,		" ","%-4s",posp("102:4"));
+	setfmt(t_cell_id,	" ","%-4s",posp("106:4"));
+	setfmt(t_other_lac,	" ","%-4s",posp("110:4"));
+	setfmt(t_other_cell_id,	" ","%-4s",posp("114:4"));
+	setfmt(t_service_type,	" ","%-3s",posp("118:3"));
+	setfmt(t_service_code,	" ","%-4s",posp("121:4"));
+	setfmt(t_third_party,	" ","%-15s",posp("125:15"));
+	setfmt(t_msrn,		" ","%-15s",posp("140:15"));
+	setfmt(st_esn,		" ","%-15s",posp("155:15" ));
+	setfmt(st_reserve,	" ","%-10s",posp("170:10" ));
+aa:
+	ticketvalid=1;
+	temp=HEX_OCTET_STRING(getfixpos(t_ori,fixp("0:1")));
+	if(temp=="EE"){ticketvalid=-1;return;}
+	
+/*字段解码部分*/
+	t_call_type=	06;
+	t_imsi=		"";
+	t_calling_nbr=	OCTET_STRING(getfixpos(t_ori,fixp("6:10")));
+	t_called_nbr=	OCTET_STRING(getfixpos(t_ori,fixp("17:10")));
+
+	if(strlen(t_called_nbr)==0){/*一些CXXX等号码进行转换*/
+		t_called_nbr=HEX_OCTET_STRING(getfixpos(t_ori,fixp("17:10")));
+		t_called_nbr=rplx(t_called_nbr,"C","0");
+		t_called_nbr=trimx(t_called_nbr,"EF");
+		t_called_nbr=rplx(t_called_nbr,"F","");
+		if(llike(t_called_nbr,"B"))
+			t_called_nbr=substr(t_called_nbr,3,24);
+	}
+	t_start_date=	OCTET_YYMMDD(getfixpos(t_ori,fixp("27:3")));
+	t_start_time=	OCTET_HHMISS(getfixpos(t_ori,fixp("30:3")));
+
+	temp=	OCTET_STRING(getfixpos(t_ori,fixp("41:4")));
+	t_duration=atoi(substr(temp,0,3))*3600+
+		atoi(substr(temp,3,2))*60+
+		atoi(substr(temp,5,2));
+	if(substr(temp,7,1)>="5") t_duration=t_duration+1;
+	t_third_party=	"";
+	
+	t_msrn=		"";
+	t_msc=		"";
+	
+	t_trunk_in=	lpad(itoa(OCTET_INT4B(getfixpos(t_ori,fixp("47:2")))),"0",6);
+	t_trunk_out=	lpad(itoa(OCTET_INT4B(getfixpos(t_ori,fixp("49:2")))),"0",6);
+	
+	t_lac=		"";
+	t_cell_id=	"";
+	t_other_lac=	"";
+	t_other_cell_id="";
+
+
+	t_service_type="000";
+	t_service_code="0021";
+
+	if(maxdatadate(t_start_date)<0)
+		ticketvalid=0;
+
+/*字段校正部分*/
+	if(t_call_type!=03) t_service_code="0011";
+	t_msc=$MSC;
+	t_msrn=fmt86a13(t_msrn);
+	t_called_nbr=fmt86a13(t_called_nbr);
+	l=length($AREACODE);
+	if(length(t_called_nbr)>12&&l!=0){
+		if(llike(t_called_nbr,$AREACODE+"0"))
+			t_called_nbr=substr(t_called_nbr,l,20);
+		else if(llike(t_called_nbr,"0"+$AREACODE+"0"))
+			t_called_nbr=substr(t_called_nbr,l+1,20);
+	}
+	t_calling_nbr=fmt86a13(t_calling_nbr);
+	t_third_party=fmt86a13(t_third_party);
+}

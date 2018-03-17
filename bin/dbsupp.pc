@@ -1,0 +1,3270 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <list.h>
+#include <wwtiny.h>
+#include <wwlog.h>
+#include <wwfile.h>
+#include <wwsupp.h>
+#include <wwdb.h>
+#include <dbsupp.h>
+
+
+/*批量数据动态从BILLING_LOG中用结构缓冲方式取数据*/
+int EGetBillingLogToStruct(struct BillingLogStruct *p,
+	struct BillingLogStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				STATE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				to_char(DEAL_BEGIN_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_END_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DATA_DATE,'yyyymmddhh24miss'),\n\
+				SEQ,\n\
+				ORI_FILE_NAME,\n\
+				nvl(FILE_TYPE,'-1'),\n\
+				nvl(TACHE_ID,-1),\n\
+				nvl(APP_ID,'-1')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE BILLING_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE BILLING_LOGSCR BILLING_LOGCR");
+
+		EXEC SQL DECLARE BILLING_LOGCR CURSOR FOR BILLING_LOGSCR;
+		CheckSqlError("Declare BILLING_LOGCR");
+
+		EXEC SQL OPEN BILLING_LOGCR;
+		CheckSqlError("Open BILLING_LOGCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE BILLING_LOGCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH BILLING_LOGCR INTO
+			:pSource->aiInputID,
+			:pSource->asSourceID,
+			:pSource->asModule,
+			:pSource->asState,
+			:pSource->aiCnt,
+			:pSource->asFileName,
+			:pSource->asDealBeginDate,
+			:pSource->asDealEndDate,
+			:pSource->asDataDate,
+			:pSource->aiSeq,
+			:pSource->asOriFileName,
+			:pSource->asFileType,
+			:pSource->aiTacheID,
+			:pSource->asAppID;
+		CheckSqlError("Fetch BILLING_LOGCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE BILLING_LOGCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=BILLING_LOG_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iInputID=			pSource->aiInputID[iCurPos];
+
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sModule,		pSource->asModule[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+
+		p->iCnt=			pSource->aiCnt[iCurPos];
+
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sDealBeginDate,	pSource->asDealBeginDate[iCurPos]);
+		strcpy(p->sDealEndDate,		pSource->asDealEndDate[iCurPos]);
+		strcpy(p->sDataDate,		pSource->asDataDate[iCurPos]);
+
+		p->iSeq=			pSource->aiSeq[iCurPos];
+
+		strcpy(p->sOriFileName,		pSource->asOriFileName[iCurPos]);
+		strcpy(p->sFileType,		pSource->asFileType[iCurPos]);
+
+		p->iTacheID=			pSource->aiTacheID[iCurPos];
+
+		strcpy(p->sAppID,		pSource->asAppID[iCurPos]);
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sModule);
+		AllTrim(p->sState);
+		AllTrim(p->sFileName);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sDataDate);
+		AllTrim(p->sOriFileName);
+		AllTrim(p->sFileType);
+		AllTrim(p->sAppID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+
+/*单条数据从用动态SQL从ACCT_LOG取数据*/
+int SDGetAcctLogToStruct(struct AcctLogStruct *p,char sTableName[],char sCondition[])
+{
+
+	/*这里不要控制变量*/
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				STATE,\n\
+				BYTE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				TABLE_NAME,\n\
+				to_char(DEAL_BEGIN_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_END_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DATA_DATE,'yyyymmddhh24miss'),\n\
+				nvl(OPER_TYPE,' '),\n\
+				nvl(FILE_TYPE,' '),\n\
+				nvl(TACHE_ID,-1),\n\
+				nvl(APP_ID,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE ACCT_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE ACCT_LOGSCR ACCT_LOGCR");
+
+		EXEC SQL DECLARE ACCT_LOGCR CURSOR FOR ACCT_LOGSCR;
+		CheckSqlError("Declare ACCT_LOGCR");
+
+		EXEC SQL OPEN ACCT_LOGCR;
+		CheckSqlError("Open ACCT_LOGCR;");
+
+	/*这里不修改控制变量*/
+
+/* FETCH */
+		EXEC SQL FETCH ACCT_LOGCR INTO
+			:p->sSourceID,
+			:p->sModule,
+			:p->sState,
+			:p->iByte,
+			:p->iCnt,
+			:p->sFileName,
+			:p->sTableName,
+			:p->sDealBeginDate,
+			:p->sDealEndDate,
+			:p->sDataDate,
+			:p->sOperType,
+			:p->sFileType,
+			:p->iTacheID,
+			:p->sAppID;
+		CheckSqlError("Fetch ACCT_LOGCR");
+
+	if(NoDataFetched){
+		EXEC SQL CLOSE ACCT_LOGCR;
+		return FALSE;
+	}
+		EXEC SQL CLOSE ACCT_LOGCR;
+
+/* 从缓冲区取数据*/
+/*------该部分不需要取数据,只要格式转换-----*/
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sModule);
+		AllTrim(p->sState);
+		AllTrim(p->sFileName);
+		AllTrim(p->sTableName);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sDataDate);
+		AllTrim(p->sOperType);
+		AllTrim(p->sFileType);
+		AllTrim(p->sAppID);
+
+	return TRUE;
+}
+
+/*单条数据动态SQL向ACCT_LOG写数据*/
+int SDInsertStructToAcctLog(struct AcctLogStruct *p,char sTableName[])
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				STATE,\n\
+				BYTE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				TABLE_NAME,\n\
+				DEAL_BEGIN_DATE,\n\
+				DEAL_END_DATE,\n\
+				DATA_DATE,\n\
+				OPER_TYPE,\n\
+				FILE_TYPE,\n\
+				TACHE_ID,\n\
+				APP_ID)\n\
+			VALUES (\n\
+				:sSourceID,\n\
+				:sModule,\n\
+				:sState,\n\
+				:iByte,\n\
+				:iCnt,\n\
+				:sFileName,\n\
+				:sTableName,\n\
+				to_date(:sDealBeginDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDealEndDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDataDate,'yyyymmddhh24miss'),\n\
+				:sOperType,\n\
+				:sFileType,\n\
+				:iTacheID,\n\
+				:sAppID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE ACCT_LOGTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement ACCT_LOG")<0) return -1;
+
+		EXEC SQL EXECUTE ACCT_LOGTRG USING
+				:p->sSourceID,
+				:p->sModule,
+				:p->sState,
+				:p->iByte,
+				:p->iCnt,
+				:p->sFileName,
+				:p->sTableName,
+				:p->sDealBeginDate,
+				:p->sDealEndDate,
+				:p->sDataDate,
+				:p->sOperType,
+				:p->sFileType,
+				:p->iTacheID,
+				:p->sAppID;
+		if(CheckSqlResult("Dyn insert into ACCT_LOG")<0) return -1;
+
+	return 0;
+}
+/*单条数据从用动态SQL从PICK_LOG取数据*/
+int SDGetPickLogToStruct(struct PickLogStruct *p,char sTableName[],char sCondition[])
+{
+
+	/*这里不要控制变量*/
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				BYTE,\n\
+				FILE_NAME,\n\
+				to_char(DEAL_BEGIN_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_END_DATE,'yyyymmddhh24miss'),\n\
+				SEQ,\n\
+				STATE,\n\
+				nvl(FILE_TYPE,'-1'),\n\
+				nvl(TACHE_ID,-1),\n\
+				nvl(APP_ID,'-1')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE PICK_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE PICK_LOGSCR PICK_LOGCR");
+
+		EXEC SQL DECLARE PICK_LOGCR CURSOR FOR PICK_LOGSCR;
+		CheckSqlError("Declare PICK_LOGCR");
+
+		EXEC SQL OPEN PICK_LOGCR;
+		CheckSqlError("Open PICK_LOGCR;");
+
+	/*这里不修改控制变量*/
+
+/* FETCH */
+		EXEC SQL FETCH PICK_LOGCR INTO
+			:p->iInputID,
+			:p->sSourceID,
+			:p->iByte,
+			:p->sFileName,
+			:p->sDealBeginDate,
+			:p->sDealEndDate,
+			:p->iSeq,
+			:p->sState,
+			:p->sFileType,
+			:p->iTacheID,
+			:p->sAppID;
+		CheckSqlError("Fetch PICK_LOGCR");
+
+	if(NoDataFetched){
+		EXEC SQL CLOSE PICK_LOGCR;
+		return FALSE;
+	}
+		EXEC SQL CLOSE PICK_LOGCR;
+
+/* 从缓冲区取数据*/
+/*------该部分不需要取数据,只要格式转换-----*/
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sFileName);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sState);
+		AllTrim(p->sFileType);
+		AllTrim(p->sAppID);
+
+	return TRUE;
+}
+
+/*单条数据动态SQL向PICK_LOG写数据*/
+int SDInsertStructToPickLog(struct PickLogStruct *p,char sTableName[])
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				BYTE,\n\
+				FILE_NAME,\n\
+				DEAL_BEGIN_DATE,\n\
+				DEAL_END_DATE,\n\
+				SEQ,\n\
+				STATE,\n\
+				FILE_TYPE,\n\
+				TACHE_ID,\n\
+				APP_ID)\n\
+			VALUES (\n\
+				:iInputID,\n\
+				:sSourceID,\n\
+				:iByte,\n\
+				:sFileName,\n\
+				to_date(:sDealBeginDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDealEndDate,'yyyymmddhh24miss'),\n\
+				:iSeq,\n\
+				:sState,\n\
+				:sFileType,\n\
+				:iTacheID,\n\
+				:sAppID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE PICK_LOGTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement PICK_LOG")<0) return -1;
+
+		EXEC SQL EXECUTE PICK_LOGTRG USING
+				:p->iInputID,
+				:p->sSourceID,
+				:p->iByte,
+				:p->sFileName,
+				:p->sDealBeginDate,
+				:p->sDealEndDate,
+				:p->iSeq,
+				:p->sState,
+				:p->sFileType,
+				:p->iTacheID,
+				:p->sAppID;
+		if(CheckSqlResult("Dyn insert into PICK_LOG")<0) return -1;
+
+	return 0;
+}
+/*单条数据从用动态SQL从PREP_LOG取数据*/
+int SDGetPrepLogToStruct(struct PrepLogStruct *p,char sTableName[],char sCondition[])
+{
+
+	/*这里不要控制变量*/
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				STATE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				to_char(DEAL_BEGIN_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_END_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DATA_DATE,'yyyymmddhh24miss'),\n\
+				SEQ,\n\
+				ORI_FILE_NAME,\n\
+				nvl(FILE_TYPE,' '),\n\
+				nvl(APP_ID,' '),\n\
+				nvl(TACHE_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE PREP_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE PREP_LOGSCR PREP_LOGCR");
+
+		EXEC SQL DECLARE PREP_LOGCR CURSOR FOR PREP_LOGSCR;
+		CheckSqlError("Declare PREP_LOGCR");
+
+		EXEC SQL OPEN PREP_LOGCR;
+		CheckSqlError("Open PREP_LOGCR;");
+
+	/*这里不修改控制变量*/
+
+/* FETCH */
+		EXEC SQL FETCH PREP_LOGCR INTO
+			:p->iInputID,
+			:p->sSourceID,
+			:p->sModule,
+			:p->sState,
+			:p->iCnt,
+			:p->sFileName,
+			:p->sDealBeginDate,
+			:p->sDealEndDate,
+			:p->sDataDate,
+			:p->iSeq,
+			:p->sOriFileName,
+			:p->sFileType,
+			:p->sAppID,
+			:p->iTacheID;
+		CheckSqlError("Fetch PREP_LOGCR");
+
+	if(NoDataFetched){
+		EXEC SQL CLOSE PREP_LOGCR;
+		return FALSE;
+	}
+		EXEC SQL CLOSE PREP_LOGCR;
+
+/* 从缓冲区取数据*/
+/*------该部分不需要取数据,只要格式转换-----*/
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sModule);
+		AllTrim(p->sState);
+		AllTrim(p->sFileName);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sDataDate);
+		AllTrim(p->sOriFileName);
+		AllTrim(p->sFileType);
+		AllTrim(p->sAppID);
+
+	return TRUE;
+}
+/*单条数据动态SQL向PREP_LOG写数据*/
+int SDInsertStructToPrepLog(struct PrepLogStruct *p,char sTableName[])
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				STATE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				DEAL_BEGIN_DATE,\n\
+				DEAL_END_DATE,\n\
+				DATA_DATE,\n\
+				SEQ,\n\
+				ORI_FILE_NAME,\n\
+				FILE_TYPE,\n\
+				APP_ID,\n\
+				TACHE_ID)\n\
+			VALUES (\n\
+				:iInputID,\n\
+				:sSourceID,\n\
+				:sModule,\n\
+				:sState,\n\
+				:iCnt,\n\
+				:sFileName,\n\
+				to_date(:sDealBeginDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDealEndDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDataDate,'yyyymmddhh24miss'),\n\
+				:iSeq,\n\
+				:sOriFileName,\n\
+				:sFileType,\n\
+				:sAppID,\n\
+				:iTacheID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE PREP_LOGTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement PREP_LOG")<0) return -1;
+
+		EXEC SQL EXECUTE PREP_LOGTRG USING
+				:p->iInputID,
+				:p->sSourceID,
+				:p->sModule,
+				:p->sState,
+				:p->iCnt,
+				:p->sFileName,
+				:p->sDealBeginDate,
+				:p->sDealEndDate,
+				:p->sDataDate,
+				:p->iSeq,
+				:p->sOriFileName,
+				:p->sFileType,
+				:p->sAppID,
+				:p->iTacheID;
+		if(CheckSqlResult("Dyn insert into PREP_LOG")<0) return -1;
+
+	return 0;
+}
+/*单条数据从用动态SQL从PREP_PROC_LOG取数据*/
+int SDGetPrepProcLogToStruct(struct PrepProcLogStruct *p,char sTableName[],char sCondition[])
+{
+
+	/*这里不要控制变量*/
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				BYTE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				to_char(nvl(DEAL_BEGIN_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_END_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(NORMAL_CNT,0),\n\
+				nvl(ERR_CNT,0),\n\
+				nvl(DUP_CNT,0),\n\
+				nvl(ABNO_CNT,0),\n\
+				nvl(NEW_CNT,0),\n\
+				nvl(FILE_TYPE,' '),\n\
+				nvl(APP_ID,' '),\n\
+				nvl(TACHE_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE PREP_PROC_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE PREP_PROC_LOGSCR PREP_PROC_LOGCR");
+
+		EXEC SQL DECLARE PREP_PROC_LOGCR CURSOR FOR PREP_PROC_LOGSCR;
+		CheckSqlError("Declare PREP_PROC_LOGCR");
+
+		EXEC SQL OPEN PREP_PROC_LOGCR;
+		CheckSqlError("Open PREP_PROC_LOGCR;");
+
+	/*这里不修改控制变量*/
+
+/* FETCH */
+		EXEC SQL FETCH PREP_PROC_LOGCR INTO
+			:p->iInputID,
+			:p->sSourceID,
+			:p->sModule,
+			:p->iByte,
+			:p->iCnt,
+			:p->sFileName,
+			:p->sDealBeginDate,
+			:p->sDealEndDate,
+			:p->iNormalCnt,
+			:p->iErrCnt,
+			:p->iDupCnt,
+			:p->iAbnoCnt,
+			:p->iNewCnt,
+			:p->sFileType,
+			:p->sAppID,
+			:p->iTacheID;
+		CheckSqlError("Fetch PREP_PROC_LOGCR");
+
+	if(NoDataFetched){
+		EXEC SQL CLOSE PREP_PROC_LOGCR;
+		return FALSE;
+	}
+		EXEC SQL CLOSE PREP_PROC_LOGCR;
+
+/* 从缓冲区取数据*/
+/*------该部分不需要取数据,只要格式转换-----*/
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sModule);
+		AllTrim(p->sFileName);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sFileType);
+		AllTrim(p->sAppID);
+
+	return TRUE;
+}
+/*单条数据动态SQL向PREP_PROC_LOG写数据*/
+int SDInsertStructToPrepProcLog(struct PrepProcLogStruct *p,char sTableName[])
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				BYTE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				DEAL_BEGIN_DATE,\n\
+				DEAL_END_DATE,\n\
+				NORMAL_CNT,\n\
+				ERR_CNT,\n\
+				DUP_CNT,\n\
+				ABNO_CNT,\n\
+				NEW_CNT,\n\
+				FILE_TYPE,\n\
+				APP_ID,\n\
+				TACHE_ID)\n\
+			VALUES (\n\
+				:iInputID,\n\
+				:sSourceID,\n\
+				:sModule,\n\
+				:iByte,\n\
+				:iCnt,\n\
+				:sFileName,\n\
+				to_date(:sDealBeginDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDealEndDate,'yyyymmddhh24miss'),\n\
+				:iNormalCnt,\n\
+				:iErrCnt,\n\
+				:iDupCnt,\n\
+				:iAbnoCnt,\n\
+				:iNewCnt,\n\
+				:sFileType,\n\
+				:sAppID,\n\
+				:iTacheID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE PREP_PROC_LOGTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement PREP_PROC_LOG")<0) return -1;
+
+		EXEC SQL EXECUTE PREP_PROC_LOGTRG USING
+				:p->iInputID,
+				:p->sSourceID,
+				:p->sModule,
+				:p->iByte,
+				:p->iCnt,
+				:p->sFileName,
+				:p->sDealBeginDate,
+				:p->sDealEndDate,
+				:p->iNormalCnt,
+				:p->iErrCnt,
+				:p->iDupCnt,
+				:p->iAbnoCnt,
+				:p->iNewCnt,
+				:p->sFileType,
+				:p->sAppID,
+				:p->iTacheID;
+		if(CheckSqlResult("Dyn insert into PREP_PROC_LOG")<0) return -1;
+
+	return 0;
+}
+
+/*单条数据从用动态SQL从BILLING_LOG取数据*/
+int SDGetBillingLogToStruct(struct BillingLogStruct *p,char sTableName[],char sCondition[])
+{
+
+	/*这里不要控制变量*/
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				STATE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				to_char(DEAL_BEGIN_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_END_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DATA_DATE,'yyyymmddhh24miss'),\n\
+				SEQ,\n\
+				ORI_FILE_NAME,\n\
+				nvl(FILE_TYPE,'-1'),\n\
+				nvl(TACHE_ID,-1),\n\
+				nvl(APP_ID,'-1')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE BILLING_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE BILLING_LOGSCR BILLING_LOGCR");
+
+		EXEC SQL DECLARE BILLING_LOGCR CURSOR FOR BILLING_LOGSCR;
+		CheckSqlError("Declare BILLING_LOGCR");
+
+		EXEC SQL OPEN BILLING_LOGCR;
+		CheckSqlError("Open BILLING_LOGCR;");
+
+	/*这里不修改控制变量*/
+
+/* FETCH */
+		EXEC SQL FETCH BILLING_LOGCR INTO
+			:p->iInputID,
+			:p->sSourceID,
+			:p->sModule,
+			:p->sState,
+			:p->iCnt,
+			:p->sFileName,
+			:p->sDealBeginDate,
+			:p->sDealEndDate,
+			:p->sDataDate,
+			:p->iSeq,
+			:p->sOriFileName,
+			:p->sFileType,
+			:p->iTacheID,
+			:p->sAppID;
+		CheckSqlError("Fetch BILLING_LOGCR");
+
+	if(NoDataFetched){
+		EXEC SQL CLOSE BILLING_LOGCR;
+		return FALSE;
+	}
+		EXEC SQL CLOSE BILLING_LOGCR;
+
+/* 从缓冲区取数据*/
+/*------该部分不需要取数据,只要格式转换-----*/
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sModule);
+		AllTrim(p->sState);
+		AllTrim(p->sFileName);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sDataDate);
+		AllTrim(p->sOriFileName);
+		AllTrim(p->sFileType);
+		AllTrim(p->sAppID);
+
+	return TRUE;
+}
+
+/*单条数据动态SQL向BILLING_LOG写数据*/
+int SDInsertStructToBillingLog(struct BillingLogStruct *p,char sTableName[])
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				STATE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				DEAL_BEGIN_DATE,\n\
+				DEAL_END_DATE,\n\
+				DATA_DATE,\n\
+				SEQ,\n\
+				ORI_FILE_NAME,\n\
+				FILE_TYPE,\n\
+				APP_CODE,\n\
+				TACHE_ID,\n\
+				APP_ID)\n\
+			VALUES (\n\
+				:iInputID,\n\
+				:sSourceID,\n\
+				:sModule,\n\
+				:sState,\n\
+				:iCnt,\n\
+				:sFileName,\n\
+				to_date(:sDealBeginDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDealEndDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDataDate,'yyyymmddhh24miss'),\n\
+				:iSeq,\n\
+				:sOriFileName,\n\
+				:sFileType,\n\
+				:sAppCode,\n\
+				:iTacheID,\n\
+				:sAppID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE BILLING_LOGTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement BILLING_LOG")<0) return -1;
+
+		EXEC SQL EXECUTE BILLING_LOGTRG USING
+				:p->iInputID,
+				:p->sSourceID,
+				:p->sModule,
+				:p->sState,
+				:p->iCnt,
+				:p->sFileName,
+				:p->sDealBeginDate,
+				:p->sDealEndDate,
+				:p->sDataDate,
+				:p->iSeq,
+				:p->sOriFileName,
+				:p->sFileType,
+				:p->sAppCode,
+				:p->iTacheID,
+				:p->sAppID;
+		if(CheckSqlResult("Dyn insert into BILLING_LOG")<0) return -1;
+
+	return 0;
+}
+/*单条数据动态SQL向ROLL_PROC_LOG写数据*/
+int SDInsertStructToRollProcLog(struct RollProcLogStruct *p,char sTableName[])
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				STATE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				DEAL_BEGIN_DATE,\n\
+				DEAL_END_DATE,\n\
+				ORI_FILE_NAME,\n\
+				FILE_TYPE,\n\
+				APP_CODE,\n\
+				APP_ID,\n\
+				TACHE_ID)\n\
+			VALUES (\n\
+				:iInputID,\n\
+				:sSourceID,\n\
+				:sModule,\n\
+				:sState,\n\
+				:iCnt,\n\
+				:sFileName,\n\
+				to_date(:sDealBeginDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDealEndDate,'yyyymmddhh24miss'),\n\
+				:sOriFileName,\n\
+				:sFileType,\n\
+				:sAppCode,\n\
+				:sAppID,\n\
+				:iTacheID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE ROLL_PROC_LOGTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement ROLL_PROC_LOG")<0) return -1;
+
+		EXEC SQL EXECUTE ROLL_PROC_LOGTRG USING
+				:p->iInputID,
+				:p->sSourceID,
+				:p->sModule,
+				:p->sState,
+				:p->iCnt,
+				:p->sFileName,
+				:p->sDealBeginDate,
+				:p->sDealEndDate,
+				:p->sOriFileName,
+				:p->sFileType,
+				:p->sAppCode,
+				:p->sAppID,
+				:p->iTacheID;
+		if(CheckSqlResult("Dyn insert into ROLL_PROC_LOG")<0) return -1;
+
+	return 0;
+}
+/*单条数据动态SQL向ROLL_LOG写数据*/
+int SDInsertStructToRollLog(struct RollLogStruct *p,char sTableName[])
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				STATE,\n\
+				FILE_NAME,\n\
+				CNT,\n\
+				DEAL_BEGIN_DATE,\n\
+				DEAL_END_DATE,\n\
+				DATA_DATE,\n\
+				SEQ,\n\
+				FILE_TYPE,\n\
+				APP_CODE,\n\
+				APP_ID,\n\
+				TACHE_ID)\n\
+			VALUES (\n\
+				:iInputID,\n\
+				:sSourceID,\n\
+				:sModule,\n\
+				:sState,\n\
+				:sFileName,\n\
+				:iCnt,\n\
+				to_date(:sDealBeginDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDealEndDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDataDate,'yyyymmddhh24miss'),\n\
+				:iSeq,\n\
+				:sFileType,\n\
+				:sAppCode,\n\
+				:sAppID,\n\
+				:iTacheID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE ROLL_LOGTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement ROLL_LOG")<0) return -1;
+
+		EXEC SQL EXECUTE ROLL_LOGTRG USING
+				:p->iInputID,
+				:p->sSourceID,
+				:p->sModule,
+				:p->sState,
+				:p->sFileName,
+				:p->iCnt,
+				:p->sDealBeginDate,
+				:p->sDealEndDate,
+				:p->sDataDate,
+				:p->iSeq,
+				:p->sFileType,
+				:p->sAppCode,
+				:p->sAppID,
+				:p->iTacheID;
+		if(CheckSqlResult("Dyn insert into ROLL_LOG")<0) return -1;
+
+	return 0;
+}
+
+/*单条数据从用动态SQL从UPDATA_LOG取数据*/
+int SDGetUpdataLogToStruct(struct UpdataLogStruct *p,char sTableName[],char sCondition[])
+{
+
+	/*这里不要控制变量*/
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				UPDATA_ID,\n\
+				FILE_TYPE,\n\
+				FILE_NAME,\n\
+				to_char(BEGIN_TIME,'yyyymmddhh24miss'),\n\
+				to_char(END_TIME,'yyyymmddhh24miss'),\n\
+				REC_CNT,\n\
+				TOTAL_CHARGE,\n\
+				to_char(DATA_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_BEGIN_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_END_DATE,'yyyymmddhh24miss'),\n\
+				nvl(APP_ID,'INTF01'),\n\
+				nvl(TACHE_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE UPDATA_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE UPDATA_LOGSCR UPDATA_LOGCR");
+
+		EXEC SQL DECLARE UPDATA_LOGCR CURSOR FOR UPDATA_LOGSCR;
+		CheckSqlError("Declare UPDATA_LOGCR");
+
+		EXEC SQL OPEN UPDATA_LOGCR;
+		CheckSqlError("Open UPDATA_LOGCR;");
+
+	/*这里不修改控制变量*/
+
+/* FETCH */
+		EXEC SQL FETCH UPDATA_LOGCR INTO
+			:p->iUpdataID,
+			:p->sFileType,
+			:p->sFileName,
+			:p->sBeginTime,
+			:p->sEndTime,
+			:p->iRecCnt,
+			:p->iTotalCharge,
+			:p->sDataDate,
+			:p->sDealBeginDate,
+			:p->sDealEndDate,
+			:p->sAppID,
+			:p->iTacheID;
+		CheckSqlError("Fetch UPDATA_LOGCR");
+
+	if(NoDataFetched){
+		EXEC SQL CLOSE UPDATA_LOGCR;
+		return FALSE;
+	}
+		EXEC SQL CLOSE UPDATA_LOGCR;
+
+/* 从缓冲区取数据*/
+/*------该部分不需要取数据,只要格式转换-----*/
+
+		AllTrim(p->sFileType);
+		AllTrim(p->sFileName);
+		AllTrim(p->sBeginTime);
+		AllTrim(p->sEndTime);
+		AllTrim(p->sDataDate);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sAppID);
+
+	return TRUE;
+}
+
+/*单条数据动态SQL向UPDATA_LOG写数据*/
+int SDInsertStructToUpdataLog(struct UpdataLogStruct *p,char sTableName[])
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				UPDATA_ID,\n\
+				FILE_TYPE,\n\
+				FILE_NAME,\n\
+				BEGIN_TIME,\n\
+				END_TIME,\n\
+				REC_CNT,\n\
+				TOTAL_CHARGE,\n\
+				DATA_DATE,\n\
+				DEAL_BEGIN_DATE,\n\
+				DEAL_END_DATE,\n\
+				APP_ID,\n\
+				TACHE_ID)\n\
+			VALUES (\n\
+				:iUpdataID,\n\
+				:sFileType,\n\
+				:sFileName,\n\
+				to_date(:sBeginTime,'yyyymmddhh24miss'),\n\
+				to_date(:sEndTime,'yyyymmddhh24miss'),\n\
+				:iRecCnt,\n\
+				:iTotalCharge,\n\
+				to_date(:sDataDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDealBeginDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDealEndDate,'yyyymmddhh24miss'),\n\
+				:sAppID,\n\
+				:iTacheID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE UPDATA_LOGTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement UPDATA_LOG")<0) return -1;
+
+		EXEC SQL EXECUTE UPDATA_LOGTRG USING
+				:p->iUpdataID,
+				:p->sFileType,
+				:p->sFileName,
+				:p->sBeginTime,
+				:p->sEndTime,
+				:p->iRecCnt,
+				:p->iTotalCharge,
+				:p->sDataDate,
+				:p->sDealBeginDate,
+				:p->sDealEndDate,
+				:p->sAppID,
+				:p->iTacheID;
+		if(CheckSqlResult("Dyn insert into UPDATA_LOG")<0) return -1;
+
+	return 0;
+}
+
+/*单条数据从用动态SQL从UPDATA_PROC_LOG取数据*/
+int SDGetUpdataProcLogToStruct(struct UpdataProcLogStruct *p,char sTableName[],char sCondition[])
+{
+
+	/*这里不要控制变量*/
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				ORI_FILE_NAME,\n\
+				CUR_FILE_NAME,\n\
+				BYTE,\n\
+				REC_CNT,\n\
+				to_char(FILE_DATE,'yyyymmddhh24miss'),\n\
+				nvl(APP_ID,'INTF01'),\n\
+				nvl(TACHE_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE UPDATA_PROC_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE UPDATA_PROC_LOGSCR UPDATA_PROC_LOGCR");
+
+		EXEC SQL DECLARE UPDATA_PROC_LOGCR CURSOR FOR UPDATA_PROC_LOGSCR;
+		CheckSqlError("Declare UPDATA_PROC_LOGCR");
+
+		EXEC SQL OPEN UPDATA_PROC_LOGCR;
+		CheckSqlError("Open UPDATA_PROC_LOGCR;");
+
+	/*这里不修改控制变量*/
+
+/* FETCH */
+		EXEC SQL FETCH UPDATA_PROC_LOGCR INTO
+			:p->sOriFileName,
+			:p->sCurFileName,
+			:p->iByte,
+			:p->iRecCnt,
+			:p->sFileDate,
+			:p->sAppID,
+			:p->iTacheID;
+		CheckSqlError("Fetch UPDATA_PROC_LOGCR");
+
+	if(NoDataFetched){
+		EXEC SQL CLOSE UPDATA_PROC_LOGCR;
+		return FALSE;
+	}
+		EXEC SQL CLOSE UPDATA_PROC_LOGCR;
+
+/* 从缓冲区取数据*/
+/*------该部分不需要取数据,只要格式转换-----*/
+
+		AllTrim(p->sOriFileName);
+		AllTrim(p->sCurFileName);
+		AllTrim(p->sFileDate);
+		AllTrim(p->sAppID);
+
+	return TRUE;
+}
+
+/*单条数据动态SQL向UPDATA_PROC_LOG写数据*/
+int SDInsertStructToUpdataProcLog(struct UpdataProcLogStruct *p,char sTableName[])
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				ORI_FILE_NAME,\n\
+				CUR_FILE_NAME,\n\
+				BYTE,\n\
+				REC_CNT,\n\
+				FILE_DATE,\n\
+				APP_ID,\n\
+				TACHE_ID)\n\
+			VALUES (\n\
+				:sOriFileName,\n\
+				:sCurFileName,\n\
+				:iByte,\n\
+				:iRecCnt,\n\
+				to_date(:sFileDate,'yyyymmddhh24miss'),\n\
+				:sAppID,\n\
+				:iTacheID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE UPDATA_PROC_LOGTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement UPDATA_PROC_LOG")<0) return -1;
+
+		EXEC SQL EXECUTE UPDATA_PROC_LOGTRG USING
+				:p->sOriFileName,
+				:p->sCurFileName,
+				:p->iByte,
+				:p->iRecCnt,
+				:p->sFileDate,
+				:p->sAppID,
+				:p->iTacheID;
+		if(CheckSqlResult("Dyn insert into UPDATA_PROC_LOG")<0) return -1;
+
+	return 0;
+}
+
+int GetLastDateSeq(char sFileType[],char sDataDate[],int *piSeq)
+{
+	int iSeq=0;
+	char	sTempDate[15],sTempType[6];
+	
+
+	strcpy(sTempType,sFileType);
+
+/*先带索引的方式获取最大的DATA_DATE 在DATA>SYSDATE-1的情况下*/
+	EXEC SQL SELECT nvl(to_char(max(DATA_DATE),'yyyymmddhh24miss'),'0')
+		INTO :sTempDate
+		FROM UPDATA_LOG
+		WHERE DATA_DATE>TRUNC(SYSDATE)-1 AND
+			FILE_TYPE=:sTempType;
+	if(CheckSqlResult("GET MAX DATADATE UPDATA_LOG")<0) return -1;
+
+/*如果获取不到则通过不用索引的方式获取*/
+	if(strncmp(sTempDate,"0",1)==0){
+		EXEC SQL SELECT nvl(to_char(max(DATA_DATE),'yyyymmddhh24miss'),'0')
+			INTO :sTempDate
+			FROM UPDATA_LOG
+			WHERE FILE_TYPE=:sTempType;
+		if(CheckSqlResult("GET MAX DATADATE UPDATA_LOG")<0) return -1;
+
+		/*如果还是获取不到则取系统时间*/
+		if(strncmp(sTempDate,"0",1)==0) GetHostTime(sTempDate);
+
+	}
+	strcpy(sTempDate+8,"000000");
+	
+	EXEC SQL SELECT nvl(max(UPDATA_ID),0) 
+		INTO :iSeq
+		FROM UPDATA_LOG 
+		WHERE DATA_DATE=to_date(:sTempDate,'yyyymmddhh24miss') AND
+			FILE_TYPE=:sTempType;
+	if(CheckSqlResult("GET MAX SEQ BY DATADATE UPDATA_LOG")<0) return -1;
+	
+	strcpy(sDataDate,sTempDate);
+	*piSeq=	iSeq;
+	
+	return 0;
+}
+int GetLastSeqComm(char sFileType[],int *piSeq)
+{
+	int iSeq=0;
+	char	sTempDate[15],sTempType[6];
+	
+
+	strcpy(sTempType,sFileType);
+	
+/*先带索引的方式获取最大的DEAL_DATE 在DEAL>SYSDATE-1的情况下*/
+	EXEC SQL SELECT nvl(to_char(max(DEAL_END_DATE),'yyyymmddhh24miss'),'0')
+		INTO :sTempDate
+		FROM UPDATA_LOG
+		WHERE DEAL_END_DATE>TRUNC(SYSDATE)-1 AND
+			FILE_TYPE=:sTempType;
+	if(CheckSqlResult("GET MAX DEALDATE UPDATA_LOG")<0) return -1;
+	
+/*如果获取不到则通过不用索引的方式获取*/
+	if(strncmp(sTempDate,"0",1)==0){
+		EXEC SQL SELECT nvl(to_char(max(DEAL_END_DATE),'yyyymmddhh24miss'),'0')
+			INTO :sTempDate
+			FROM UPDATA_LOG
+			WHERE FILE_TYPE=:sTempType;
+		if(CheckSqlResult("GET MAX DEALDATE UPDATA_LOG")<0) return -1;
+	}
+
+	if(strncmp(sTempDate,"0",1)==0){
+		*piSeq=0;
+		return 0;
+	}
+	
+	EXEC SQL SELECT nvl(max(UPDATA_ID) ,0)
+		INTO :iSeq
+		FROM UPDATA_LOG 
+		WHERE DEAL_END_DATE=to_date(:sTempDate,'yyyymmddhh24miss') AND
+			FILE_TYPE=:sTempType;
+	if(CheckSqlResult("GET MAX SEQ UPDATA_LOG")<0) return -1;
+
+	*piSeq=	iSeq;
+	
+	return 0;
+}
+int GetLastSeq(char sFileType[],char sDataDate[],int *piSeq)
+{
+	int iSeq=0;
+	char	sTempDate[15],sTempType[6];
+	
+
+	strcpy(sTempType,sFileType);
+	strcpy(sTempDate,sDataDate);
+	
+	EXEC SQL SELECT nvl(max(UPDATA_ID),0) 
+		INTO :iSeq
+		FROM UPDATA_LOG 
+		WHERE DATA_DATE=to_date(:sTempDate,'yyyymmddhh24miss') AND
+			FILE_TYPE=:sTempType;
+	if(CheckSqlResult("GET MAX SEQ UPDATA_LOG")<0) return -1;
+	
+	*piSeq=	iSeq;
+	
+	return 0;
+}
+/*这个函数用在tsmsfile中*/
+int GetNextSeq( char sFileType[] )
+{	
+	int iNextSeq =0;
+	char sTempType[6];
+
+	strcpy(sTempType,sFileType);
+
+	EXEC SQL SELECT nvl(max(UPDATA_ID),0) INTO :iNextSeq
+		FROM UPDATA_LOG
+		WHERE DEAL_END_DATE>trunc(SYSDATE) AND
+			FILE_TYPE=:sTempType;
+
+	if(CheckSqlResult("GET CURDATE MAX SEQ UPDATA_LOG")<0) return -1;
+
+	iNextSeq ++;
+	 
+	if ( iNextSeq > 9999 )
+		iNextSeq = 1;
+	return iNextSeq;
+}
+
+int GetInputID()
+{
+	int iInputID;
+	
+	EXEC SQL SELECT INPUT_ID_SEQ.NEXTVAL INTO :iInputID FROM DUAL;
+	if(CheckSqlResult("GET INPUT_ID_SEQ")<0) return -1;
+	return iInputID;
+}
+int BillingLogCheck(char sSourceID[20],char sFileName[80],
+	char sModule[10],char sTargetName[])
+{
+	int iCnt;
+	char sTempSourceID[20],sTempFileName[80];
+	char sTempModule[10],sTempTarget[80];
+	
+	strcpy(sTempSourceID,	sSourceID);
+	strcpy(sTempFileName,	sFileName);
+	strcpy(sTempModule,	sModule);
+	strcpy(sTempTarget,	sTargetName);
+
+/*对于目标文件如果是彻底失败的直接不检查*/
+	if(RLike(sTempTarget,"0")==true) return 0;
+
+	EXEC SQL SELECT COUNT(*) INTO :iCnt
+		FROM BILLING_PROC_LOG
+		WHERE SOURCE_ID=:sTempSourceID AND
+			FILE_NAME=:sTempFileName AND
+			MODULE=:sTempModule;
+	if(CheckSqlResult("COUNT BILLING_PROC_LOG")<0) return -1;
+
+	if(iCnt==0) return 0;
+	return 1;	
+}
+
+int PrepLogCheck(char sSourceID[20],char sFileName[80],char sModule[10])
+{
+	int iCnt;
+	char sTempSourceID[20],sTempFileName[80],sTempModule[10];
+	
+	strcpy(sTempSourceID,	sSourceID);
+	strcpy(sTempFileName,	sFileName);
+	strcpy(sTempModule,	sModule);
+
+	EXEC SQL SELECT COUNT(*) INTO :iCnt
+		FROM PREP_PROC_LOG
+		WHERE SOURCE_ID=:sTempSourceID AND
+			FILE_NAME=:sTempFileName AND
+			MODULE=:sTempModule AND
+			DEAL_END_DATE>SYSDATE-90;
+	if(CheckSqlResult("COUNT PREP_PROC_LOG")<0) return -1;
+
+	if(iCnt==0) return 0;
+	return 1;	
+}
+
+int PickLogCheck(char sSourceID[20],char sFileName[80],int iChkDays)
+{
+	int iCnt;
+	char sTempSourceID[20],sTempFileName[80];
+	
+	strcpy(sTempSourceID,	sSourceID);
+	strcpy(sTempFileName,	sFileName);
+	
+	if(iChkDays>0){
+		EXEC SQL SELECT COUNT(*) INTO :iCnt
+			FROM PICK_LOG
+			WHERE SOURCE_ID=:sSourceID AND
+				FILE_NAME=:sFileName AND
+				STATE='A' AND
+				DEAL_END_DATE>SYSDATE-:iChkDays;
+	}
+	else{
+		EXEC SQL SELECT COUNT(*) INTO :iCnt
+			FROM PICK_LOG
+			WHERE SOURCE_ID=:sSourceID AND
+				FILE_NAME=:sFileName AND
+				STATE='A' ;
+	}
+
+	if(CheckSqlResult("COUNT PICK_LOG")<0) return -1;
+	
+	if(iCnt==0) return 0;
+	return 1;	
+}
+int GetPrepNextSeq(char sSourceID[10],char sDataDate[15],char sModule[10])
+{
+	int iSeq;
+	char sTempSourceID[10],sTempDataDate[15], sTempModule[10];
+
+	strcpy(sTempSourceID,	sSourceID);
+	strcpy(sTempDataDate,	sDataDate);
+	strcpy(sTempModule,	sModule);
+	
+	
+	EXEC SQL SELECT nvl(MAX(SEQ),-1)+1 INTO :iSeq
+		FROM PREP_LOG
+		WHERE SOURCE_ID=:sTempSourceID AND
+			DATA_DATE=to_date(:sTempDataDate,'yyyymmddhh24miss') AND
+			MODULE=:sTempModule;
+
+	if(CheckSqlResult("GET PREP_LOG SEQ")<0) return -1;
+	return iSeq;
+}
+int GetRcylNextSeq(char sSourceID[10],char sDataDate[15],char sModule[10])
+{
+	int iSeq;
+	char sTempSourceID[10],sTempDataDate[15],sTempModule[10],sNextDate[15];
+
+	strcpy(sTempSourceID,	sSourceID);
+	strcpy(sTempDataDate,	sDataDate);
+	strcpy(sTempModule,	sModule);
+	
+	EXEC SQL SELECT nvl(MAX(SEQ),-1)+1 INTO :iSeq
+		FROM RCYL_LOG
+		WHERE DATA_DATE=to_date(:sTempDataDate,'yyyymmddhh24miss') AND
+			SOURCE_ID=:sTempSourceID AND
+			MODULE=:sTempModule;
+
+	if(CheckSqlResult("GET RCYL_LOG SEQ")<0) return -1;
+	return iSeq;
+}
+int GetRollNextSeq(char sSourceID[10],char sDataDate[15],char sModule[10])
+{
+	int iSeq;
+	char sTempSourceID[10],sTempDataDate[15],sTempModule[10],sNextDate[15];
+
+	strcpy(sTempSourceID,	sSourceID);
+	strcpy(sTempDataDate,	sDataDate);
+	strcpy(sTempModule,	sModule);
+	
+	EXEC SQL SELECT nvl(MAX(SEQ),-1)+1 INTO :iSeq
+		FROM ROLL_LOG
+		WHERE DATA_DATE=to_date(:sTempDataDate,'yyyymmddhh24miss') AND
+			SOURCE_ID=:sTempSourceID AND
+			MODULE=:sTempModule;
+
+	if(CheckSqlResult("GET ROLL_LOG SEQ")<0) return -1;
+	return iSeq;
+}
+int GetBillNextSeq(char sSourceID[10],char sDataDate[15],char sModule[10])
+{
+	int iSeq;
+	char sTempSourceID[10],sTempDataDate[15], sTempModule[10];
+
+	strcpy(sTempSourceID,	sSourceID);
+	strcpy(sTempDataDate,	sDataDate);
+	strcpy(sTempModule,	sModule);
+	
+	
+	EXEC SQL SELECT nvl(MAX(SEQ),-1)+1 INTO :iSeq
+		FROM BILLING_LOG
+		WHERE SOURCE_ID=:sTempSourceID AND
+			DATA_DATE=to_date(:sTempDataDate,'yyyymmddhh24miss') AND
+			MODULE=:sTempModule;
+
+	if(CheckSqlResult("GET BILLING_LOG SEQ")<0) return -1;
+	return iSeq;
+}
+/***系统监控部分**************************/
+int GetTablespaceUsedPercent(char sTableSpaceName[31])
+{	
+	int iUsedPercent=0;
+	char sTempTableSpaceName[31];
+	strcpy(sTempTableSpaceName,sTableSpaceName);
+	
+	EXEC SQL SELECT 
+		round((B.TOTAL_MB-A.TOTAL_MB)/B.TOTAL_MB*100,2) INTO :iUsedPercent
+	FROM (
+		SELECT	TABLESPACE_NAME,
+			round(sum(BYTES)/(1024*1024),2) TOTAL_MB,
+			round(max(BYTES)/(1024*1024),2) MAX_MB
+		FROM DBA_FREE_SPACE
+		GROUP BY TABLESPACE_NAME
+	) A,
+	(
+		SELECT TABLESPACE_NAME,
+			round(sum(BYTES)/(1024*1024),2) TOTAL_MB
+		FROM   DBA_DATA_FILES
+	    GROUP BY TABLESPACE_NAME
+	) B
+	WHERE A.TABLESPACE_NAME = B.TABLESPACE_NAME
+	AND B.TABLESPACE_NAME=:sTempTableSpaceName;
+
+	if(CheckSqlResult("GET TABLESPACE")<0) return -1;
+	return iUsedPercent;
+	
+}
+void PrintErrTicket(char sTableName[],int iMaxCnt)
+{
+	int iCnt;
+	char sTrunk[10],sMsc[11],sDirection[20];
+	
+	char statement[8192];
+	
+	sprintf(statement,"\n\
+		SELECT COUNT(*) CNT,		\n\
+			MSC,			\n\
+			'其它' TRUNKNAME,	\n\
+			'其它' TRUNK_TYPE     \n\
+		FROM %s 			\n\
+		WHERE TICKET_TYPE_ID=0 AND 	\n\
+		TRUNK_OUT_TYPE_ID<>0 AND	\n\
+		TRUNK_IN_TYPE_ID<>0		\n\
+		GROUP BY MSC			\n\
+		HAVING COUNT(*) >= %d		\n\
+	",sTableName,iMaxCnt);
+	
+	EXEC SQL PREPARE CHKTICKET_SCR FROM :statement;
+	EXEC SQL DECLARE CHKTICKET_CR CURSOR FOR CHKTICKET_SCR;
+	CheckSqlError("Declare CHKTICKET_CR");
+
+	EXEC SQL OPEN CHKTICKET_CR;
+	CheckSqlError("Open CHKTICKET_CR");	
+	
+	while(1){			
+		EXEC SQL FETCH CHKTICKET_CR INTO :iCnt,:sMsc,:sTrunk,:sDirection;	
+		CheckSqlError("Fetch CHKTICKET_CR");
+		if(NoDataFetched) break;
+		
+		AllTrim(sMsc);
+		AllTrim(sTrunk);
+		AllTrim(sDirection);			
+		printf("%d\t%s\t%s\t%s\tErr\n",iCnt,sMsc,sTrunk,sDirection);
+	}
+	
+	EXEC SQL CLOSE CHKTICKET_CR;
+}
+
+void PrintMissTrunk(char sTableName[],int iMaxCnt)
+{
+	int iCnt;
+	char sTrunk[10],sMsc[11],sDirection[20];
+	
+	char statement[8192];
+	
+	sprintf(statement,"\n\
+		SELECT COUNT(*) CNT,		\n\
+			MSC,			\n\
+			nvl(TRUNK_IN,'空') TRUNKNAME,	\n\
+			'入中继' TRUNK_TYPE   	\n\
+		FROM %s 			\n\
+		WHERE TICKET_TYPE_ID=0 AND 	\n\
+			TRUNK_IN_TYPE_ID=0  	\n\
+		GROUP BY MSC,TRUNK_IN 		\n\
+		HAVING COUNT(*) >= %d 		\n\
+		UNION 				\n\
+		SELECT COUNT(*) CNT,		\n\
+			MSC,			\n\
+			nvl(TRUNK_OUT,'空') TRUNKNAME,	\n\
+			'出中继' TRUNK_TYPE     \n\
+		FROM %s 			\n\
+		WHERE TICKET_TYPE_ID=0 AND 	\n\
+		TRUNK_OUT_TYPE_ID=0		\n\
+		GROUP BY MSC,TRUNK_OUT		\n\
+		HAVING COUNT(*) >= %d		\n\
+	",sTableName,iMaxCnt,sTableName,iMaxCnt);
+	EXEC SQL PREPARE CHKTRUNK_SCR FROM :statement;
+	EXEC SQL DECLARE CHKTRUNK_CR CURSOR FOR CHKTRUNK_SCR;
+	CheckSqlError("Declare CHKTRUNK_CR");
+
+	EXEC SQL OPEN CHKTRUNK_CR;
+	CheckSqlError("Open CHKTRUNK_CR");	
+	
+	while(1){			
+		EXEC SQL FETCH CHKTRUNK_CR INTO :iCnt,:sMsc,:sTrunk,:sDirection;	
+		CheckSqlError("Fetch CHKTRUNK_CR");
+		if(NoDataFetched) break;
+		
+		AllTrim(sMsc);
+		AllTrim(sTrunk);
+		AllTrim(sDirection);			
+		printf("%d\t%s\t%s\t%s\tMissed\n",iCnt,sMsc,sTrunk,sDirection);
+	}
+	
+	EXEC SQL CLOSE CHKTRUNK_CR;
+}
+void PrintInsertLogCnt(char sSourceID[10],int iDay)
+{
+	int iPercent,iCurCnt,iAvgCnt;
+	char	sModule[10];
+	char	statement[8192];
+	
+	sprintf(statement,"\n\
+	SELECT round((B.CNT -A.CNT)/B.CNT*100) PERCENT, \n\
+		A.MODULE,	\n\
+		A.CNT,		\n\
+		B.CNT		\n\
+	FROM	\n\
+	(	\n\
+		SELECT SUM(CNT) CNT,\n\
+			MODULE  \n\
+		FROM INSERT_LOG	\n\
+		WHERE TRUNC(DATA_DATE)=TRUNC(SYSDATE) AND \n\
+			SOURCE_ID='%s' \n\
+		GROUP BY MODULE \n\
+	)A,	\n\
+	(	\n\
+	SELECT ROUND(AVG(CNT)) CNT,	\n\
+		MODULE	\n\
+	FROM \n\
+		( \n\
+			SELECT SUM(CNT) CNT,	\n\
+				MODULE		\n\
+			FROM	\n\
+			(	\n\
+				SELECT CNT,	\n\
+					DATA_DATE,\n\
+					MODULE	\n\
+				FROM INSERT_LOG	\n\
+				WHERE DATA_DATE>=SYSDATE-%d AND \n\
+	to_char(DEAL_END_DATE,'hh24miss')<TO_CHAR(SYSDATE,'hh24miss') AND\n\
+					SOURCE_ID='%s'	\n\
+			)\n\
+			GROUP BY DATA_DATE,MODULE \n\
+		)		\n\
+		GROUP BY MODULE \n\
+	)B \n\
+	WHERE A.MODULE = B.MODULE",sSourceID,iDay,sSourceID);
+			
+	EXEC SQL PREPARE CHKINSERTLOG_SCR FROM :statement;
+	EXEC SQL DECLARE CHKINSERTLOG_CR CURSOR FOR CHKINSERTLOG_SCR;
+	CheckSqlError("Declare CHKINSERTLOG_CR");
+
+	EXEC SQL OPEN CHKINSERTLOG_CR;
+	CheckSqlError("Open CHKINSERTLOG_CR");	
+	
+	while(1){			
+	
+		EXEC SQL FETCH CHKINSERTLOG_CR INTO 
+			:iPercent,:sModule,:iCurCnt,:iAvgCnt;
+		CheckSqlError("Fetch CHECK_CNT");
+		
+		if(NoDataFetched) break;
+		
+		AllTrim(sModule);
+		
+		/*错误话单的处理刚好相反*/
+		if (strcmp(sModule,"ERR")==0) 	iPercent =-iPercent;
+			
+		printf("%d\t%s\t%d\t%d\n",iPercent,sModule,iCurCnt,iAvgCnt);
+	}																	
+	
+	EXEC SQL CLOSE CHKINSERTLOG_CR;
+}
+int PrintDataDelay(char sType[],char sTableName[31])
+{
+	int iDelay;
+	char sVisitAreaCode[10];
+	char	statement[8192];
+	
+	if(strcmp(sType,"visit")!=0&&strcmp(sType,"vit")!=0) return -1;
+	
+	if ( strcmp(sType,"visit") == 0 )
+	{
+		sprintf(statement,"\n\
+			SELECT nvl(round((SYSDATE-max(START_TIME))*60*24),0),\n\
+		  		nvl(VISIT_AREA_CODE,'000') \n\
+		  	FROM %s 	\n\
+		  	GROUP BY VISIT_AREA_CODE",sTableName);
+	}
+	else{
+		sprintf(statement,"\n\
+			SELECT nvl(round((SYSDATE-to_date(max(START_TIME),'yyyymmddhh24miss'))*60*24),0),\n\
+		  		nvl(VISIT_AREA_CODE,'000') \n\
+		  	FROM %s 	\n\
+		  	GROUP BY VISIT_AREA_CODE",sTableName);
+	}
+
+	EXEC SQL PREPARE DATADELAY_SCR FROM :statement;
+	EXEC SQL DECLARE DATADELAY_CR CURSOR FOR DATADELAY_SCR;
+	CheckSqlError("Declare DATADELAY_CR");
+
+	EXEC SQL OPEN DATADELAY_CR;
+	CheckSqlError("Open DATADELAY_CR");	
+	
+					
+	while(1){			
+	
+		EXEC SQL FETCH DATADELAY_CR INTO :iDelay,:sVisitAreaCode;	
+		CheckSqlError("Fetch DATADELAY_CR");
+		
+		if(NoDataFetched) break;
+		
+		AllTrim(sVisitAreaCode);	
+			
+		printf("%d\t%s\n",iDelay,sVisitAreaCode);
+	}																							
+	
+	EXEC SQL CLOSE DATADELAY_CR;
+	return 0;
+}
+void GetPickLogDelay(char sSourceID[7],char sDealEndDate[15],int *piDelay)
+{
+	int	iDelay;
+	char	sTempSourceID[7],sTempDate[15];
+	
+	strcpy(sTempSourceID,sSourceID);
+	
+	EXEC SQL SELECT 
+		nvl(to_char(max(DEAL_END_DATE),'yyyymmddhh24miss'),'0'),
+		nvl(SYSDATE-max(DEAL_END_DATE),0)*86400
+		INTO	:sTempDate,:iDelay
+		FROM PICK_LOG
+		WHERE SOURCE_ID=:sTempSourceID;
+	CheckSqlError(" SELECT PICK_LOG");
+	
+	strcpy(sDealEndDate,sTempDate);
+	*piDelay=	iDelay;	
+}
+/*批量数据动态从PICK_LOG中用结构缓冲方式取数据*/
+int EGetPickLogToStruct(struct PickLogStruct *p,
+	struct PickLogStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				BYTE,\n\
+				FILE_NAME,\n\
+				to_char(DEAL_BEGIN_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_END_DATE,'yyyymmddhh24miss'),\n\
+				SEQ,\n\
+				STATE\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE EPICK_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE EPICK_LOGSCR EPICK_LOGCR");
+
+		EXEC SQL DECLARE EPICK_LOGCR CURSOR FOR EPICK_LOGSCR;
+		CheckSqlError("Declare EPICK_LOGCR");
+
+		EXEC SQL OPEN EPICK_LOGCR;
+		CheckSqlError("Open EPICK_LOGCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE EPICK_LOGCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH EPICK_LOGCR INTO
+			:pSource->aiInputID,
+			:pSource->asSourceID,
+			:pSource->aiByte,
+			:pSource->asFileName,
+			:pSource->asDealBeginDate,
+			:pSource->asDealEndDate,
+			:pSource->aiSeq,
+			:pSource->asState;
+		CheckSqlError("Fetch EPICK_LOGCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE EPICK_LOGCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=PICK_LOG_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iInputID=			pSource->aiInputID[iCurPos];
+
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+
+		p->iByte=			pSource->aiByte[iCurPos];
+
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sDealBeginDate,	pSource->asDealBeginDate[iCurPos]);
+		strcpy(p->sDealEndDate,		pSource->asDealEndDate[iCurPos]);
+
+		p->iSeq=			pSource->aiSeq[iCurPos];
+
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sFileName);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sState);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/**对表PICK_LOG的链表释放函数**/
+void DestroyPickLog(struct PickLogStruct *ptHead)
+{
+	struct PickLogStruct *pTemp;
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pLoadNext;
+		free(pTemp);
+	}
+}
+int InitPickLog(char sSourceID[],char sTableName[],
+	struct PickLogStruct **pptHead)
+{
+	int iCnt=0;
+	static struct PickLogStruct *pTemp,*ptHead=NULL;
+	struct PickLogStruct Temp;
+	struct PickLogStructIn TempIn;
+
+	*pptHead=NULL;
+	/*释放内部链表**/
+	DestroyPickLog(ptHead);
+	ptHead=NULL;
+
+	/**初始化输入缓冲成员**/
+	bzero((void*)&TempIn,sizeof(struct PickLogStructIn));
+	sprintf(TempIn.sTableName,sTableName);
+	/*MODIFYHERE*/
+	sprintf(TempIn.sCondition,"\n\
+		WHERE SOURCE_ID='%s' AND \n\
+			DEAL_END_DATE>trunc(SYSDATE)-300",
+				sSourceID);
+	TempIn.iFirstFlag =TRUE;
+	TempIn.iBufEmpty =TRUE;
+
+	/*获取数据循环部分**/
+	while(EGetPickLogToStruct(&Temp,&TempIn)){
+
+		Temp.pNext=NULL;
+		Temp.pLoadNext=NULL;
+
+		if((pTemp=(struct PickLogStruct*)
+			malloc(sizeof(struct PickLogStruct)))==NULL){
+
+			DestroyPickLog(ptHead);
+			ptHead=NULL;
+			*pptHead=NULL;
+			return -1;
+		}
+
+		memcpy((void*)pTemp,(void *)&Temp,sizeof(struct PickLogStruct));
+
+		pTemp->pLoadNext=ptHead;
+		ptHead=pTemp;
+
+		InsertList((LIST**)pptHead,(LIST*)pTemp);
+/*		if((++iCnt%10000)==0)
+			WriteProcMsg("加载表PICK_LOG记录数%d",iCnt);*/
+	}
+
+/*	WriteProcMsg("加载表PICK_LOG完毕总记录数%d",iCnt);*/
+
+	return iCnt;
+}
+
+/*单条数据从用动态SQL从SETT_LOG取数据*/
+int SDGetSettLogToStruct(struct SettLogStruct *p,char sTableName[],char sCondition[])
+{
+
+	/*这里不要控制变量*/
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				INPUT_ID,\n\
+				MODULE,\n\
+				SETT_CARRIER_ID,\n\
+				LATN_ID,\n\
+				nvl(SETT_CYCLE_ID,-1),\n\
+				to_char(SETT_ITEM_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_BEGIN_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_END_DATE,'yyyymmddhh24miss'),\n\
+				nvl(STEP,'-1'),\n\
+				STATE,\n\
+				to_char(nvl(STATE_DATE,SYSDATE+3000),'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SETT_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE SETT_LOGSCR SETT_LOGCR");
+
+		EXEC SQL DECLARE SETT_LOGCR CURSOR FOR SETT_LOGSCR;
+		CheckSqlError("Declare SETT_LOGCR");
+
+		EXEC SQL OPEN SETT_LOGCR;
+		CheckSqlError("Open SETT_LOGCR;");
+
+	/*这里不修改控制变量*/
+
+/* FETCH */
+		EXEC SQL FETCH SETT_LOGCR INTO
+			:p->iInputID,
+			:p->sModule,
+			:p->iSettCarrierID,
+			:p->iLatnID,
+			:p->iSettCycleID,
+			:p->sSettItemDate,
+			:p->sDealBeginDate,
+			:p->sDealEndDate,
+			:p->sStep,
+			:p->sState,
+			:p->sStateDate;
+		CheckSqlError("Fetch SETT_LOGCR");
+
+	if(NoDataFetched){
+		EXEC SQL CLOSE SETT_LOGCR;
+		return FALSE;
+	}
+		EXEC SQL CLOSE SETT_LOGCR;
+
+/* 从缓冲区取数据*/
+/*------该部分不需要取数据,只要格式转换-----*/
+
+		AllTrim(p->sModule);
+		AllTrim(p->sSettItemDate);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sStep);
+		AllTrim(p->sState);
+		AllTrim(p->sStateDate);
+
+	return TRUE;
+}
+
+/*单条数据动态SQL向SETT_LOG写数据*/
+int SDInsertStructToSettLog(struct SettLogStruct *p,char sTableName[])
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				INPUT_ID,\n\
+				MODULE,\n\
+				SETT_CARRIER_ID,\n\
+				LATN_ID,\n\
+				SETT_CYCLE_ID,\n\
+				SETT_ITEM_DATE,\n\
+				DEAL_BEGIN_DATE,\n\
+				DEAL_END_DATE,\n\
+				STEP,\n\
+				STATE,\n\
+				STATE_DATE)\n\
+			VALUES (\n\
+				:iInputID,\n\
+				:sModule,\n\
+				:iSettCarrierID,\n\
+				:iLatnID,\n\
+				:iSettCycleID,\n\
+				to_date(:sSettItemDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDealBeginDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDealEndDate,'yyyymmddhh24miss'),\n\
+				:sStep,\n\
+				:sState,\n\
+				to_date(:sStateDate,'yyyymmddhh24miss')\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE SETT_LOGTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement SETT_LOG")<0) return -1;
+
+		EXEC SQL EXECUTE SETT_LOGTRG USING
+				:p->iInputID,
+				:p->sModule,
+				:p->iSettCarrierID,
+				:p->iLatnID,
+				:p->iSettCycleID,
+				:p->sSettItemDate,
+				:p->sDealBeginDate,
+				:p->sDealEndDate,
+				:p->sStep,
+				:p->sState,
+				:p->sStateDate;
+		if(CheckSqlResult("Dyn insert into SETT_LOG")<0) return -1;
+
+	return 0;
+}
+/*单条数据静态SQL向PROC_CTRL写数据*/
+int SSInsertStructToProcCtrl(struct ProcCtrlStruct *p)
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		EXEC SQL INSERT INTO PROC_CTRL (
+				INPUT_ID,
+				FILE_NAME,
+				CREATED_DATE,
+				DEAL_DATE,
+				STATE,
+				CREATE_CMD,
+				PROC_CMD)
+			VALUES (
+				:p->iInputID,
+				:p->sFileName,
+				to_date(:p->sCreatedDate,'yyyymmddhh24miss'),
+				to_date(:p->sDealDate,'yyyymmddhh24miss'),
+				:p->sState,
+				:p->sCreateCmd,
+				:p->sProcCmd
+			);
+		if(CheckSqlResult("insert into PROC_CTRL")<0) return -1;
+
+	return 0;
+}
+
+int NewProcCtrl(char sFileName[],char sCreateCmd[])
+{
+	struct ProcCtrlStruct Temp;
+	
+	bzero((void*)&Temp,sizeof(struct ProcCtrlStruct));
+	
+	if((Temp.iInputID=GetInputID())<0) return -1;
+
+	strncpy(Temp.sFileName,	sFileName,255);
+	strcpy(Temp.sState,"0");
+	GetHostTime(Temp.sCreatedDate);
+	GetHostTime(Temp.sDealDate);
+	strncpy(Temp.sCreateCmd,sCreateCmd,255);
+	strcpy(Temp.sProcCmd,"null");
+
+	if(SSInsertStructToProcCtrl(&Temp)<0) return -1;
+	
+	return Temp.iInputID;
+}
+int CheckProcCtrl(char sFileName[])
+{
+	int iInputID=0;
+	char sTempFileName[256];
+	
+	strncpy(sTempFileName,sFileName,255); sTempFileName[255]=0;
+	AllTrim(sTempFileName);
+	
+	EXEC SQL SELECT INPUT_ID INTO :iInputID FROM PROC_CTRL
+		WHERE FILE_NAME=:sTempFileName AND 
+			STATE='0';
+	if(CheckSqlResult("GET INPUT_ID FROM PROC_CTRL")<0) return -1;
+	
+	if(NoDataFetched) return 0;
+	
+	return iInputID;
+	
+}
+int BeginProcCtrl(int iInputID)
+{
+	EXEC SQL UPDATE PROC_CTRL 
+		SET STATE='1'
+		WHERE INPUT_ID=:iInputID;
+	
+	return CheckSqlResult("UPDATE PROC_CTRL STATE BEGIN");
+}
+int EndProcCtrl(int iInputID,char sState[],char sProcCmd[])
+{
+	char sTempState[2],sTempProcCmd[256];
+	
+	strncpy(sTempState,sState,1); sTempState[1]=0;
+	strncpy(sTempProcCmd,sProcCmd,255); sTempProcCmd[255]=0;
+	
+	EXEC SQL UPDATE PROC_CTRL
+		SET STATE=:sTempState,
+			DEAL_DATE=SYSDATE,
+			PROC_CMD=:sTempProcCmd
+		WHERE INPUT_ID=:iInputID;
+	return CheckSqlResult("UPDATE PROC_CTRL STATE END");
+}
+
+int InsertPickLog(char sSourceID[],int iSize,char sFileName[],
+	char sDealBeginDate[], char sDealEndDate[],int iSeq,
+	char sFileType[],int iTacheID,char sAppID[])
+{
+/*** $source $size1 $filename $dealbegindate $dealenddate $seq*/
+	
+	char sBaseName[256];
+	struct PickLogStruct Temp;
+/*	
+	if(NewProcCtrl(sFileName,"pick")<0) return -1;
+*/	
+	bzero((void*)&Temp,sizeof(struct PickLogStruct));
+	
+	GetBaseName(sFileName,sBaseName);
+	
+	strcpy(Temp.sSourceID,sSourceID);
+	Temp.iByte=iSize;
+	strcpy(Temp.sFileName,sBaseName);
+	strcpy(Temp.sDealBeginDate,sDealBeginDate);
+	strcpy(Temp.sDealEndDate,sDealEndDate);
+	Temp.iSeq=iSeq;
+	
+	strcpy(Temp.sState,"A");
+	strcpy(Temp.sFileType,sFileType);
+	Temp.iTacheID=iTacheID;
+	strcpy(Temp.sAppID,sAppID);
+	
+	TrimAll(Temp.sSourceID);
+	
+	Temp.iInputID=GetInputID();
+	
+	if(SDInsertStructToPickLog(&Temp,"PICK_LOG")<0){
+		WriteErrStackAlert();
+		RollbackWorkRelease();
+		return -1;
+	}
+		
+	return 0;
+}
+char GetLogFileType(char cSplitType)
+{
+	char cFileType='C';
+	
+	cFileType='C';
+
+	if(cSplitType>='N'&&cSplitType<='Z')cFileType='N';
+	else if(cSplitType=='a')cFileType='A';
+	else if(cSplitType=='e')cFileType='E';
+	
+	return cFileType;
+}
+int WritePrepLog(struct PrepLogStruct *p,int iErrCnt,int iAbnoCnt,
+	char sPrefix[],char sSplitStr[],char sOutName[])
+{
+	int i=0,iDupCnt=0;
+	char	sTempName[256],sTempDate[9];
+	char	oriPrefix[256],stdPrefix[256];
+	struct TinySplitStruct *pTinySplit=NULL,*ptPre,*ptCur;
+
+	strncpy(sTempDate,p->sDataDate,8);sTempDate[8]=0;
+	sprintf(sOutName,"%s%s",sTempDate,p->sOriFileName);
+
+	if(InitTinySplitList(p->sSourceID,sOutName,&pTinySplit)<0)
+		return -1;
+
+	for(i=0;i<strlen(sSplitStr);i++){
+
+		/*如果是异常单或错误话单*/
+		if(sSplitStr[i]=='a'||sSplitStr[i]=='e'){
+			sprintf(p->sFileName,"%s.%s.%c",
+				sPrefix,p->sModule,sSplitStr[i]);
+			
+			if(sSplitStr[i]=='a')p->iCnt=iAbnoCnt;
+			else		p->iCnt=iErrCnt;
+			p->sFileType[0]=GetLogFileType(sSplitStr[i]);
+	
+			if(SDInsertStructToPrepLog(p,"PREP_LOG")<0)return -1;
+			continue;
+		}
+		
+		sprintf(oriPrefix,"%s.%c",sOutName,sSplitStr[i]);
+		sprintf(stdPrefix,"%s.%s.%c",sPrefix,p->sModule,sSplitStr[i]);
+		
+		/*错误话单或者忽略话单，以及未按KEY拆分的话单*/
+		
+		p->sFileType[0]=GetLogFileType(sSplitStr[i]);
+
+		if(SearchTinySplit(pTinySplit,sSplitStr[i])==NOTFOUND){
+
+			sprintf(sTempName,"%s.tmp",oriPrefix);
+			p->iCnt=FileLines(sTempName);
+
+			sprintf(p->sFileName,"%s",stdPrefix);
+
+			if(SDInsertStructToPrepLog(p,"PREP_LOG")<0)return -1;
+
+			/*写重单文件日志*/
+			sprintf(sTempName,"%s.DUP",oriPrefix);
+			if(!IsFile(sTempName))continue;
+			
+			strcpy(p->sFileType,"D");
+			p->iCnt=FileLines(sTempName);
+
+			sprintf(p->sFileName,"%s.DUP",stdPrefix);
+			
+			if(SDInsertStructToPrepLog(p,"PREP_LOG")<0)return -1;
+			continue;
+		}
+		
+		/*按key拆分的话单*/
+		ptCur=pTinySplit;
+		while(ptCur!=NULL){
+			ptPre=ptCur;
+			ptCur=ptCur->pNext;
+			if(sSplitStr[i]!=ptPre->sSplitType[0]) continue;
+			
+			p->sFileType[0]=GetLogFileType(sSplitStr[i]);
+			/*如果有对应的重单文件则写重单日志*/
+			iDupCnt=0;
+			sprintf(sTempName,"%s.%s.DUP",oriPrefix,ptPre->sKey);
+			if(IsFile(sTempName)){
+				sprintf(p->sFileName,"%s.%s.DUP",stdPrefix,
+					ptPre->sKey);
+				strcpy(p->sFileType,"D");
+				p->iCnt=iDupCnt=FileLines(sTempName);
+				if(SDInsertStructToPrepLog(p,"PREP_LOG")<0)return -1;
+			}
+			
+			p->iCnt=ptPre->iCnt-iDupCnt;
+
+			sprintf(p->sFileName,"%s.%s",stdPrefix,ptPre->sKey);
+	
+			if(SDInsertStructToPrepLog(p,"PREP_LOG")<0) return -1;
+		}
+	}
+	DestroyList((LIST*)pTinySplit);
+	
+	return 0;
+}
+int InsertPrepLog(char sSourceID[],char sModule[],char sOriFileName[],
+	char sDataDate[],int iByte,int iNormalCnt,int iErrCnt,int iAbnoCnt,
+	char sDealBeginDate[],char sDealEndDate[],char sSplitStr[],
+	char sState[],char sOutName[],
+	char sInFileType[],int iTacheID,char sAppID[],char sPrefix[])
+{
+	char sTempSource[7],sTempDate[9];
+	struct PrepLogStruct Temp;
+	struct PrepProcLogStruct ProcLog;
+
+	strcpy(Temp.sDataDate,sDataDate);
+	
+	strncpy(sTempDate,sDataDate,8);sTempDate[8]=0;
+	
+	strcpy(Temp.sSourceID,	sSourceID);
+	strcpy(Temp.sModule,	sModule);
+	
+	TrimAll(Temp.sSourceID);
+	TrimAll(Temp.sModule);
+	
+	strcpy(Temp.sOriFileName,sOriFileName);
+		
+	strcpy(Temp.sDealBeginDate,sDealBeginDate);
+	strcpy(Temp.sDealEndDate,sDealEndDate);
+
+	strncpy(sTempSource,Temp.sSourceID,6);sTempSource[6]=0;
+	RightPad(sTempSource,6,'0');
+	
+	strcpy(Temp.sState,sState);
+	Temp.iTacheID=iTacheID;
+	strcpy(Temp.sAppID,sAppID);
+
+	Temp.iInputID=GetInputID();
+
+	ProcLog.iInputID=Temp.iInputID;
+	strcpy(ProcLog.sSourceID,Temp.sSourceID);
+	strcpy(ProcLog.sModule,Temp.sModule);
+
+	ProcLog.iByte=	iByte;
+
+	ProcLog.iCnt=	iNormalCnt+iErrCnt+iAbnoCnt;
+	
+	strcpy(ProcLog.sFileName,sOriFileName);
+	strcpy(ProcLog.sDealBeginDate,sDealBeginDate);
+	strcpy(ProcLog.sDealEndDate,sDealEndDate);
+	strcpy(ProcLog.sFileType,sInFileType);
+
+	ProcLog.iTacheID=iTacheID;
+	strcpy(ProcLog.sAppID,sAppID);
+	
+	if(SDInsertStructToPrepProcLog(&ProcLog,"PREP_PROC_LOG")<0)return -1;
+		
+	if((Temp.iSeq=GetPrepNextSeq(sTempSource,Temp.sDataDate,sModule))<0)
+		return -1;
+	
+	sprintf(sPrefix,"%s%s%05d",sTempSource,sTempDate,Temp.iSeq);
+	
+	if(WritePrepLog(&Temp,iErrCnt,iAbnoCnt,sPrefix,sSplitStr,sOutName)<0)
+		return -1;
+
+	return 0;
+}
+int WriteBillingLog(struct BillingLogStruct *p,char sPrefix[],char sSplitStr[],
+	char sNormalPath[],char sErrPath[])
+{
+	int i=0;
+	char	sPath[256],sTempName[256];
+	struct TinySplitStruct *pTinySplit=NULL,*ptPre,*ptCur;
+	
+	if(InitTinySplitList(p->sSourceID,p->sOriFileName,&pTinySplit)<0)
+		return -1;
+	
+	for(i=0;i<strlen(sSplitStr);i++){
+
+		if(sSplitStr[i]=='a')	strcpy(sPath,sErrPath);
+		else			strcpy(sPath,sNormalPath);
+		
+		if(SearchTinySplit(pTinySplit,sSplitStr[i])==NOTFOUND){
+
+			sprintf(sTempName,"%s%s.%c.tmp",
+				sPath,p->sOriFileName,sSplitStr[i]);
+			p->iCnt=FileLines(sTempName);
+
+			sprintf(p->sFileName,"%s.%s.BIL.%c",
+				sPrefix,p->sModule,sSplitStr[i]);
+
+			if(SDInsertStructToBillingLog(p,"BILLING_LOG")<0)
+				return -1;
+			continue;
+		}
+		
+		ptCur=pTinySplit;
+		while(ptCur!=NULL){
+			ptPre=ptCur;
+			ptCur=ptCur->pNext;
+			if(sSplitStr[i]!=ptPre->sSplitType[0]) continue;
+			
+			p->iCnt=ptPre->iCnt;
+			sprintf(p->sFileName,"%s.%s.BIL.%c.%s",sPrefix,
+				p->sModule,sSplitStr[i],ptPre->sKey);
+				
+			if(SDInsertStructToBillingLog(p,"BILLING_LOG")<0)
+				return -1;
+		}
+	}
+	DestroyList((LIST*)pTinySplit);
+
+	return 0;
+}
+int InsertBillingLog(char sSourceID[],char sModule[],char sOriFileName[],
+	int iByte,int iCnt,char sDataDate[],char sDealBeginDate[],
+	char sDealEndDate[],char sState[],char sSplitStr[],char sNormalPath[],
+	char sErrPath[],char sInType[],char sOutType[],
+	char sAppCode[],int iTacheID,char sAppID[],char sPrefix[])
+{
+	char sTemp[40],sTempSource[7];
+	struct BillingLogStruct Temp;
+	struct BillingProcLogStruct ProcLog;
+
+	strcpy(sPrefix,"");
+	bzero((void*)&Temp,sizeof(struct BillingLogStruct));
+
+	strcpy(Temp.sSourceID,	sSourceID);
+	strcpy(Temp.sModule,	sModule);
+	GetBaseName(sOriFileName,Temp.sOriFileName);
+	Temp.iCnt=		iCnt;
+
+	TrimAll(Temp.sSourceID);
+	TrimAll(Temp.sModule);
+	
+	strncpy(sTempSource,Temp.sSourceID,6);sTempSource[6]=0;
+	RightPad(sTempSource,6,'0');
+
+	strcpy(Temp.sDataDate,	sDataDate);
+	strcpy(Temp.sDataDate+8,"000000");
+
+	strcpy(Temp.sDealBeginDate,	sDealBeginDate);
+	strcpy(Temp.sDealEndDate,	sDealEndDate);
+
+	strcpy(Temp.sState,sState);
+	strcpy(Temp.sFileType,	sOutType);	
+	strcpy(Temp.sAppCode,	sAppCode);
+	Temp.iTacheID=iTacheID;
+	strcpy(Temp.sAppID,	sAppID);	
+	
+	bzero((void*)&ProcLog,sizeof(struct BillingProcLogStruct));
+	ProcLog.iInputID=GetInputID();
+	strcpy(ProcLog.sSourceID,Temp.sSourceID);
+	strcpy(ProcLog.sModule, Temp.sModule);
+	strcpy(ProcLog.sFileName,Temp.sOriFileName);
+	strcpy(ProcLog.sSplitStr,sSplitStr);
+	ProcLog.iByte=iByte;
+	ProcLog.iCnt=iCnt;
+	strcpy(ProcLog.sDealBeginDate,	sDealBeginDate);
+	strcpy(ProcLog.sDealEndDate,	sDealEndDate);
+	strcpy(ProcLog.sFileType,	sInType);
+	strcpy(ProcLog.sAppCode,		sAppCode);
+	ProcLog.iTacheID=iTacheID;
+	strcpy(ProcLog.sAppID,	sAppID);	
+	
+	if(SDInsertStructToBillingProcLog(&ProcLog,"BILLING_PROC_LOG")<0)
+		return -1;
+
+	Temp.iInputID=ProcLog.iInputID;
+	
+	/*当SOURCE_ID一致的时候，则不改，不一致的时候重新分配*/
+	/*如果是内部的文件名，则不改名，$SOURCEYYYYMMDDNNNNN.开头的文件*/
+	if(IsInternalName(Temp.sOriFileName)){
+		strncpy(sTemp,Temp.sOriFileName+14,5);sTemp[5]=0;
+		Temp.iSeq=atoi(sTemp);
+		strncpy(sPrefix,Temp.sOriFileName,19);sPrefix[19]=0;
+	}
+	else{
+		if((Temp.iSeq=GetBillNextSeq(sTempSource,Temp.sDataDate,
+			sModule))<0) return -1;
+		strncpy(sTemp,Temp.sDataDate,8);sTemp[8]=0;
+		sprintf(sPrefix,"%s%s%05d",sTempSource,sTemp,Temp.iSeq);
+	}
+
+	if(WriteBillingLog(&Temp,sPrefix,sSplitStr,sNormalPath,sErrPath)<0)
+		return -1;
+
+	return 0;
+}
+/*单条数据动态SQL向BILLING_PROC_LOG写数据*/
+int SDInsertStructToBillingProcLog(struct BillingProcLogStruct *p,char sTableName[])
+{
+
+
+/*放置数据到静态缓冲*/
+/*------单个数据不需要存数据-----*/
+
+/* INSERT */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				FILE_NAME,\n\
+				SPLIT_STR,\n\
+				BYTE,\n\
+				CNT,\n\
+				DEAL_BEGIN_DATE,\n\
+				DEAL_END_DATE,\n\
+				CUR_FILE_NAME,\n\
+				NORMAL_CNT,\n\
+				ABNO_CNT,\n\
+				NEW_CNT,\n\
+				FILE_TYPE,\n\
+				APP_CODE,\n\
+				TACHE_ID,\n\
+				APP_ID)\n\
+			VALUES (\n\
+				:iInputID,\n\
+				:sSourceID,\n\
+				:sModule,\n\
+				:sFileName,\n\
+				:sSplitStr,\n\
+				:iByte,\n\
+				:iCnt,\n\
+				to_date(:sDealBeginDate,'yyyymmddhh24miss'),\n\
+				to_date(:sDealEndDate,'yyyymmddhh24miss'),\n\
+				:sCurFileName,\n\
+				:iNormalCnt,\n\
+				:iAbnoCnt,\n\
+				:iNewCnt,\n\
+				:sFileType,\n\
+				:sAppCode,\n\
+				:iTacheID,\n\
+				:sAppID\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE BILLING_PROC_LOGTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement BILLING_PROC_LOG")<0) return -1;
+
+		EXEC SQL EXECUTE BILLING_PROC_LOGTRG USING
+				:p->iInputID,
+				:p->sSourceID,
+				:p->sModule,
+				:p->sFileName,
+				:p->sSplitStr,
+				:p->iByte,
+				:p->iCnt,
+				:p->sDealBeginDate,
+				:p->sDealEndDate,
+				:p->sCurFileName,
+				:p->iNormalCnt,
+				:p->iAbnoCnt,
+				:p->iNewCnt,
+				:p->sFileType,
+				:p->sAppCode,
+				:p->iTacheID,
+				:p->sAppID;
+		if(CheckSqlResult("Dyn insert into BILLING_PROC_LOG")<0) return -1;
+
+	return 0;
+}
+int InsertRollLog(char sSourceID[],char sModule[],char sFileName[],
+	int iSeq,char sDataDate[],char sDealBeginDate[],char sDealEndDate[],
+	char sNormalPath[],char sFileType[],char sAppCode[],
+	int iTacheID,char sAppID[])
+{
+	char sTargetTemp[256],sTargetList[1024];
+	struct RollLogStruct Temp;
+	struct RollProcLogStruct Log;
+	struct TinyRollLogStruct *pTemp,*ptHead=NULL;
+
+	bzero((void*)&Temp,sizeof(struct RollLogStruct));
+	bzero((void*)&Log,sizeof(struct RollProcLogStruct));
+
+	strcpy(sTargetList,"");
+/*初始化TEMP变量*/
+	Temp.iInputID=	GetInputID();
+	strcpy(Temp.sSourceID,	sSourceID);
+	strcpy(Temp.sModule,	sModule);
+	Temp.iCnt=	0;
+
+	strcpy(Temp.sDataDate,	sDataDate);
+	strcpy(Temp.sDataDate+8,"000000");
+	
+	strcpy(Temp.sDealBeginDate,	sDealBeginDate);
+	strcpy(Temp.sDealEndDate,	sDealEndDate);
+	Temp.iSeq=	iSeq;
+	
+	strcpy(Temp.sState,"A");
+	strcpy(Temp.sFileType,	sFileType);
+	strcpy(Temp.sAppCode,	sAppCode);
+	Temp.iTacheID=		iTacheID;
+	strcpy(Temp.sAppID,	sAppID);
+	
+/*初始化LOG变量*/
+	Log.iInputID=	Temp.iInputID;
+	strcpy(Log.sSourceID,Temp.sSourceID);
+	strcpy(Log.sModule,  Temp.sModule);
+	strcpy(Log.sState,   Temp.sState);
+	strcpy(Log.sDealBeginDate,Temp.sDealBeginDate);
+	strcpy(Log.sDealEndDate,Temp.sDealEndDate);
+	strcpy(Log.sFileType,Temp.sFileType);
+	strcpy(Log.sAppCode,Temp.sAppCode);
+	strcpy(Log.sAppID,Temp.sAppID);
+	Log.iTacheID=	Temp.iTacheID;
+	
+	if(InitRollLogCtl(sFileName,&ptHead)<0) return -1;
+
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		Log.iCnt= pTemp->iCnt;
+		strcpy(Log.sOriFileName,pTemp->sOriFileName);
+		
+		Log.iCnt= pTemp->iCnt;
+		strcpy(Log.sOriFileName,pTemp->sOriFileName);
+		strcpy(Log.sFileName,pTemp->sFileName);
+		strcpy(Temp.sFileName,pTemp->sFileName);
+
+		if(strstr(sTargetList,pTemp->sFileName)==NULL){
+
+			strcat(sTargetList,pTemp->sFileName);
+			strcat(sTargetList,",");
+			sprintf(sTargetTemp,"%s%s.tmp",
+				sNormalPath,pTemp->sFileName);
+			Temp.iCnt=FileLines(sTargetTemp);
+
+			if(SDInsertStructToRollLog(&Temp,"ROLL_LOG")<0)
+				return -1;
+		}
+
+		free(pTemp);
+
+		if(SDInsertStructToRollProcLog(&Log,"ROLL_PROC_LOG")<0)
+			return -1;
+
+	}
+	return 0;
+}
+int InsertRcylLog(char sSourceID[],char sModule[],char sFileName[],
+	int iSeq,char sDataDate[],char sDealBeginDate[],char sDealEndDate[],
+	char sNormalPath[],char sFileType[],char sAppCode[],
+	int iTacheID,char sAppID[])
+{
+	char sTargetTemp[256],sTargetList[1024];
+	struct RollLogStruct Temp;
+	struct RollProcLogStruct Log;
+	struct TinyRollLogStruct *pTemp,*ptHead=NULL;
+
+	bzero((void*)&Temp,sizeof(struct RollLogStruct));
+	bzero((void*)&Log,sizeof(struct RollProcLogStruct));
+
+	strcpy(sTargetList,"");
+/*初始化TEMP变量*/
+	Temp.iInputID=	GetInputID();
+	strcpy(Temp.sSourceID,	sSourceID);
+	strcpy(Temp.sModule,	sModule);
+	Temp.iCnt=	0;
+
+	strcpy(Temp.sDataDate,	sDataDate);
+	strcpy(Temp.sDataDate+8,"000000");
+	
+	strcpy(Temp.sDealBeginDate,	sDealBeginDate);
+	strcpy(Temp.sDealEndDate,	sDealEndDate);
+	Temp.iSeq=	iSeq;
+	
+	strcpy(Temp.sState,"A");
+	strcpy(Temp.sFileType,	sFileType);
+	strcpy(Temp.sAppCode,	sAppCode);
+	Temp.iTacheID=		iTacheID;
+	strcpy(Temp.sAppID,	sAppID);
+/*初始化LOG变量*/
+	Log.iInputID=	Temp.iInputID;
+	strcpy(Log.sSourceID,Temp.sSourceID);
+	strcpy(Log.sModule,  Temp.sModule);
+	strcpy(Log.sState,   Temp.sState);
+	strcpy(Log.sDealBeginDate,Temp.sDealBeginDate);
+	strcpy(Log.sDealEndDate,Temp.sDealEndDate);
+	strcpy(Log.sFileType,Temp.sFileType);
+	strcpy(Log.sAppCode,Temp.sAppCode);
+	strcpy(Log.sAppID,Temp.sAppID);
+	Log.iTacheID=	Temp.iTacheID;
+
+	if(InitRollLogCtl(sFileName,&ptHead)<0) return -1;
+	
+	while(ptHead!=NULL){
+		pTemp=ptHead;
+		ptHead=ptHead->pNext;
+		
+		Log.iCnt= pTemp->iCnt;
+		strcpy(Log.sOriFileName,pTemp->sOriFileName);
+		strcpy(Log.sFileName,pTemp->sFileName);
+		strcpy(Temp.sFileName,pTemp->sFileName);
+
+		if(strstr(sTargetList,pTemp->sFileName)==NULL){
+
+			strcat(sTargetList,pTemp->sFileName);
+			strcat(sTargetList,",");
+			sprintf(sTargetTemp,"%s%s.tmp",
+				sNormalPath,pTemp->sFileName);
+			Temp.iCnt=FileLines(sTargetTemp);
+
+			if(SDInsertStructToRollLog(&Temp,"RCYL_LOG")<0)
+				return -1;
+		}
+		
+		free(pTemp);
+
+		if(SDInsertStructToRollProcLog(&Log,"RCYL_PROC_LOG")<0)
+			return -1;
+
+	}
+	return 0;
+}	
+int PutLogCheck(char sSourceID[20],char sFileName[80],int iChkDays)
+{
+	int iCnt;
+	char sTempSourceID[20],sTempFileName[80];
+	
+	strcpy(sTempSourceID,	sSourceID);
+	strcpy(sTempFileName,	sFileName);
+	
+	if(iChkDays>0){
+		EXEC SQL SELECT COUNT(*) INTO :iCnt
+			FROM PUT_LOG
+			WHERE SOURCE_ID=:sSourceID AND
+				FILE_NAME=:sFileName AND
+				STATE='A' AND
+				DEAL_END_DATE>SYSDATE-:iChkDays;
+	}
+	else{
+		EXEC SQL SELECT COUNT(*) INTO :iCnt
+			FROM PUT_LOG
+			WHERE SOURCE_ID=:sSourceID AND
+				FILE_NAME=:sFileName AND
+				STATE='A' ;
+	}
+
+	if(CheckSqlResult("COUNT PUT_LOG")<0) return -1;
+	
+	if(iCnt==0) return 0;
+	return 1;	
+}
+
+
+int InsertPutLog(char sSourceID[],int iSize,char sFileName[],
+	char sDealBeginDate[], char sDealEndDate[],int iSeq,
+	char sFileType[],int iTacheID,char sAppID[])
+{
+/*** $source $size1 $filename $dealbegindate $dealenddate $seq*/
+	
+	char sBaseName[256];
+	struct PickLogStruct Temp;
+	
+	bzero((void*)&Temp,sizeof(struct PickLogStruct));
+	
+	GetBaseName(sFileName,sBaseName);
+	
+	strcpy(Temp.sSourceID,sSourceID);
+	Temp.iByte=iSize;
+	strcpy(Temp.sFileName,sBaseName);
+	strcpy(Temp.sDealBeginDate,sDealBeginDate);
+	strcpy(Temp.sDealEndDate,sDealEndDate);
+	Temp.iSeq=iSeq;
+	
+	strcpy(Temp.sState,"A");
+	strcpy(Temp.sFileType,sFileType);
+	Temp.iTacheID=iTacheID;
+	strcpy(Temp.sAppID,sAppID);
+	
+	TrimAll(Temp.sSourceID);
+	
+	Temp.iInputID=GetInputID();
+	
+	if(SDInsertStructToPickLog(&Temp,"PUT_LOG")<0){
+		WriteErrStackAlert();
+		RollbackWorkRelease();
+		return -1;
+	}
+		
+	return 0;
+}
+
+/*批量数据动态从PREP_LOG中用结构缓冲方式取数据*/
+int EGetPrepLogToStruct(struct PrepLogStruct *p,
+	struct PrepLogStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				STATE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				to_char(DEAL_BEGIN_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DEAL_END_DATE,'yyyymmddhh24miss'),\n\
+				to_char(DATA_DATE,'yyyymmddhh24miss'),\n\
+				SEQ,\n\
+				ORI_FILE_NAME,\n\
+				nvl(FILE_TYPE,' '),\n\
+				nvl(APP_ID,' '),\n\
+				nvl(TACHE_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE PREP_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE PREP_LOGSCR PREP_LOGCR");
+
+		EXEC SQL DECLARE PREP_LOGCR CURSOR FOR PREP_LOGSCR;
+		CheckSqlError("Declare PREP_LOGCR");
+
+		EXEC SQL OPEN PREP_LOGCR;
+		CheckSqlError("Open PREP_LOGCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE PREP_LOGCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH PREP_LOGCR INTO
+			:pSource->aiInputID,
+			:pSource->asSourceID,
+			:pSource->asModule,
+			:pSource->asState,
+			:pSource->aiCnt,
+			:pSource->asFileName,
+			:pSource->asDealBeginDate,
+			:pSource->asDealEndDate,
+			:pSource->asDataDate,
+			:pSource->aiSeq,
+			:pSource->asOriFileName,
+			:pSource->asFileType,
+			:pSource->asAppID,
+			:pSource->aiTacheID;
+		CheckSqlError("Fetch PREP_LOGCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE PREP_LOGCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=PREP_LOG_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iInputID=			pSource->aiInputID[iCurPos];
+
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sModule,		pSource->asModule[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+
+		p->iCnt=			pSource->aiCnt[iCurPos];
+
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sDealBeginDate,	pSource->asDealBeginDate[iCurPos]);
+		strcpy(p->sDealEndDate,		pSource->asDealEndDate[iCurPos]);
+		strcpy(p->sDataDate,		pSource->asDataDate[iCurPos]);
+
+		p->iSeq=			pSource->aiSeq[iCurPos];
+
+		strcpy(p->sOriFileName,		pSource->asOriFileName[iCurPos]);
+		strcpy(p->sFileType,		pSource->asFileType[iCurPos]);
+		strcpy(p->sAppID,		pSource->asAppID[iCurPos]);
+
+		p->iTacheID=			pSource->aiTacheID[iCurPos];
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sModule);
+		AllTrim(p->sState);
+		AllTrim(p->sFileName);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sDataDate);
+		AllTrim(p->sOriFileName);
+		AllTrim(p->sFileType);
+		AllTrim(p->sAppID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从PREP_PROC_LOG中用结构缓冲方式取数据*/
+int EGetPrepProcLogToStruct(struct PrepProcLogStruct *p,
+	struct PrepProcLogStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				INPUT_ID,\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				BYTE,\n\
+				CNT,\n\
+				FILE_NAME,\n\
+				to_char(nvl(DEAL_BEGIN_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_END_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(NORMAL_CNT,0),\n\
+				nvl(ERR_CNT,0),\n\
+				nvl(DUP_CNT,0),\n\
+				nvl(ABNO_CNT,0),\n\
+				nvl(NEW_CNT,0),\n\
+				nvl(FILE_TYPE,' '),\n\
+				nvl(APP_ID,' '),\n\
+				nvl(TACHE_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE PREP_PROC_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE PREP_PROC_LOGSCR PREP_PROC_LOGCR");
+
+		EXEC SQL DECLARE PREP_PROC_LOGCR CURSOR FOR PREP_PROC_LOGSCR;
+		CheckSqlError("Declare PREP_PROC_LOGCR");
+
+		EXEC SQL OPEN PREP_PROC_LOGCR;
+		CheckSqlError("Open PREP_PROC_LOGCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE PREP_PROC_LOGCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH PREP_PROC_LOGCR INTO
+			:pSource->aiInputID,
+			:pSource->asSourceID,
+			:pSource->asModule,
+			:pSource->aiByte,
+			:pSource->aiCnt,
+			:pSource->asFileName,
+			:pSource->asDealBeginDate,
+			:pSource->asDealEndDate,
+			:pSource->aiNormalCnt,
+			:pSource->aiErrCnt,
+			:pSource->aiDupCnt,
+			:pSource->aiAbnoCnt,
+			:pSource->aiNewCnt,
+			:pSource->asFileType,
+			:pSource->asAppID,
+			:pSource->aiTacheID;
+		CheckSqlError("Fetch PREP_PROC_LOGCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE PREP_PROC_LOGCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=PREP_PROC_LOG_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iInputID=			pSource->aiInputID[iCurPos];
+
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sModule,		pSource->asModule[iCurPos]);
+
+		p->iByte=			pSource->aiByte[iCurPos];
+		p->iCnt=			pSource->aiCnt[iCurPos];
+
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sDealBeginDate,	pSource->asDealBeginDate[iCurPos]);
+		strcpy(p->sDealEndDate,		pSource->asDealEndDate[iCurPos]);
+		
+		p->iNormalCnt=			pSource->aiNormalCnt[iCurPos];
+		p->iErrCnt=			pSource->aiErrCnt[iCurPos];
+		p->iDupCnt=			pSource->aiDupCnt[iCurPos];
+		p->iAbnoCnt=			pSource->aiAbnoCnt[iCurPos];
+		p->iNewCnt=			pSource->aiNewCnt[iCurPos];
+
+		strcpy(p->sFileType,		pSource->asFileType[iCurPos]);
+		strcpy(p->sAppID,		pSource->asAppID[iCurPos]);
+
+		p->iTacheID=			pSource->aiTacheID[iCurPos];
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sModule);
+		AllTrim(p->sFileName);
+		AllTrim(p->sDealBeginDate);
+		AllTrim(p->sDealEndDate);
+		AllTrim(p->sFileType);
+		AllTrim(p->sAppID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据结构缓冲写入PICK_CHECK_LOG*/
+int EInsertStructToPickCheckLog(struct PickCheckLogStruct *p,
+	int iInsertFlag,struct PickCheckLogStructOut *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+	if(iInsertFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asSourceID[iCurPos],	p->sSourceID);
+		strcpy(pTarget->asModule[iCurPos],	p->sModule);
+		strcpy(pTarget->asFileName[iCurPos],	p->sFileName);
+		strcpy(pTarget->asFileDate[iCurPos],	p->sFileDate);
+		strcpy(pTarget->asChkFileName[iCurPos],	p->sChkFileName);
+
+		pTarget->aiChkCnt[iCurPos]=		p->iChkCnt;
+		pTarget->aiPreCnt[iCurPos]=		p->iPreCnt;
+
+		strcpy(pTarget->asFileType[iCurPos],	p->sFileType);
+		strcpy(pTarget->asDealDate[iCurPos],	p->sDealDate);
+
+		iCurPos++;
+	}
+
+	if(iInsertFlag==TRUE||iCurPos==PICK_CHECK_LOG_BUFLEN_OUT){
+
+/* INSERT */
+		char statement[8192];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			INSERT INTO %s(\n\
+				SOURCE_ID,\n\
+				MODULE,\n\
+				FILE_NAME,\n\
+				FILE_DATE,\n\
+				CHK_FILE_NAME,\n\
+				CHK_CNT,\n\
+				PRE_CNT,\n\
+				FILE_TYPE,\n\
+				DEAL_DATE)\n\
+			VALUES (\n\
+				:asSourceID,\n\
+				:asModule,\n\
+				:asFileName,\n\
+				to_date(:asFileDate,'yyyymmddhh24miss'),\n\
+				:asChkFileName,\n\
+				:aiChkCnt,\n\
+				:aiPreCnt,\n\
+				:asFileType,\n\
+				to_date(:asDealDate,'yyyymmddhh24miss')\n\
+			)",sTableName);
+
+		EXEC SQL PREPARE PICK_CHECK_LOGTRG FROM :statement;
+		if(CheckSqlResult("Prepare insert statement PICK_CHECK_LOG")<0) return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE PICK_CHECK_LOGTRG USING
+				:pTarget->asSourceID,
+				:pTarget->asModule,
+				:pTarget->asFileName,
+				:pTarget->asFileDate,
+				:pTarget->asChkFileName,
+				:pTarget->aiChkCnt,
+				:pTarget->aiPreCnt,
+				:pTarget->asFileType,
+				:pTarget->asDealDate;
+		if(CheckSqlResult("Dyn insert into PICK_CHECK_LOG")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+
+/*单条数据从用动态SQL从PICK_CHECK_LOG取数据*/
+int SDGetPickCheckLogToStruct(struct PickCheckLogStruct *p,char sTableName[],char sCondition[])
+{
+
+	/*这里不要控制变量*/
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(SOURCE_ID,' '),\n\
+				nvl(MODULE,' '),\n\
+				nvl(FILE_NAME,' '),\n\
+				to_char(FILE_DATE,'yyyymmddhh24miss'),\n\
+				nvl(CHK_FILE_NAME,' '),\n\
+				nvl(CHK_CNT,0),\n\
+				nvl(PRE_CNT,0),\n\
+				nvl(FILE_TYPE,' '),\n\
+				to_char(DEAL_DATE,'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE PICK_CHECK_LOGSCR FROM :statement;
+		CheckSqlError(" PREPARE PICK_CHECK_LOGSCR PICK_CHECK_LOGCR");
+
+		EXEC SQL DECLARE PICK_CHECK_LOGCR CURSOR FOR PICK_CHECK_LOGSCR;
+		CheckSqlError("Declare PICK_CHECK_LOGCR");
+
+		EXEC SQL OPEN PICK_CHECK_LOGCR;
+		CheckSqlError("Open PICK_CHECK_LOGCR;");
+
+
+	/*这里不修改控制变量*/
+
+/* FETCH */
+		EXEC SQL FETCH PICK_CHECK_LOGCR INTO
+			:p->sSourceID,
+			:p->sModule,
+			:p->sFileName,
+			:p->sFileDate,
+			:p->sChkFileName,
+			:p->iChkCnt,
+			:p->iPreCnt,
+			:p->sFileType,
+			:p->sDealDate;
+		CheckSqlError("Fetch PICK_CHECK_LOGCR");
+
+	if(NoDataFetched){
+		EXEC SQL CLOSE PICK_CHECK_LOGCR;
+		return FALSE;
+	}
+		EXEC SQL CLOSE PICK_CHECK_LOGCR;
+
+/* 从缓冲区取数据*/
+/*------该部分不需要取数据,只要格式转换-----*/
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sModule);
+		AllTrim(p->sFileName);
+		AllTrim(p->sFileDate);
+		AllTrim(p->sChkFileName);		
+		AllTrim(p->sFileType);
+		AllTrim(p->sDealDate);
+
+
+	return TRUE;
+}
+int SDGetTabCnt(char sTableName[])
+{
+	int iCnt=0;
+	char statement[4096];
+
+	sprintf(statement,"SELECT count(*) FROM %s",sTableName);
+
+	EXEC SQL PREPARE TAB_CNTSCR FROM :statement;
+	if(CheckSqlResult(" PREPARE TAB_CNTSCR TAB_CNTCR")<0) return -1;
+
+	EXEC SQL DECLARE TAB_CNTCR CURSOR FOR TAB_CNTSCR;
+	if(CheckSqlResult("Declare TAB_CNTCR")<0) return -1;
+
+	EXEC SQL OPEN TAB_CNTCR;
+	if(CheckSqlResult("Open TAB_CNTCR")<0) return -1;
+
+	EXEC SQL FETCH TAB_CNTCR INTO
+		:iCnt;
+	if(CheckSqlResult("Fetch TAB_CNTCR")<0) return -1;
+
+	if(NoDataFetched){
+		EXEC SQL CLOSE TAB_CNTCR;
+		return 0;
+	}
+
+	EXEC SQL CLOSE TAB_CNTCR;
+
+	return iCnt;
+}

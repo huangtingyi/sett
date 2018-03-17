@@ -1,0 +1,7085 @@
+#include <wwlog.h>
+#include <wwtiny.h>
+#include <wwdb.h>
+
+#include <stt_ticket.h>
+
+/*批量数据动态从PREP_TICKET中用结构缓冲方式取数据*/
+int EGetPrepTicketToStruct(struct PrepTicketStruct *p,
+	struct PrepTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(IMSI,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(to_char(DURATION),' '),\n\
+				nvl(MSC,' '),\n\
+				nvl(TRUNK_IN,' '),\n\
+				nvl(TRUNK_OUT,' '),\n\
+				nvl(LAC,' '),\n\
+				nvl(CELL_ID,' '),\n\
+				nvl(OTHER_LAC,' '),\n\
+				nvl(OTHER_CELL_ID,' '),\n\
+				nvl(SERVICE_TYPE,' '),\n\
+				nvl(SERVICE_CODE,' '),\n\
+				nvl(THIRD_PARTY,' '),\n\
+				nvl(MSRN,' '),\n\
+				nvl(USER_TYPE,'0'),\n\
+				nvl(RESERVE1,'00'),\n\
+				nvl(ESN,' '),\n\
+				nvl(SCP_FLAG,'0'),\n\
+				nvl(DEFORM_FLAG,'0'),\n\
+				nvl(RESERVE,' '),\n\
+				nvl(ERR_CODE,' '),\n\
+				nvl(FILE_NAME,' '),\n\
+				nvl(MODULE,' '),\n\
+				nvl(AREA_CODE,' '),\n\
+				nvl(STATE,' '),\n\
+				to_char(nvl(UPDATE_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE PREP_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE PREP_TICKETSCR PREP_TICKETCR");
+
+		EXEC SQL DECLARE PREP_TICKETCR CURSOR FOR PREP_TICKETSCR;
+		CheckSqlError("Declare PREP_TICKETCR");
+
+		EXEC SQL OPEN PREP_TICKETCR;
+		CheckSqlError("Open PREP_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE PREP_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH PREP_TICKETCR INTO
+			:pSource->asCallType,
+			:pSource->asImsi,
+			:pSource->asMsisdn,
+			:pSource->asOtherParty,
+			:pSource->asStartTime,
+			:pSource->asDuration,
+			:pSource->asMsc,
+			:pSource->asTrunkIn,
+			:pSource->asTrunkOut,
+			:pSource->asLac,
+			:pSource->asCellID,
+			:pSource->asOtherLac,
+			:pSource->asOtherCellID,
+			:pSource->asServiceType,
+			:pSource->asServiceCode,
+			:pSource->asThirdParty,
+			:pSource->asMsrn,
+			:pSource->asUserType,
+			:pSource->asReserve1,
+			:pSource->asEsn,
+			:pSource->asScpFlag,
+			:pSource->asDeformFlag,
+			:pSource->asReserve,
+			:pSource->asErrCode,
+			:pSource->asFileName,
+			:pSource->asModule,
+			:pSource->asAreaCode,
+			:pSource->asState,
+			:pSource->asUpdateDate,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch PREP_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE PREP_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=PREP_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sCallType,	pSource->asCallType[iCurPos]);
+		strcpy(p->sImsi,	pSource->asImsi[iCurPos]);
+		strcpy(p->sMsisdn,	pSource->asMsisdn[iCurPos]);
+		strcpy(p->sOtherParty,	pSource->asOtherParty[iCurPos]);
+		strcpy(p->sStartTime,	pSource->asStartTime[iCurPos]);
+		strcpy(p->sDuration,	pSource->asDuration[iCurPos]);
+		strcpy(p->sMsc,		pSource->asMsc[iCurPos]);
+		strcpy(p->sTrunkIn,	pSource->asTrunkIn[iCurPos]);
+		strcpy(p->sTrunkOut,	pSource->asTrunkOut[iCurPos]);
+		strcpy(p->sLac,		pSource->asLac[iCurPos]);
+		strcpy(p->sCellID,	pSource->asCellID[iCurPos]);
+		strcpy(p->sOtherLac,	pSource->asOtherLac[iCurPos]);
+		strcpy(p->sOtherCellID,	pSource->asOtherCellID[iCurPos]);
+		strcpy(p->sServiceType,	pSource->asServiceType[iCurPos]);
+		strcpy(p->sServiceCode,	pSource->asServiceCode[iCurPos]);
+		strcpy(p->sThirdParty,	pSource->asThirdParty[iCurPos]);
+		strcpy(p->sMsrn,	pSource->asMsrn[iCurPos]);
+		
+		strcpy(p->sUserType,	pSource->asUserType[iCurPos]);
+		strcpy(p->sReserve1,	pSource->asReserve1[iCurPos]);
+
+		strcpy(p->sEsn,		pSource->asEsn[iCurPos]);
+
+		strcpy(p->sScpFlag,	pSource->asScpFlag[iCurPos]);
+		strcpy(p->sDeformFlag,	pSource->asDeformFlag[iCurPos]);
+		strcpy(p->sReserve,	pSource->asReserve[iCurPos]);
+
+		strcpy(p->sErrCode,	pSource->asErrCode[iCurPos]);
+		strcpy(p->sFileName,	pSource->asFileName[iCurPos]);
+		strcpy(p->sModule,	pSource->asModule[iCurPos]);
+		strcpy(p->sAreaCode,	pSource->asAreaCode[iCurPos]);
+		strcpy(p->sState,	pSource->asState[iCurPos]);
+
+		strcpy(p->sUpdateDate,	pSource->asUpdateDate[iCurPos]);
+		strcpy(p->sDealDate,	pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,	pSource->asSourceID[iCurPos]);
+
+		strcpy(p->sRowID,	pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sCallType);
+		AllTrim(p->sImsi);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sDuration);
+		AllTrim(p->sMsc);
+		AllTrim(p->sTrunkIn);
+		AllTrim(p->sTrunkOut);
+		AllTrim(p->sLac);
+		AllTrim(p->sCellID);
+		AllTrim(p->sOtherLac);
+		AllTrim(p->sOtherCellID);
+		AllTrim(p->sServiceType);
+		AllTrim(p->sServiceCode);
+		AllTrim(p->sThirdParty);
+		AllTrim(p->sMsrn);
+		
+		AllTrim(p->sUserType);
+		AllTrim(p->sReserve1);
+
+		AllTrim(p->sEsn);
+		AllTrim(p->sReserve);
+
+		AllTrim(p->sErrCode);
+		AllTrim(p->sFileName);
+		AllTrim(p->sModule);
+		AllTrim(p->sAreaCode);
+		AllTrim(p->sState);
+
+		AllTrim(p->sUpdateDate);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从STT_TICKET中用结构缓冲方式取数据*/
+int EGetSttTicketToStruct(struct SttTicketStruct *p,
+	struct SttTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				CALL_TYPE,\n\
+				nvl(MSISDN,' '),\n\
+				nvl(CALLED_CODE,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(VISIT_AREA_CODE,' '),\n\
+				nvl(ROAM_FEE,-1),\n\
+				nvl(TOLL_FEE,-1),\n\
+				nvl(ADD_FEE,-1),\n\
+				nvl(DURATION,-1),\n\
+				START_TIME,\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(ROAM_TYPE,' '),\n\
+				nvl(DISTANCE_TYPE,' '),\n\
+				nvl(OPP_TYPE,' '),\n\
+				nvl(USER_TYPE,' '),\n\
+				nvl(SPLIT_RULE_ID,' '),\n\
+				nvl(OPP_ROAM_TYPE,' '),\n\
+				nvl(SERVICE_TYPE,' '),\n\
+				nvl(SERVICE_CODE,' '),\n\
+				nvl(IMSI,' '),\n\
+				nvl(MSC,' '),\n\
+				nvl(LAC,' '),\n\
+				nvl(CELL_ID,' '),\n\
+				nvl(OTHER_LAC,' '),\n\
+				nvl(OTHER_CELL_ID,' '),\n\
+				nvl(TRUNK_IN,' '),\n\
+				nvl(TRUNK_OUT,' '),\n\
+				nvl(THIRD_PARTY,' '),\n\
+				nvl(MSRN,' '),\n\
+				nvl(TRUNK_IN_TYPE_ID,-1),\n\
+				nvl(TRUNK_OUT_TYPE_ID,-1),\n\
+				nvl(TRUNK_IN_CARRIER_ID,-1),\n\
+				nvl(TRUNK_OUT_CARRIER_ID,-1),\n\
+				nvl(TRUNK_IN_TYPE,' '),\n\
+				nvl(TRUNK_OUT_TYPE,' '),\n\
+				nvl(CALLING_CARRIER_ID,-1),\n\
+				nvl(CALLED_CARRIER_ID,-1),\n\
+				nvl(CALLING_TYPE_ID,-1),\n\
+				nvl(CALLED_TYPE_ID,-1),\n\
+				nvl(CALLING_AREA_ID,-1),\n\
+				nvl(CALLED_AREA_ID,-1),\n\
+				nvl(SPLIT_TYPE,'0'),\n\
+				nvl(CAL,'0'),\n\
+				nvl(ESN,'0'),\n\
+				nvl(SCP_FLAG,'0'),\n\
+				nvl(DEFORM_FLAG,'0'),\n\
+				nvl(RESERVE,' '),\n\
+				nvl(BILL_MODE,'000'),\n\
+				nvl(RESERVE1,'00'),\n\
+				nvl(ROAM_TARIFF_TYPE,'000'),\n\
+				nvl(TOLL_TARIFF_TYPE,'000'),\n\
+				nvl(ADD_TARIFF_TYPE,'000'),\n\
+				nvl(ERR_CODE,' '),\n\
+				nvl(FILE_NAME,' '),\n\
+				nvl(MODULE,' '),\n\
+				nvl(AREA_CODE,' '),\n\
+				nvl(STATE,'0'),\n\
+				to_char(nvl(UPDATE_DATE,SYSDATE-3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE-3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE STT_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE STT_TICKETSCR STT_TICKETCR");
+
+		EXEC SQL DECLARE STT_TICKETCR CURSOR FOR STT_TICKETSCR;
+		CheckSqlError("Declare STT_TICKETCR");
+
+		EXEC SQL OPEN STT_TICKETCR;
+		CheckSqlError("Open STT_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE STT_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH STT_TICKETCR INTO
+			:pSource->aiTicketTypeID,
+			:pSource->asCallType,
+			:pSource->asMsisdn,
+			:pSource->asCalledCode,
+			:pSource->asOtherParty,
+			:pSource->asVisitAreaCode,
+			:pSource->aiRoamFee,
+			:pSource->aiTollFee,
+			:pSource->aiAddFee,
+			:pSource->aiDuration,
+			:pSource->asStartTime,
+			:pSource->asHomeAreaCode,
+			:pSource->asRoamType,
+			:pSource->asDistanceType,
+			:pSource->asOppType,
+			:pSource->asUserType,
+			:pSource->asSplitRuleID,
+			:pSource->asOppRoamType,
+			:pSource->asServiceType,
+			:pSource->asServiceCode,
+			:pSource->asImsi,
+			:pSource->asMsc,
+			:pSource->asLac,
+			:pSource->asCellID,
+			:pSource->asOtherLac,
+			:pSource->asOtherCellID,
+			:pSource->asTrunkIn,
+			:pSource->asTrunkOut,
+			:pSource->asThirdParty,
+			:pSource->asMsrn,
+			:pSource->aiTrunkInTypeID,
+			:pSource->aiTrunkOutTypeID,
+			:pSource->aiTrunkInCarrierID,
+			:pSource->aiTrunkOutCarrierID,
+			:pSource->asTrunkInType,
+			:pSource->asTrunkOutType,
+			:pSource->aiCallingCarrierID,
+			:pSource->aiCalledCarrierID,
+			:pSource->aiCallingTypeID,
+			:pSource->aiCalledTypeID,
+			:pSource->aiCallingAreaID,
+			:pSource->aiCalledAreaID,
+			:pSource->asSplitType,
+			:pSource->asCal,
+			:pSource->asEsn,
+			:pSource->asScpFlag,
+			:pSource->asDeformFlag,
+			:pSource->asReserve,
+			:pSource->asBillMode,
+			:pSource->asReserve1,
+			:pSource->asRoamTariffType,
+			:pSource->asTollTariffType,
+			:pSource->asAddTariffType,
+			:pSource->asErrCode,
+			:pSource->asFileName,
+			:pSource->asModule,
+			:pSource->asAreaCode,
+			:pSource->asState,
+			:pSource->asUpdateDate,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch STT_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE STT_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=STT_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sCalledCode,		pSource->asCalledCode[iCurPos]);
+		strcpy(p->sOtherParty,		pSource->asOtherParty[iCurPos]);
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+
+		p->iRoamFee=			pSource->aiRoamFee[iCurPos];
+		p->iTollFee=			pSource->aiTollFee[iCurPos];
+		p->iAddFee=			pSource->aiAddFee[iCurPos];
+		p->iDuration=			pSource->aiDuration[iCurPos];
+
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sRoamType,		pSource->asRoamType[iCurPos]);
+		strcpy(p->sDistanceType,	pSource->asDistanceType[iCurPos]);
+		strcpy(p->sOppType,		pSource->asOppType[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sSplitRuleID,		pSource->asSplitRuleID[iCurPos]);
+		strcpy(p->sOppRoamType,		pSource->asOppRoamType[iCurPos]);
+		strcpy(p->sServiceType,		pSource->asServiceType[iCurPos]);
+		strcpy(p->sServiceCode,		pSource->asServiceCode[iCurPos]);
+		strcpy(p->sImsi,		pSource->asImsi[iCurPos]);
+		strcpy(p->sMsc,			pSource->asMsc[iCurPos]);
+		strcpy(p->sLac,			pSource->asLac[iCurPos]);
+		strcpy(p->sCellID,		pSource->asCellID[iCurPos]);
+		strcpy(p->sOtherLac,		pSource->asOtherLac[iCurPos]);
+		strcpy(p->sOtherCellID,		pSource->asOtherCellID[iCurPos]);
+		strcpy(p->sTrunkIn,		pSource->asTrunkIn[iCurPos]);
+		strcpy(p->sTrunkOut,		pSource->asTrunkOut[iCurPos]);
+		strcpy(p->sThirdParty,		pSource->asThirdParty[iCurPos]);
+		strcpy(p->sMsrn,		pSource->asMsrn[iCurPos]);
+
+		p->iTrunkInTypeID=		pSource->aiTrunkInTypeID[iCurPos];
+		p->iTrunkOutTypeID=		pSource->aiTrunkOutTypeID[iCurPos];
+		p->iTrunkInCarrierID=		pSource->aiTrunkInCarrierID[iCurPos];
+		p->iTrunkOutCarrierID=		pSource->aiTrunkOutCarrierID[iCurPos];
+
+		strcpy(p->sTrunkInType,		pSource->asTrunkInType[iCurPos]);
+		strcpy(p->sTrunkOutType,	pSource->asTrunkOutType[iCurPos]);
+
+		p->iCallingCarrierID=		pSource->aiCallingCarrierID[iCurPos];
+		p->iCalledCarrierID=		pSource->aiCalledCarrierID[iCurPos];
+		p->iCallingTypeID=		pSource->aiCallingTypeID[iCurPos];
+		p->iCalledTypeID=		pSource->aiCalledTypeID[iCurPos];
+		p->iCallingAreaID=		pSource->aiCallingAreaID[iCurPos];
+		p->iCalledAreaID=		pSource->aiCalledAreaID[iCurPos];
+
+		strcpy(p->sSplitType,		pSource->asSplitType[iCurPos]);
+		strcpy(p->sCal,			pSource->asCal[iCurPos]);
+		strcpy(p->sEsn,			pSource->asEsn[iCurPos]);
+		strcpy(p->sScpFlag,		pSource->asScpFlag[iCurPos]);
+		strcpy(p->sDeformFlag,		pSource->asDeformFlag[iCurPos]);
+
+		strcpy(p->sReserve,		pSource->asReserve[iCurPos]);
+		strcpy(p->sBillMode,		pSource->asBillMode[iCurPos]);
+		
+		strcpy(p->sReserve1,		pSource->asReserve1[iCurPos]);
+		strcpy(p->sRoamTariffType,	pSource->asRoamTariffType[iCurPos]);
+		strcpy(p->sTollTariffType,	pSource->asTollTariffType[iCurPos]);
+		strcpy(p->sAddTariffType,	pSource->asAddTariffType[iCurPos]);
+		
+		strcpy(p->sErrCode,		pSource->asErrCode[iCurPos]);
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sModule,		pSource->asModule[iCurPos]);
+		strcpy(p->sAreaCode,		pSource->asAreaCode[iCurPos]);
+
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+
+		strcpy(p->sUpdateDate,		pSource->asUpdateDate[iCurPos]);
+
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sCallType);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sCalledCode);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sVisitAreaCode);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sRoamType);
+		AllTrim(p->sDistanceType);
+		AllTrim(p->sOppType);
+		AllTrim(p->sUserType);
+		AllTrim(p->sSplitRuleID);
+		AllTrim(p->sOppRoamType);
+		AllTrim(p->sServiceType);
+		AllTrim(p->sServiceCode);
+		AllTrim(p->sImsi);
+		AllTrim(p->sMsc);
+		AllTrim(p->sLac);
+		AllTrim(p->sCellID);
+		AllTrim(p->sOtherLac);
+		AllTrim(p->sOtherCellID);
+		AllTrim(p->sTrunkIn);
+		AllTrim(p->sTrunkOut);
+		AllTrim(p->sThirdParty);
+		AllTrim(p->sMsrn);
+		AllTrim(p->sTrunkInType);
+		AllTrim(p->sTrunkOutType);
+		AllTrim(p->sSplitType);
+		AllTrim(p->sCal);
+		AllTrim(p->sEsn);
+		AllTrim(p->sScpFlag);
+		AllTrim(p->sDeformFlag);
+
+		AllTrim(p->sReserve);
+		AllTrim(p->sBillMode);
+		
+		AllTrim(p->sReserve1);
+		AllTrim(p->sRoamTariffType);
+		AllTrim(p->sTollTariffType);
+		AllTrim(p->sAddTariffType);
+
+		AllTrim(p->sErrCode);
+		AllTrim(p->sFileName);
+		AllTrim(p->sModule);
+		AllTrim(p->sAreaCode);
+
+		AllTrim(p->sState);
+
+		AllTrim(p->sUpdateDate);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从R_STT_TICKET中用结构缓冲方式取数据*/
+int EGetRSttTicketToStruct(struct RSttTicketStruct *p,
+	struct RSttTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				CALL_TYPE,\n\
+				nvl(IMSI,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				START_TIME,\n\
+				DURATION,\n\
+				nvl(MSRN,' '),\n\
+				MSC,\n\
+				nvl(LAC,' '),\n\
+				nvl(CELL_ID,' '),\n\
+				nvl(OTHER_LAC,' '),\n\
+				nvl(OTHER_CELL_ID,' '),\n\
+				nvl(TRUNK_IN,' '),\n\
+				nvl(TRUNK_OUT,' '),\n\
+				nvl(SERVICE_TYPE,' '),\n\
+				nvl(SERVICE_CODE,' '),\n\
+				nvl(THIRD_PARTY,' '),\n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				nvl(ROAM_FEE,0),\n\
+				nvl(TOLL_FEE,0),\n\
+				nvl(ADD_FEE,0),\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(VISIT_AREA_CODE,' '),\n\
+				nvl(CALLED_CODE,' '),\n\
+				nvl(ROAM_TYPE,' '),\n\
+				nvl(DISTANCE_TYPE,' '),\n\
+				nvl(TRUNK_IN_TYPE_ID,0),\n\
+				nvl(TRUNK_OUT_TYPE_ID,0),\n\
+				nvl(TRUNK_IN_CARRIER_ID,0),\n\
+				nvl(TRUNK_OUT_CARRIER_ID,0),\n\
+				nvl(CALLING_TYPE_ID,0),\n\
+				nvl(CALLED_TYPE_ID,0),\n\
+				nvl(CALLING_CARRIER_ID,0),\n\
+				nvl(CALLED_CARRIER_ID,0),\n\
+				nvl(CALLING_AREA_ID,0),\n\
+				nvl(CALLED_AREA_ID,0),\n\
+				nvl(SPLIT_RULE_ID,0),\n\
+				nvl(BILL_MODE,'000'),\n\
+				nvl(SPLIT_TYPE,' '),\n\
+				nvl(ESN,'0'),\n\
+				nvl(OPP_TYPE,' '),\n\
+				nvl(USER_TYPE,' '),\n\
+				nvl(TRUNK_IN_TYPE,' '),\n\
+				nvl(TRUNK_OUT_TYPE,' '),\n\
+				nvl(CAL,' '),\n\
+				nvl(SCP_FLAG,' '),\n\
+				nvl(DEFORM_FLAG,' '),\n\
+				nvl(RESERVE,' '),\n\
+				nvl(RESERVE1,'00'),\n\
+				nvl(ROAM_TARIFF_TYPE,'000'),\n\
+				nvl(TOLL_TARIFF_TYPE,'000'),\n\
+				nvl(ADD_TARIFF_TYPE,'000'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE R_STT_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE R_STT_TICKETSCR R_STT_TICKETCR");
+
+		EXEC SQL DECLARE R_STT_TICKETCR CURSOR FOR R_STT_TICKETSCR;
+		CheckSqlError("Declare R_STT_TICKETCR");
+
+		EXEC SQL OPEN R_STT_TICKETCR;
+		CheckSqlError("Open R_STT_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE R_STT_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH R_STT_TICKETCR INTO
+			:pSource->asCallType,
+			:pSource->asImsi,
+			:pSource->asMsisdn,
+			:pSource->asOtherParty,
+			:pSource->asStartTime,
+			:pSource->asDuration,
+			:pSource->asMsrn,
+			:pSource->asMsc,
+			:pSource->asLac,
+			:pSource->asCellID,
+			:pSource->asOtherLac,
+			:pSource->asOtherCellID,
+			:pSource->asTrunkIn,
+			:pSource->asTrunkOut,
+			:pSource->asServiceType,
+			:pSource->asServiceCode,
+			:pSource->asThirdParty,
+			:pSource->aiTicketTypeID,
+			:pSource->aiRoamFee,
+			:pSource->aiTollFee,
+			:pSource->aiAddFee,
+			:pSource->asHomeAreaCode,
+			:pSource->asVisitAreaCode,
+			:pSource->asCalledCode,
+			:pSource->asRoamType,
+			:pSource->asDistanceType,
+			:pSource->aiTrunkInTypeID,
+			:pSource->aiTrunkOutTypeID,
+			:pSource->aiTrunkInCarrierID,
+			:pSource->aiTrunkOutCarrierID,
+			:pSource->aiCallingTypeID,
+			:pSource->aiCalledTypeID,
+			:pSource->aiCallingCarrierID,
+			:pSource->aiCalledCarrierID,
+			:pSource->aiCallingAreaID,
+			:pSource->aiCalledAreaID,
+			:pSource->asSplitRuleID,
+			:pSource->asBillMode,
+			:pSource->asSplitType,
+			:pSource->asEsn,
+			:pSource->asOppType,
+			:pSource->asUserType,
+			:pSource->asTrunkInType,
+			:pSource->asTrunkOutType,
+			:pSource->asCal,
+			:pSource->asScpFlag,
+			:pSource->asDeformFlag,
+			:pSource->asReserve,
+			:pSource->asReserve1,
+			:pSource->asRoamTariffType,
+			:pSource->asTollTariffType,
+			:pSource->asAddTariffType,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch R_STT_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE R_STT_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=R_STT_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sImsi,		pSource->asImsi[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sOtherParty,		pSource->asOtherParty[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+		strcpy(p->sDuration,		pSource->asDuration[iCurPos]);
+		strcpy(p->sMsrn,		pSource->asMsrn[iCurPos]);
+		strcpy(p->sMsc,			pSource->asMsc[iCurPos]);
+		strcpy(p->sLac,			pSource->asLac[iCurPos]);
+		strcpy(p->sCellID,		pSource->asCellID[iCurPos]);
+		strcpy(p->sOtherLac,		pSource->asOtherLac[iCurPos]);
+		strcpy(p->sOtherCellID,		pSource->asOtherCellID[iCurPos]);
+		strcpy(p->sTrunkIn,		pSource->asTrunkIn[iCurPos]);
+		strcpy(p->sTrunkOut,		pSource->asTrunkOut[iCurPos]);
+		strcpy(p->sServiceType,		pSource->asServiceType[iCurPos]);
+		strcpy(p->sServiceCode,		pSource->asServiceCode[iCurPos]);
+		strcpy(p->sThirdParty,		pSource->asThirdParty[iCurPos]);
+
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+		p->iRoamFee=			pSource->aiRoamFee[iCurPos];
+		p->iTollFee=			pSource->aiTollFee[iCurPos];
+		p->iAddFee=			pSource->aiAddFee[iCurPos];
+
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+		strcpy(p->sCalledCode,		pSource->asCalledCode[iCurPos]);
+		strcpy(p->sRoamType,		pSource->asRoamType[iCurPos]);
+		strcpy(p->sDistanceType,	pSource->asDistanceType[iCurPos]);
+
+		p->iTrunkInTypeID=		pSource->aiTrunkInTypeID[iCurPos];
+		p->iTrunkOutTypeID=		pSource->aiTrunkOutTypeID[iCurPos];
+		p->iTrunkInCarrierID=		pSource->aiTrunkInCarrierID[iCurPos];
+		p->iTrunkOutCarrierID=		pSource->aiTrunkOutCarrierID[iCurPos];
+		p->iCallingTypeID=		pSource->aiCallingTypeID[iCurPos];
+		p->iCalledTypeID=		pSource->aiCalledTypeID[iCurPos];
+		p->iCallingCarrierID=		pSource->aiCallingCarrierID[iCurPos];
+		p->iCalledCarrierID=		pSource->aiCalledCarrierID[iCurPos];
+		p->iCallingAreaID=		pSource->aiCallingAreaID[iCurPos];
+		p->iCalledAreaID=		pSource->aiCalledAreaID[iCurPos];
+
+		strcpy(p->sSplitRuleID,		pSource->asSplitRuleID[iCurPos]);
+		strcpy(p->sBillMode,		pSource->asBillMode[iCurPos]);
+		strcpy(p->sSplitType,		pSource->asSplitType[iCurPos]);
+		strcpy(p->sEsn,			pSource->asEsn[iCurPos]);
+		strcpy(p->sOppType,     	pSource->asOppType[iCurPos]);
+		strcpy(p->sUserType,    	pSource->asUserType[iCurPos]);
+		strcpy(p->sTrunkInType, 	pSource->asTrunkInType[iCurPos]);
+		strcpy(p->sTrunkOutType,	pSource->asTrunkOutType[iCurPos]);
+		strcpy(p->sCal,         	pSource->asCal[iCurPos]);
+		strcpy(p->sScpFlag,     	pSource->asScpFlag[iCurPos]);
+		strcpy(p->sDeformFlag,  	pSource->asDeformFlag[iCurPos]);
+		strcpy(p->sReserve,     	pSource->asReserve[iCurPos]);
+		
+		strcpy(p->sReserve1,		pSource->asReserve1[iCurPos]);
+		strcpy(p->sRoamTariffType,	pSource->asRoamTariffType[iCurPos]);
+		strcpy(p->sTollTariffType,	pSource->asTollTariffType[iCurPos]);
+		strcpy(p->sAddTariffType,	pSource->asAddTariffType[iCurPos]);
+
+		strcpy(p->sSourceID,     	pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sCallType);
+		AllTrim(p->sImsi);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sDuration);
+		AllTrim(p->sMsrn);
+		AllTrim(p->sMsc);
+		AllTrim(p->sLac);
+		AllTrim(p->sCellID);
+		AllTrim(p->sOtherLac);
+		AllTrim(p->sOtherCellID);
+		AllTrim(p->sTrunkIn);
+		AllTrim(p->sTrunkOut);
+		AllTrim(p->sServiceType);
+		AllTrim(p->sServiceCode);
+		AllTrim(p->sThirdParty);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sVisitAreaCode);
+		AllTrim(p->sCalledCode);
+		AllTrim(p->sRoamType);
+		AllTrim(p->sDistanceType);
+		AllTrim(p->sSplitRuleID);
+		AllTrim(p->sBillMode);
+		AllTrim(p->sSplitType);
+		AllTrim(p->sEsn);
+		AllTrim(p->sOppType);
+		AllTrim(p->sUserType);
+		AllTrim(p->sTrunkInType);
+		AllTrim(p->sTrunkOutType);
+		AllTrim(p->sCal);
+		AllTrim(p->sScpFlag);
+		AllTrim(p->sDeformFlag);
+		AllTrim(p->sReserve);
+		
+		AllTrim(p->sReserve1);
+		AllTrim(p->sRoamTariffType);
+		AllTrim(p->sTollTariffType);
+		AllTrim(p->sAddTariffType);
+
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据结构缓冲更新ACCT_ITEM.CHARGE*/
+int EUpdateStructToUSttTicket(struct USttTicketStruct *p,
+	int iUpdateFlag,struct USttTicketStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		pTarget->aiTicketTypeID[iCurPos]=		p->iTicketTypeID;
+		pTarget->aiRoamFee[iCurPos]=			p->iRoamFee;
+		pTarget->aiTollFee[iCurPos]=			p->iTollFee;
+		pTarget->aiAddFee[iCurPos]=			p->iAddFee;
+
+		strcpy(pTarget->asHomeAreaCode[iCurPos],	p->sHomeAreaCode);
+		strcpy(pTarget->asVisitAreaCode[iCurPos],	p->sVisitAreaCode);
+		strcpy(pTarget->asCalledCode[iCurPos],		p->sCalledCode);
+		strcpy(pTarget->asRoamType[iCurPos],		p->sRoamType);
+		strcpy(pTarget->asDistanceType[iCurPos],	p->sDistanceType);
+
+		pTarget->aiTrunkInTypeID[iCurPos]=		p->iTrunkInTypeID;
+		pTarget->aiTrunkOutTypeID[iCurPos]=		p->iTrunkOutTypeID;
+		pTarget->aiTrunkInCarrierID[iCurPos]=		p->iTrunkInCarrierID;
+		pTarget->aiTrunkOutCarrierID[iCurPos]=		p->iTrunkOutCarrierID;
+		pTarget->aiCallingTypeID[iCurPos]=		p->iCallingTypeID;
+		pTarget->aiCalledTypeID[iCurPos]=		p->iCalledTypeID;
+		pTarget->aiCallingCarrierID[iCurPos]=		p->iCallingCarrierID;
+		pTarget->aiCalledCarrierID[iCurPos]=		p->iCalledCarrierID;
+		pTarget->aiCallingAreaID[iCurPos]=		p->iCallingAreaID;
+		pTarget->aiCalledAreaID[iCurPos]=		p->iCalledAreaID;
+
+		strcpy(pTarget->asSplitRuleID[iCurPos],		p->sSplitRuleID);
+		strcpy(pTarget->asTrunkIn[iCurPos],		p->sTrunkIn);
+		strcpy(pTarget->asTrunkOut[iCurPos],		p->sTrunkOut);
+		strcpy(pTarget->asBillMode[iCurPos],		p->sBillMode);
+		
+		strcpy(pTarget->asRoamTariffType[iCurPos],	p->sRoamTariffType);
+		strcpy(pTarget->asTollTariffType[iCurPos],	p->sTollTariffType);
+		strcpy(pTarget->asAddTariffType[iCurPos],	p->sAddTariffType);
+
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asRowID[iCurPos],		p->sRowID);
+
+		strcpy(pTarget->asMsisdn[iCurPos],		p->sMsisdn);
+		strcpy(pTarget->asStartTime[iCurPos],		p->sStartTime);
+		pTarget->aiDuration[iCurPos]=			p->iDuration;
+		strcpy(pTarget->asMsrn[iCurPos],		p->sMsrn);
+		strcpy(pTarget->asCal[iCurPos],			p->sCal);
+		strcpy(pTarget->asUserType[iCurPos],		p->sUserType);
+
+
+		iCurPos++;
+	}
+
+	if(iUpdateFlag==TRUE||iCurPos==STT_TICKET_BUFLEN_UP){
+
+/* INSERT */
+		char statement[4096];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE %s\n\
+			SET \n\
+				TICKET_TYPE_ID=		:aiTicketTypeID,\n\
+				ROAM_FEE=               :aiRoamFee,\n\
+				TOLL_FEE=               :aiTollFee,\n\
+				ADD_FEE=                :aiAddFee,\n\
+				HOME_AREA_CODE=         :asHomeAreaCode,\n\
+				VISIT_AREA_CODE=        :asVisitAreaCode,\n\
+				CALLED_CODE=            :asCalledCode,\n\
+				ROAM_TYPE=              :asRoamType,\n\
+				DISTANCE_TYPE=          :asDistanceType,\n\
+				TRUNK_IN_TYPE_ID=       :aiTrunkInTypeID,\n\
+				TRUNK_OUT_TYPE_ID=      :aiTrunkOutTypeID,\n\
+				TRUNK_IN_CARRIER_ID=    :aiTrunkInCarrierID,\n\
+				TRUNK_OUT_CARRIER_ID=   :aiTrunkOutCarrierID,\n\
+				CALLING_TYPE_ID=        :aiCallingTypeID,\n\
+				CALLED_TYPE_ID=         :aiCalledTypeID,\n\
+				CALLING_CARRIER_ID=     :aiCallingCarrierID,\n\
+				CALLED_CARRIER_ID=      :aiCalledCarrierID,\n\
+				CALLING_AREA_ID=        :aiCallingAreaID,\n\
+				CALLED_AREA_ID=         :aiCalledAreaID,\n\
+				SPLIT_RULE_ID=          :asSplitRuleID,\n\
+				TRUNK_IN=               :asTrunkIn,\n\
+				TRUNK_OUT=     	        :asTrunkOut,\n\
+				BILL_MODE=		:asBillMode,\n\
+				ROAM_TARIFF_TYPE=	:asRoamTariffType,\n\
+				TOLL_TARIFF_TYPE=	:asTollTariffType,\n\
+				ADD_TARIFF_TYPE=	:asAddTariffType,\n\
+				STATE=			:asState,\n\
+				MSRN=			:asMsrn,\n\
+				CAL=			:asCal,\n\
+				USER_TYPE=		:asUserType,\n\
+				UPDATE_DATE=		SYSDATE\n\
+			WHERE \n\
+				ROWID = chartorowid(:asRowID)\n\
+			",sTableName);
+
+		EXEC SQL PREPARE RSTT_TICKETUCR FROM :statement;
+		if(CheckSqlResult("Prepare update statement STT_TICKET")<0)
+			return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE RSTT_TICKETUCR USING
+				:pTarget->aiTicketTypeID,
+				:pTarget->aiRoamFee,
+				:pTarget->aiTollFee,
+				:pTarget->aiAddFee,
+				:pTarget->asHomeAreaCode,
+				:pTarget->asVisitAreaCode,
+				:pTarget->asCalledCode,
+				:pTarget->asRoamType,
+				:pTarget->asDistanceType,
+				:pTarget->aiTrunkInTypeID,
+				:pTarget->aiTrunkOutTypeID,
+				:pTarget->aiTrunkInCarrierID,
+				:pTarget->aiTrunkOutCarrierID,
+				:pTarget->aiCallingTypeID,
+				:pTarget->aiCalledTypeID,
+				:pTarget->aiCallingCarrierID,
+				:pTarget->aiCalledCarrierID,
+				:pTarget->aiCallingAreaID,
+				:pTarget->aiCalledAreaID,
+				:pTarget->asSplitRuleID,
+				:pTarget->asTrunkIn,
+				:pTarget->asTrunkOut,
+				:pTarget->asBillMode,
+				:pTarget->asRoamTariffType,
+				:pTarget->asTollTariffType,
+				:pTarget->asAddTariffType,
+				:pTarget->asState,
+				:pTarget->asMsrn,
+				:pTarget->asCal,
+				:pTarget->asUserType,
+				:pTarget->asRowID;
+		if(CheckSqlResult("Dyn update STT_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+int EUpdateStructToUCommTicket(struct UCommTicketStruct *p,
+	int iUpdateFlag,struct UCommTicketStructUp *pTarget)
+{
+
+	int  iCurPos=pTarget->iCurPos;
+	char *sTableName=pTarget->sTableName;
+
+
+	if(iUpdateFlag!=TRUE){
+
+/*放置数据到静态缓冲*/
+		strcpy(pTarget->asFileName[iCurPos],		p->sFileName);
+		strcpy(pTarget->asModule[iCurPos],		p->sModule);
+		strcpy(pTarget->asAreaCode[iCurPos],		p->sAreaCode);
+		strcpy(pTarget->asState[iCurPos],		p->sState);
+		strcpy(pTarget->asUpdateDate[iCurPos],		p->sUpdateDate);
+		strcpy(pTarget->asRowID[iCurPos],		p->sRowID);
+
+		iCurPos++;
+	}
+
+	if(iUpdateFlag==TRUE||iCurPos==U_COMM_TICKET_BUFLEN_UP){
+
+/* INSERT */
+		char statement[4096];
+
+		if(iCurPos==0) return 0;
+
+		sprintf(statement,"\n\
+			UPDATE %s\n\
+			SET \n\
+				FILE_NAME=		:asFileName,\n\
+				MODULE=               	:asModule,\n\
+				AREA_CODE=              :asAreaCode,\n\
+				STATE=                  :asState,\n\
+				UPDATE_DATE=		SYSDATE\n\
+			WHERE \n\
+				ROWID = chartorowid(:asRowID)\n\
+			",sTableName);
+
+		EXEC SQL PREPARE RU_COMM_TICKETUCR FROM :statement;
+		if(CheckSqlResult("Prepare update statement U_COMM_TICKET")<0)
+			return -1;
+
+		EXEC SQL FOR :iCurPos EXECUTE RU_COMM_TICKETUCR USING
+				:pTarget->asFileName,
+				:pTarget->asModule,
+				:pTarget->asAreaCode,
+				:pTarget->asState,
+				:pTarget->asRowID;
+		if(CheckSqlResult("Dyn update U_COMM_TICKET")<0) return -1;
+
+		iCurPos=0;
+	}
+
+	pTarget->iCurPos=iCurPos;
+	return 0;
+}
+/*批量数据动态从SMSC_TICKET中用结构缓冲方式取数据*/
+int EGetSmscTicketToStruct(struct SmscTicketStruct *p,
+	struct SmscTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(CITY_CODE,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(DURATION,' '),\n\
+				nvl(MSC,' '),\n\
+				nvl(SMSP,' '),\n\
+				nvl(USER_TYPE,'G'),\n\
+				nvl(FEE,' '),\n\
+				nvl(SERVICE_CODE,' '),\n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				nvl(ERR_CODE,' '),\n\
+				nvl(FILE_NAME,' '),\n\
+				nvl(MODULE,' '),\n\
+				nvl(AREA_CODE,' '),\n\
+				nvl(STATE,'0'),\n\
+				to_char(nvl(UPDATE_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMSC_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE SMSC_TICKETSCR SMSC_TICKETCR");
+
+		EXEC SQL DECLARE SMSC_TICKETCR CURSOR FOR SMSC_TICKETSCR;
+		CheckSqlError("Declare SMSC_TICKETCR");
+
+		EXEC SQL OPEN SMSC_TICKETCR;
+		CheckSqlError("Open SMSC_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMSC_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMSC_TICKETCR INTO
+			:pSource->asCallType,
+			:pSource->asCityCode,
+			:pSource->asMsisdn,
+			:pSource->asOtherParty,
+			:pSource->asStartTime,
+			:pSource->asDuration,
+			:pSource->asMsc,
+			:pSource->asSmsp,
+			:pSource->asUserType,
+			:pSource->asFee,
+			:pSource->asServiceCode,
+			:pSource->aiTicketTypeID,
+			:pSource->asErrCode,
+			:pSource->asFileName,
+			:pSource->asModule,
+			:pSource->asAreaCode,
+			:pSource->asState,
+			:pSource->asUpdateDate,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch SMSC_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMSC_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMSC_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sCallType,	pSource->asCallType[iCurPos]);
+		strcpy(p->sCityCode,	pSource->asCityCode[iCurPos]);
+		strcpy(p->sMsisdn,	pSource->asMsisdn[iCurPos]);
+		strcpy(p->sOtherParty,	pSource->asOtherParty[iCurPos]);
+		strcpy(p->sStartTime,	pSource->asStartTime[iCurPos]);
+		strcpy(p->sDuration,	pSource->asDuration[iCurPos]);
+		strcpy(p->sMsc,		pSource->asMsc[iCurPos]);
+		strcpy(p->sSmsp,	pSource->asSmsp[iCurPos]);
+		strcpy(p->sUserType,	pSource->asUserType[iCurPos]);
+		strcpy(p->sFee,		pSource->asFee[iCurPos]);
+		strcpy(p->sServiceCode,	pSource->asServiceCode[iCurPos]);
+
+		p->iTicketTypeID=	pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sErrCode,		pSource->asErrCode[iCurPos]);
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sModule,		pSource->asModule[iCurPos]);
+		strcpy(p->sAreaCode,		pSource->asAreaCode[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+
+		strcpy(p->sUpdateDate,	pSource->asUpdateDate[iCurPos]);
+		strcpy(p->sDealDate,	pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,	pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,	pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sCallType);
+		AllTrim(p->sCityCode);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sDuration);
+		AllTrim(p->sMsc);
+		AllTrim(p->sSmsp);
+		AllTrim(p->sUserType);
+		AllTrim(p->sFee);
+		AllTrim(p->sServiceCode);
+
+		AllTrim(p->sErrCode);
+		AllTrim(p->sFileName);
+		AllTrim(p->sModule);
+		AllTrim(p->sAreaCode);
+
+		AllTrim(p->sUpdateDate);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SMSP_TICKET中用结构缓冲方式取数据*/
+int EGetSmspTicketToStruct(struct SmspTicketStruct *p,
+	struct SmspTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(CITY_CODE,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(DURATION,' '),\n\
+				nvl(MSC,' '),\n\
+				nvl(SMSP,' '),\n\
+				nvl(USER_TYPE,'G'),\n\
+				nvl(SP_ACC_NBR,' '),\n\
+				nvl(SP_SERVICE_CODE,' '),\n\
+				nvl(SP_CODE,' '),\n\
+				nvl(FEE1,' '),\n\
+				nvl(FEE2,' '),\n\
+				nvl(FEE3,' '),\n\
+				nvl(FEE4,' '),\n\
+				nvl(FEE5,' '),\n\
+				nvl(FEE6,' '),\n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				nvl(ERR_CODE,' '),\n\
+				nvl(FILE_NAME,' '),\n\
+				nvl(MODULE,' '),\n\
+				nvl(AREA_CODE,' '),\n\
+				nvl(STATE,'0'),\n\
+				to_char(nvl(UPDATE_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMSP_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE SMSP_TICKETSCR SMSP_TICKETCR");
+
+		EXEC SQL DECLARE SMSP_TICKETCR CURSOR FOR SMSP_TICKETSCR;
+		CheckSqlError("Declare SMSP_TICKETCR");
+
+		EXEC SQL OPEN SMSP_TICKETCR;
+		CheckSqlError("Open SMSP_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMSP_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMSP_TICKETCR INTO
+			:pSource->asCallType,
+			:pSource->asCityCode,
+			:pSource->asMsisdn,
+			:pSource->asOtherParty,
+			:pSource->asStartTime,
+			:pSource->asDuration,
+			:pSource->asMsc,
+			:pSource->asSmsp,
+			:pSource->asUserType,
+			:pSource->asSpAccNbr,
+			:pSource->asSpServiceCode,
+			:pSource->asSpCode,
+			:pSource->asFee1,
+			:pSource->asFee2,
+			:pSource->asFee3,
+			:pSource->asFee4,
+			:pSource->asFee5,
+			:pSource->asFee6,
+			:pSource->aiTicketTypeID,
+			:pSource->asErrCode,
+			:pSource->asFileName,
+			:pSource->asModule,
+			:pSource->asAreaCode,
+			:pSource->asState,
+			:pSource->asUpdateDate,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch SMSP_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMSP_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMSP_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sCityCode,		pSource->asCityCode[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sOtherParty,		pSource->asOtherParty[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+		strcpy(p->sDuration,		pSource->asDuration[iCurPos]);
+		strcpy(p->sMsc,			pSource->asMsc[iCurPos]);
+		strcpy(p->sSmsp,		pSource->asSmsp[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sSpAccNbr,		pSource->asSpAccNbr[iCurPos]);
+		strcpy(p->sSpServiceCode,	pSource->asSpServiceCode[iCurPos]);
+		strcpy(p->sSpCode,		pSource->asSpCode[iCurPos]);
+		strcpy(p->sFee1,		pSource->asFee1[iCurPos]);
+		strcpy(p->sFee2,		pSource->asFee2[iCurPos]);
+		strcpy(p->sFee3,		pSource->asFee3[iCurPos]);
+		strcpy(p->sFee4,		pSource->asFee4[iCurPos]);
+
+		strcpy(p->sFee5,		pSource->asFee5[iCurPos]);
+		strcpy(p->sFee6,		pSource->asFee6[iCurPos]);
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sErrCode,		pSource->asErrCode[iCurPos]);
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sModule,		pSource->asModule[iCurPos]);
+		strcpy(p->sAreaCode,		pSource->asAreaCode[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+
+		strcpy(p->sUpdateDate,		pSource->asUpdateDate[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sCallType);
+		AllTrim(p->sCityCode);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sDuration);
+		AllTrim(p->sMsc);
+		AllTrim(p->sSmsp);
+		AllTrim(p->sUserType);
+		AllTrim(p->sSpAccNbr);
+		AllTrim(p->sSpServiceCode);
+		AllTrim(p->sSpCode);
+		AllTrim(p->sFee1);
+		AllTrim(p->sFee2);
+		AllTrim(p->sFee3);
+		AllTrim(p->sFee4);
+		AllTrim(p->sFee5);
+		AllTrim(p->sFee6);
+
+		AllTrim(p->sErrCode);
+		AllTrim(p->sFileName);
+		AllTrim(p->sModule);
+		AllTrim(p->sAreaCode);
+		AllTrim(p->sState);
+
+		AllTrim(p->sUpdateDate);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从GPRS_TICKET中用结构缓冲方式取数据*/
+int EGetGprsTicketToStruct(struct GprsTicketStruct *p,
+	struct GprsTicketStructIn *pSource)
+
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(RECORD_TYPE,' '),\n\
+				nvl(NI_PDP,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(IMSI,' '),\n\
+				nvl(SGSN,' '),\n\
+				nvl(MSNC,' '),\n\
+				nvl(LAC,' '),\n\
+				nvl(ROUTE_AREA,' '),\n\
+				nvl(CELL_ID,' '),\n\
+				nvl(CHARGING_ID,' '),\n\
+				nvl(GGSN,' '),\n\
+				nvl(APN_NI,' '),\n\
+				nvl(APN_OI,' '),\n\
+				nvl(PDP_TYPE,' '),\n\
+				nvl(SERVED_PDP_ADDRESS,' '),\n\
+				nvl(SGSN_CHANGE,' '),\n\
+				nvl(CLOSE_CAUSE,' '),\n\
+				nvl(RESULT,' '),\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(VISIT_AREA_CODE,' '),\n\
+				nvl(USER_TYPE,' '),\n\
+				nvl(FEE_TYPE,' '),\n\
+				nvl(ROAM_TYPE,' '),\n\
+				nvl(SERVICE_TYPE,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(CALL_DURATION,' '),\n\
+				nvl(TARIFF1,' '),\n\
+				nvl(DATA_FLOWUP1,' '),\n\
+				nvl(DATA_FLOWDN1,' '),\n\
+				nvl(DURATION1,' '),\n\
+				nvl(TARIFF2,' '),\n\
+				nvl(DATA_FLOWUP2,' '),\n\
+				nvl(DATA_FLOWDN2,' '),\n\
+				nvl(DURATION2,' '),\n\
+				nvl(TARIFF3,' '),\n\
+				nvl(DATA_FLOWUP3,' '),\n\
+				nvl(DATA_FLOWDN3,' '),\n\
+				nvl(DURATION3,' '),\n\
+				nvl(TARIFF4,' '),\n\
+				nvl(DATA_FLOWUP4,' '),\n\
+				nvl(DATA_FLOWDN4,' '),\n\
+				nvl(DURATION4,' '),\n\
+				nvl(TARIFF5,' '),\n\
+				nvl(DATA_FLOWUP5,' '),\n\
+				nvl(DATA_FLOWDN5,' '),\n\
+				nvl(DURATION5,' '),\n\
+				nvl(TARIFF6,' '),\n\
+				nvl(DATA_FLOWUP6,' '),\n\
+				nvl(DATA_FLOWDN6,' '),\n\
+				nvl(DURATION6,' '),\n\
+				nvl(CFEE,' '),\n\
+				nvl(FEE1,' '),\n\
+				nvl(FEE2,' '),\n\
+				nvl(FEE3,' '),\n\
+				nvl(TOTAL_FEE,' '),\n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				nvl(ERR_CODE,' '),\n\
+				nvl(FILE_NAME,' '),\n\
+				nvl(MODULE,' '),\n\
+				nvl(AREA_CODE,' '),\n\
+				nvl(STATE,'0'),\n\
+				to_date(nvl(UPDATE_DATE,SYSDATE-3000),'yyyymmddhh24miss'),\n\
+				to_date(nvl(DEAL_DATE,SYSDATE-3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE GPRS_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE GPRS_TICKETSCR GPRS_TICKETCR");
+
+		EXEC SQL DECLARE GPRS_TICKETCR CURSOR FOR GPRS_TICKETSCR;
+		CheckSqlError("Declare GPRS_TICKETCR");
+
+		EXEC SQL OPEN GPRS_TICKETCR;
+		CheckSqlError("Open GPRS_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE GPRS_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH GPRS_TICKETCR INTO
+			:pSource->asRecordType,
+			:pSource->asNiPdp,
+			:pSource->asMsisdn,
+			:pSource->asImsi,
+			:pSource->asSgsn,
+			:pSource->asMsnc,
+			:pSource->asLac,
+			:pSource->asRouteArea,
+			:pSource->asCellID,
+			:pSource->asChargingID,
+			:pSource->asGgsn,
+			:pSource->asApnNi,
+			:pSource->asApnOi,
+			:pSource->asPdpType,
+			:pSource->asServedPdpAddress,
+			:pSource->asSgsnChange,
+			:pSource->asCloseCause,
+			:pSource->asResult,
+			:pSource->asHomeAreaCode,
+			:pSource->asVisitAreaCode,
+			:pSource->asUserType,
+			:pSource->asFeeType,
+			:pSource->asRoamType,
+			:pSource->asServiceType,
+			:pSource->asStartTime,
+			:pSource->asCallDuration,
+			:pSource->asTariff1,
+			:pSource->asDataFlowup1,
+			:pSource->asDataFlowdn1,
+			:pSource->asDuration1,
+			:pSource->asTariff2,
+			:pSource->asDataFlowup2,
+			:pSource->asDataFlowdn2,
+			:pSource->asDuration2,
+			:pSource->asTariff3,
+			:pSource->asDataFlowup3,
+			:pSource->asDataFlowdn3,
+			:pSource->asDuration3,
+			:pSource->asTariff4,
+			:pSource->asDataFlowup4,
+			:pSource->asDataFlowdn4,
+			:pSource->asDuration4,
+			:pSource->asTariff5,
+			:pSource->asDataFlowup5,
+			:pSource->asDataFlowdn5,
+			:pSource->asDuration5,
+			:pSource->asTariff6,
+			:pSource->asDataFlowup6,
+			:pSource->asDataFlowdn6,
+			:pSource->asDuration6,
+			:pSource->asCfee,
+			:pSource->asFee1,
+			:pSource->asFee2,
+			:pSource->asFee3,
+			:pSource->asTotalFee,
+			:pSource->aiTicketTypeID,
+			:pSource->asErrCode,
+			:pSource->asFileName,
+			:pSource->asModule,
+			:pSource->asAreaCode,
+			:pSource->asState,
+			:pSource->asUpdateDate,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch GPRS_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE GPRS_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=GPRS_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sRecordType,		pSource->asRecordType[iCurPos]);
+		strcpy(p->sNiPdp,		pSource->asNiPdp[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sImsi,		pSource->asImsi[iCurPos]);
+		strcpy(p->sSgsn,		pSource->asSgsn[iCurPos]);
+		strcpy(p->sMsnc,		pSource->asMsnc[iCurPos]);
+		strcpy(p->sLac,			pSource->asLac[iCurPos]);
+		strcpy(p->sRouteArea,		pSource->asRouteArea[iCurPos]);
+		strcpy(p->sCellID,		pSource->asCellID[iCurPos]);
+		strcpy(p->sChargingID,		pSource->asChargingID[iCurPos]);
+		strcpy(p->sGgsn,		pSource->asGgsn[iCurPos]);
+		strcpy(p->sApnNi,		pSource->asApnNi[iCurPos]);
+		strcpy(p->sApnOi,		pSource->asApnOi[iCurPos]);
+		strcpy(p->sPdpType,		pSource->asPdpType[iCurPos]);
+		strcpy(p->sServedPdpAddress,	pSource->asServedPdpAddress[iCurPos]);
+		strcpy(p->sSgsnChange,		pSource->asSgsnChange[iCurPos]);
+		strcpy(p->sCloseCause,		pSource->asCloseCause[iCurPos]);
+		strcpy(p->sResult,		pSource->asResult[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sFeeType,		pSource->asFeeType[iCurPos]);
+		strcpy(p->sRoamType,		pSource->asRoamType[iCurPos]);
+		strcpy(p->sServiceType,		pSource->asServiceType[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+		strcpy(p->sCallDuration,	pSource->asCallDuration[iCurPos]);
+		strcpy(p->sTariff1,		pSource->asTariff1[iCurPos]);
+		strcpy(p->sDataFlowup1,		pSource->asDataFlowup1[iCurPos]);
+		strcpy(p->sDataFlowdn1,		pSource->asDataFlowdn1[iCurPos]);
+		strcpy(p->sDuration1,		pSource->asDuration1[iCurPos]);
+		strcpy(p->sTariff2,		pSource->asTariff2[iCurPos]);
+		strcpy(p->sDataFlowup2,		pSource->asDataFlowup2[iCurPos]);
+		strcpy(p->sDataFlowdn2,		pSource->asDataFlowdn2[iCurPos]);
+		strcpy(p->sDuration2,		pSource->asDuration2[iCurPos]);
+		strcpy(p->sTariff3,		pSource->asTariff3[iCurPos]);
+		strcpy(p->sDataFlowup3,		pSource->asDataFlowup3[iCurPos]);
+		strcpy(p->sDataFlowdn3,		pSource->asDataFlowdn3[iCurPos]);
+		strcpy(p->sDuration3,		pSource->asDuration3[iCurPos]);
+		strcpy(p->sTariff4,		pSource->asTariff4[iCurPos]);
+		strcpy(p->sDataFlowup4,		pSource->asDataFlowup4[iCurPos]);
+		strcpy(p->sDataFlowdn4,		pSource->asDataFlowdn4[iCurPos]);
+		strcpy(p->sDuration4,		pSource->asDuration4[iCurPos]);
+		strcpy(p->sTariff5,		pSource->asTariff5[iCurPos]);
+		strcpy(p->sDataFlowup5,		pSource->asDataFlowup5[iCurPos]);
+		strcpy(p->sDataFlowdn5,		pSource->asDataFlowdn5[iCurPos]);
+		strcpy(p->sDuration5,		pSource->asDuration5[iCurPos]);
+		strcpy(p->sTariff6,		pSource->asTariff6[iCurPos]);
+		strcpy(p->sDataFlowup6,		pSource->asDataFlowup6[iCurPos]);
+		strcpy(p->sDataFlowdn6,		pSource->asDataFlowdn6[iCurPos]);
+		strcpy(p->sDuration6,		pSource->asDuration6[iCurPos]);
+		strcpy(p->sCfee,		pSource->asCfee[iCurPos]);
+		strcpy(p->sFee1,		pSource->asFee1[iCurPos]);
+		strcpy(p->sFee2,		pSource->asFee2[iCurPos]);
+		strcpy(p->sFee3,		pSource->asFee3[iCurPos]);
+		strcpy(p->sTotalFee,		pSource->asTotalFee[iCurPos]);
+
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sErrCode,		pSource->asErrCode[iCurPos]);
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sModule,		pSource->asModule[iCurPos]);
+		strcpy(p->sAreaCode,		pSource->asAreaCode[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sUpdateDate,		pSource->asUpdateDate[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sRecordType);
+		AllTrim(p->sNiPdp);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sImsi);
+		AllTrim(p->sSgsn);
+		AllTrim(p->sMsnc);
+		AllTrim(p->sLac);
+		AllTrim(p->sRouteArea);
+		AllTrim(p->sCellID);
+		AllTrim(p->sChargingID);
+		AllTrim(p->sGgsn);
+		AllTrim(p->sApnNi);
+		AllTrim(p->sApnOi);
+		AllTrim(p->sPdpType);
+		AllTrim(p->sServedPdpAddress);
+		AllTrim(p->sSgsnChange);
+		AllTrim(p->sCloseCause);
+		AllTrim(p->sResult);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sVisitAreaCode);
+		AllTrim(p->sUserType);
+		AllTrim(p->sFeeType);
+		AllTrim(p->sRoamType);
+		AllTrim(p->sServiceType);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sCallDuration);
+		AllTrim(p->sTariff1);
+		AllTrim(p->sDataFlowup1);
+		AllTrim(p->sDataFlowdn1);
+		AllTrim(p->sDuration1);
+		AllTrim(p->sTariff2);
+		AllTrim(p->sDataFlowup2);
+		AllTrim(p->sDataFlowdn2);
+		AllTrim(p->sDuration2);
+		AllTrim(p->sTariff3);
+		AllTrim(p->sDataFlowup3);
+		AllTrim(p->sDataFlowdn3);
+		AllTrim(p->sDuration3);
+		AllTrim(p->sTariff4);
+		AllTrim(p->sDataFlowup4);
+		AllTrim(p->sDataFlowdn4);
+		AllTrim(p->sDuration4);
+		AllTrim(p->sTariff5);
+		AllTrim(p->sDataFlowup5);
+		AllTrim(p->sDataFlowdn5);
+		AllTrim(p->sDuration5);
+		AllTrim(p->sTariff6);
+		AllTrim(p->sDataFlowup6);
+		AllTrim(p->sDataFlowdn6);
+		AllTrim(p->sDuration6);
+		AllTrim(p->sCfee);
+		AllTrim(p->sFee1);
+		AllTrim(p->sFee2);
+		AllTrim(p->sFee3);
+		AllTrim(p->sTotalFee);
+
+		AllTrim(p->sErrCode);
+		AllTrim(p->sFileName);
+		AllTrim(p->sModule);
+		AllTrim(p->sAreaCode);
+		AllTrim(p->sState);
+
+		AllTrim(p->sUpdateDate);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从CDMA1X_TICKET中用结构缓冲方式取数据*/
+int EGetCdma1xTicketToStruct(struct Cdma1xTicketStruct *p,
+	struct Cdma1xTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(RECORD_TYPE,' '),\n\
+				nvl(SEQ_NUMBER,' '),\n\
+				nvl(MDN,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(ESN,' '),\n\
+				nvl(IP,' '),\n\
+				nvl(NAI,' '),\n\
+				nvl(USER_TYPE,' '),\n\
+				nvl(NAI_AREA_CODE,' '),\n\
+				nvl(ROAM_TYPE,' '),\n\
+				nvl(IP_TECH_TYPE,' '),\n\
+				nvl(ACCOUNT_SESSION_ID,' '),\n\
+				nvl(CORRELATION_ID,' '),\n\
+				nvl(HAIP,' '),\n\
+				nvl(PDSNIP,' '),\n\
+				nvl(PCFIP,' '),\n\
+				nvl(BSID,' '),\n\
+				nvl(UZID,' '),\n\
+				nvl(SERVICE_OPTION,' '),\n\
+				nvl(COMPULSORY_TUNNEL,' '),\n\
+				nvl(END_RELEASE,' '),\n\
+				nvl(DATA_COUNT_TERMINATION,' '),\n\
+				nvl(DATA_COUNT_ORIGINATION,' '),\n\
+				nvl(BAD_FRAME_COUNT,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(STOP_TIME,' '),\n\
+				to_char(nvl(ACTIVE_TIME,0)),\n\
+				nvl(ACTION_COUNT,' '),\n\
+				nvl(SDB_COUNT_TERMINATION,' '),\n\
+				nvl(SDB_COUNT_ORIGINATION,' '),\n\
+				nvl(SDB_TERMINATIONNUM,' '),\n\
+				nvl(SDB_ORIGINATIONNUM,' '),\n\
+				nvl(PDSN_RECEIVE_NUM,' '),\n\
+				nvl(MIP_RECEIVE_NUM,' '),\n\
+				nvl(MIP_SEND_NUM,' '),\n\
+				nvl(IPQOS,' '),\n\
+				nvl(AIRLINKQOS,' '),\n\
+				nvl(BASE_CHARGE,-1),\n\
+				nvl(FLUX_CHARGE,-1),\n\
+				nvl(OTHER_CHARGE,-1),\n\
+				nvl(HOME_COUNTRY_CODE,' '),\n\
+				nvl(HOME_OPERATOR_CODE,' '),\n\
+				nvl(VISIT_COUNTRY_CODE,' '),\n\
+				nvl(VISIT_OPERATO_CODE,' '),\n\
+				nvl(RATING_RULE_ID,' '),\n\
+				nvl(NOUSED1,' '),\n\
+				nvl(NOUSED2,' '),\n\
+				nvl(NOUSED3,' '),\n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(ERR_CODE,' '),\n\
+				nvl(FILE_NAME,' '),\n\
+				nvl(MODULE,' '),\n\
+				nvl(AREA_CODE,' '),\n\
+				nvl(STATE,'0'),\n\
+				to_char(nvl(UPDATE_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE CDMA1X_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE CDMA1X_TICKETSCR CDMA1X_TICKETCR");
+
+		EXEC SQL DECLARE CDMA1X_TICKETCR CURSOR FOR CDMA1X_TICKETSCR;
+		CheckSqlError("Declare CDMA1X_TICKETCR");
+
+		EXEC SQL OPEN CDMA1X_TICKETCR;
+		CheckSqlError("Open CDMA1X_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE CDMA1X_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH CDMA1X_TICKETCR INTO
+			:pSource->asRecordType,
+			:pSource->asSeqNumber,
+			:pSource->asMdn,
+			:pSource->asMsisdn,
+			:pSource->asEsn,
+			:pSource->asIp,
+			:pSource->asNai,
+			:pSource->asUserType,
+			:pSource->asNaiAreaCode,
+			:pSource->asRoamType,
+			:pSource->asIpTechType,
+			:pSource->asAccountSessionID,
+			:pSource->asCorrelationID,
+			:pSource->asHaip,
+			:pSource->asPdsnip,
+			:pSource->asPcfip,
+			:pSource->asBsid,
+			:pSource->asUzid,
+			:pSource->asServiceOption,
+			:pSource->asCompulsoryTunnel,
+			:pSource->asEndRelease,
+			:pSource->asDataCountTermination,
+			:pSource->asDataCountOrigination,
+			:pSource->asBadFrameCount,
+			:pSource->asStartTime,
+			:pSource->asStopTime,
+			:pSource->asActiveTime,
+			:pSource->asActionCount,
+			:pSource->asSdbCountTermination,
+			:pSource->asSdbCountOrigination,
+			:pSource->asSdbTerminationnum,
+			:pSource->asSdbOriginationnum,
+			:pSource->asPdsnReceiveNum,
+			:pSource->asMipReceiveNum,
+			:pSource->asMipSendNum,
+			:pSource->asIpqos,
+			:pSource->asAirlinkqos,
+			:pSource->aiBaseCharge,
+			:pSource->aiFluxCharge,
+			:pSource->aiOtherCharge,
+			:pSource->asHomeCountryCode,
+			:pSource->asHomeOperatorCode,
+			:pSource->asVisitCountryCode,
+			:pSource->asVisitOperatoCode,
+			:pSource->asRatingRuleID,
+			:pSource->asNoused1,
+			:pSource->asNoused2,
+			:pSource->asNoused3,
+			:pSource->aiTicketTypeID,
+			:pSource->asHomeAreaCode,
+			:pSource->asErrCode,
+			:pSource->asFileName,
+			:pSource->asModule,
+			:pSource->asAreaCode,
+			:pSource->asState,
+			:pSource->asUpdateDate,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch CDMA1X_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE CDMA1X_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=CDMA1X_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sRecordType,			pSource->asRecordType[iCurPos]);
+		strcpy(p->sSeqNumber,			pSource->asSeqNumber[iCurPos]);
+		strcpy(p->sMdn,				pSource->asMdn[iCurPos]);
+		strcpy(p->sMsisdn,			pSource->asMsisdn[iCurPos]);
+		strcpy(p->sEsn,				pSource->asEsn[iCurPos]);
+		strcpy(p->sIp,				pSource->asIp[iCurPos]);
+		strcpy(p->sNai,				pSource->asNai[iCurPos]);
+		strcpy(p->sUserType,			pSource->asUserType[iCurPos]);
+		strcpy(p->sNaiAreaCode,			pSource->asNaiAreaCode[iCurPos]);
+		strcpy(p->sRoamType,			pSource->asRoamType[iCurPos]);
+		strcpy(p->sIpTechType,			pSource->asIpTechType[iCurPos]);
+		strcpy(p->sAccountSessionID,		pSource->asAccountSessionID[iCurPos]);
+		strcpy(p->sCorrelationID,		pSource->asCorrelationID[iCurPos]);
+		strcpy(p->sHaip,			pSource->asHaip[iCurPos]);
+		strcpy(p->sPdsnip,			pSource->asPdsnip[iCurPos]);
+		strcpy(p->sPcfip,			pSource->asPcfip[iCurPos]);
+		strcpy(p->sBsid,			pSource->asBsid[iCurPos]);
+		strcpy(p->sUzid,			pSource->asUzid[iCurPos]);
+		strcpy(p->sServiceOption,		pSource->asServiceOption[iCurPos]);
+		strcpy(p->sCompulsoryTunnel,		pSource->asCompulsoryTunnel[iCurPos]);
+		strcpy(p->sEndRelease,			pSource->asEndRelease[iCurPos]);
+		strcpy(p->sDataCountTermination,	pSource->asDataCountTermination[iCurPos]);
+		strcpy(p->sDataCountOrigination,	pSource->asDataCountOrigination[iCurPos]);
+		strcpy(p->sBadFrameCount,		pSource->asBadFrameCount[iCurPos]);
+		strcpy(p->sStartTime,			pSource->asStartTime[iCurPos]);
+		strcpy(p->sStopTime,			pSource->asStopTime[iCurPos]);
+		strcpy(p->sActiveTime,			pSource->asActiveTime[iCurPos]);
+		strcpy(p->sActionCount,			pSource->asActionCount[iCurPos]);
+		strcpy(p->sSdbCountTermination,		pSource->asSdbCountTermination[iCurPos]);
+		strcpy(p->sSdbCountOrigination,		pSource->asSdbCountOrigination[iCurPos]);
+		strcpy(p->sSdbTerminationnum,		pSource->asSdbTerminationnum[iCurPos]);
+		strcpy(p->sSdbOriginationnum,		pSource->asSdbOriginationnum[iCurPos]);
+		strcpy(p->sPdsnReceiveNum,		pSource->asPdsnReceiveNum[iCurPos]);
+		strcpy(p->sMipReceiveNum,		pSource->asMipReceiveNum[iCurPos]);
+		strcpy(p->sMipSendNum,			pSource->asMipSendNum[iCurPos]);
+		strcpy(p->sIpqos,			pSource->asIpqos[iCurPos]);
+		strcpy(p->sAirlinkqos,			pSource->asAirlinkqos[iCurPos]);
+
+		p->iBaseCharge=				pSource->aiBaseCharge[iCurPos];
+		p->iFluxCharge=				pSource->aiFluxCharge[iCurPos];
+		p->iOtherCharge=			pSource->aiOtherCharge[iCurPos];
+
+		strcpy(p->sHomeCountryCode,		pSource->asHomeCountryCode[iCurPos]);
+		strcpy(p->sHomeOperatorCode,		pSource->asHomeOperatorCode[iCurPos]);
+		strcpy(p->sVisitCountryCode,		pSource->asVisitCountryCode[iCurPos]);
+		strcpy(p->sVisitOperatoCode,		pSource->asVisitOperatoCode[iCurPos]);
+		strcpy(p->sRatingRuleID,		pSource->asRatingRuleID[iCurPos]);
+		strcpy(p->sNoused1,			pSource->asNoused1[iCurPos]);
+		strcpy(p->sNoused2,			pSource->asNoused2[iCurPos]);
+		strcpy(p->sNoused3,			pSource->asNoused3[iCurPos]);
+
+		p->iTicketTypeID=			pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sHomeAreaCode,		pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sErrCode,			pSource->asErrCode[iCurPos]);
+		strcpy(p->sFileName,			pSource->asFileName[iCurPos]);
+		strcpy(p->sModule,			pSource->asModule[iCurPos]);
+		strcpy(p->sAreaCode,			pSource->asAreaCode[iCurPos]);
+		strcpy(p->sState,			pSource->asState[iCurPos]);
+		strcpy(p->sUpdateDate,			pSource->asUpdateDate[iCurPos]);
+		strcpy(p->sDealDate,			pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,			pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,			pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sRecordType);
+		AllTrim(p->sSeqNumber);
+		AllTrim(p->sMdn);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sEsn);
+		AllTrim(p->sIp);
+		AllTrim(p->sNai);
+		AllTrim(p->sUserType);
+		AllTrim(p->sNaiAreaCode);
+		AllTrim(p->sRoamType);
+		AllTrim(p->sIpTechType);
+		AllTrim(p->sAccountSessionID);
+		AllTrim(p->sCorrelationID);
+		AllTrim(p->sHaip);
+		AllTrim(p->sPdsnip);
+		AllTrim(p->sPcfip);
+		AllTrim(p->sBsid);
+		AllTrim(p->sUzid);
+		AllTrim(p->sServiceOption);
+		AllTrim(p->sCompulsoryTunnel);
+		AllTrim(p->sEndRelease);
+		AllTrim(p->sDataCountTermination);
+		AllTrim(p->sDataCountOrigination);
+		AllTrim(p->sBadFrameCount);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sStopTime);
+		AllTrim(p->sActiveTime);
+		AllTrim(p->sActionCount);
+		AllTrim(p->sSdbCountTermination);
+		AllTrim(p->sSdbCountOrigination);
+		AllTrim(p->sSdbTerminationnum);
+		AllTrim(p->sSdbOriginationnum);
+		AllTrim(p->sPdsnReceiveNum);
+		AllTrim(p->sMipReceiveNum);
+		AllTrim(p->sMipSendNum);
+		AllTrim(p->sIpqos);
+		AllTrim(p->sAirlinkqos);
+		AllTrim(p->sHomeCountryCode);
+		AllTrim(p->sHomeOperatorCode);
+		AllTrim(p->sVisitCountryCode);
+		AllTrim(p->sVisitOperatoCode);
+		AllTrim(p->sRatingRuleID);
+		AllTrim(p->sNoused1);
+		AllTrim(p->sNoused2);
+		AllTrim(p->sNoused3);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sErrCode);
+		AllTrim(p->sFileName);
+		AllTrim(p->sModule);
+		AllTrim(p->sAreaCode);
+		AllTrim(p->sState);
+		AllTrim(p->sUpdateDate);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从INFO_ACCT中用结构缓冲方式取数据*/
+int EGetInfoAcctToStruct(struct InfoAcctStruct *p,
+	struct InfoAcctStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				nvl(PROVINCE_ID,' '),\n\
+				nvl(AREA_CODE,' '),\n\
+				nvl(TOTAL_CNT,0),\n\
+				nvl(TOTAL_FEE,0),\n\
+				nvl(VALID_CNT,0),\n\
+				nvl(VALID_FEE,0),\n\
+				nvl(INVALID_CNT,0),\n\
+				nvl(INVALID_FEE,' '),\n\
+				nvl(BILLING_CYCLE_ID,' '),\n\
+				nvl(SP_CODE,' '),\n\
+				nvl(FEE,0),\n\
+				nvl(OWE_FEE,0),\n\
+				nvl(STATE,' '),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE INFO_ACCTSCR FROM :statement;
+		CheckSqlError(" PREPARE INFO_ACCTSCR INFO_ACCTCR");
+
+		EXEC SQL DECLARE INFO_ACCTCR CURSOR FOR INFO_ACCTSCR;
+		CheckSqlError("Declare INFO_ACCTCR");
+
+		EXEC SQL OPEN INFO_ACCTCR;
+		CheckSqlError("Open INFO_ACCTCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE INFO_ACCTCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH INFO_ACCTCR INTO
+			:pSource->aiTicketTypeID,
+			:pSource->asProvinceID,
+			:pSource->asAreaCode,
+			:pSource->aiTotalCnt,
+			:pSource->aiTotalFee,
+			:pSource->aiValidCnt,
+			:pSource->aiValidFee,
+			:pSource->aiInvalidCnt,
+			:pSource->asInvalidFee,
+			:pSource->asBillingCycleID,
+			:pSource->asSpCode,
+			:pSource->aiFee,
+			:pSource->aiOweFee,
+			:pSource->asState,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch INFO_ACCTCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE INFO_ACCTCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=INFO_ACCT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sProvinceID,		pSource->asProvinceID[iCurPos]);
+		strcpy(p->sAreaCode,		pSource->asAreaCode[iCurPos]);
+
+		p->iTotalCnt=			pSource->aiTotalCnt[iCurPos];
+		p->iTotalFee=			pSource->aiTotalFee[iCurPos];
+		p->iValidCnt=			pSource->aiValidCnt[iCurPos];
+		p->iValidFee=			pSource->aiValidFee[iCurPos];
+		p->iInvalidCnt=			pSource->aiInvalidCnt[iCurPos];
+
+		strcpy(p->sInvalidFee,		pSource->asInvalidFee[iCurPos]);
+		strcpy(p->sBillingCycleID,	pSource->asBillingCycleID[iCurPos]);
+		strcpy(p->sSpCode,		pSource->asSpCode[iCurPos]);
+
+		p->iFee=			pSource->aiFee[iCurPos];
+		p->iOweFee=			pSource->aiOweFee[iCurPos];
+
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sProvinceID);
+		AllTrim(p->sAreaCode);
+		AllTrim(p->sInvalidFee);
+		AllTrim(p->sBillingCycleID);
+		AllTrim(p->sSpCode);
+		AllTrim(p->sState);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从ICC_TICKET中用结构缓冲方式取数据*/
+int EGetIccTicketToStruct(struct IccTicketStruct *p,
+	struct IccTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				nvl(RECORD_TYPE,' '),\n\
+				nvl(PROVINCE_CODE,' '),\n\
+				nvl(CALL_AREA_CODE,' '),\n\
+				nvl(CARD_ID,' '),\n\
+				nvl(CARD_PROVINCE_CODE,' '),\n\
+				nvl(CARD_AREA_CODE,' '),\n\
+				nvl(CARD_AREA_ID,' '),\n\
+				nvl(CALLING_NBR,' '),\n\
+				nvl(CALLED_NBR,' '),\n\
+				nvl(BILLING_CYCLE_ID,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(DURATION,0),\n\
+				nvl(TOTAL_FEE,0),\n\
+				nvl(SERVICE_TYPE,' '),\n\
+				nvl(DISTANCE_TYPE,' '),\n\
+				nvl(STATE,' '),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE ICC_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE ICC_TICKETSCR ICC_TICKETCR");
+
+		EXEC SQL DECLARE ICC_TICKETCR CURSOR FOR ICC_TICKETSCR;
+		CheckSqlError("Declare ICC_TICKETCR");
+
+		EXEC SQL OPEN ICC_TICKETCR;
+		CheckSqlError("Open ICC_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE ICC_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH ICC_TICKETCR INTO
+			:pSource->aiTicketTypeID,
+			:pSource->asRecordType,
+			:pSource->asProvinceCode,
+			:pSource->asCallAreaCode,
+			:pSource->asCardID,
+			:pSource->asCardProvinceCode,
+			:pSource->asCardAreaCode,
+			:pSource->asCardAreaID,
+			:pSource->asCallingNbr,
+			:pSource->asCalledNbr,
+			:pSource->asBillingCycleID,
+			:pSource->asStartTime,
+			:pSource->aiDuration,
+			:pSource->aiTotalFee,
+			:pSource->asServiceType,
+			:pSource->asDistanceType,
+			:pSource->asState,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch ICC_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE ICC_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=ICC_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sRecordType,		pSource->asRecordType[iCurPos]);
+		strcpy(p->sProvinceCode,	pSource->asProvinceCode[iCurPos]);
+		strcpy(p->sCallAreaCode,	pSource->asCallAreaCode[iCurPos]);
+		strcpy(p->sCardID,		pSource->asCardID[iCurPos]);
+		strcpy(p->sCardProvinceCode,	pSource->asCardProvinceCode[iCurPos]);
+		strcpy(p->sCardAreaCode,	pSource->asCardAreaCode[iCurPos]);
+		strcpy(p->sCardAreaID,		pSource->asCardAreaID[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sCalledNbr,		pSource->asCalledNbr[iCurPos]);
+		strcpy(p->sBillingCycleID,	pSource->asBillingCycleID[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iTotalFee=			pSource->aiTotalFee[iCurPos];
+
+		strcpy(p->sServiceType,		pSource->asServiceType[iCurPos]);
+		strcpy(p->sDistanceType,	pSource->asDistanceType[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sRecordType);
+		AllTrim(p->sProvinceCode);
+		AllTrim(p->sCallAreaCode);
+		AllTrim(p->sCardID);
+		AllTrim(p->sCardProvinceCode);
+		AllTrim(p->sCardAreaCode);
+		AllTrim(p->sCardAreaID);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sCalledNbr);
+		AllTrim(p->sBillingCycleID);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sServiceType);
+		AllTrim(p->sDistanceType);
+		AllTrim(p->sState);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从ZNW_TICKET中用结构缓冲方式取数据*/
+int EGetZnwTicketToStruct(struct ZnwTicketStruct *p,
+	struct ZnwTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				nvl(RECORD_TYPE,' '),\n\
+				nvl(STREAM_NUMBER,' '),\n\
+				nvl(SERVICE_KEY,' '),\n\
+				nvl(BILLING_MODE,' '),\n\
+				nvl(CHARGE_RECORD_ID,' '),\n\
+				nvl(CALLING_NBR,' '),\n\
+				nvl(CALLED_NBR,' '),\n\
+				nvl(TRANSLATED_NBR,' '),\n\
+				nvl(LOCATION_NBR,' '),\n\
+				nvl(BILLING_FLAG,' '),\n\
+				nvl(BILLING_NBR,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(STOP_TIME,' '),\n\
+				nvl(DURATION,0),\n\
+				nvl(TOTAL_FEE,0),\n\
+				nvl(BEAR_CAPABILITY,' '),\n\
+				nvl(TARIFF_CLASS,' '),\n\
+				nvl(BILL_TYPE,' '),\n\
+				nvl(USER_ID,' '),\n\
+				nvl(SERVICE_NBR,' '),\n\
+				nvl(COUNT,0),\n\
+				nvl(BASE_FEE,0),\n\
+				nvl(BOUNTY_FEE,0),\n\
+				nvl(ADD_FEE,0),\n\
+				nvl(TRANS_PARAM,' '),\n\
+				nvl(CALLPARTTOBECHARGER,' '),\n\
+				nvl(SCP_ID,' '),\n\
+				nvl(CAUSE_OF_CALLEND,' '),\n\
+				nvl(SERVICE_MODULATOR,' '),\n\
+				nvl(SERVICE_TYPE,' '),\n\
+				nvl(CARD_ID,' '),\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(CALLED_CODE,' '),\n\
+				nvl(BILLING_AREA_CODE,' '),\n\
+				nvl(CARD_AREA_CODE,' '),\n\
+				nvl(DISTANCE_TYPE,' '),\n\
+				nvl(ORI_FILE_NAME,' '),\n\
+				nvl(STATE,' '),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE ZNW_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE ZNW_TICKETSCR ZNW_TICKETCR");
+
+		EXEC SQL DECLARE ZNW_TICKETCR CURSOR FOR ZNW_TICKETSCR;
+		CheckSqlError("Declare ZNW_TICKETCR");
+
+		EXEC SQL OPEN ZNW_TICKETCR;
+		CheckSqlError("Open ZNW_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE ZNW_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH ZNW_TICKETCR INTO
+			:pSource->aiTicketTypeID,
+			:pSource->asRecordType,
+			:pSource->asStreamNumber,
+			:pSource->asServiceKey,
+			:pSource->asBillingMode,
+			:pSource->asChargeRecordID,
+			:pSource->asCallingNbr,
+			:pSource->asCalledNbr,
+			:pSource->asTranslatedNbr,
+			:pSource->asLocationNbr,
+			:pSource->asBillingFlag,
+			:pSource->asBillingNbr,
+			:pSource->asStartTime,
+			:pSource->asStopTime,
+			:pSource->aiDuration,
+			:pSource->aiTotalFee,
+			:pSource->asBearCapability,
+			:pSource->asTariffClass,
+			:pSource->asBillType,
+			:pSource->asUserID,
+			:pSource->asServiceNbr,
+			:pSource->aiCount,
+			:pSource->aiBaseFee,
+			:pSource->aiBountyFee,
+			:pSource->aiAddFee,
+			:pSource->asTransParam,
+			:pSource->asCallparttobecharger,
+			:pSource->asScpID,
+			:pSource->asCauseOfCallend,
+			:pSource->asServiceModulator,
+			:pSource->asServiceType,
+			:pSource->asCardID,
+			:pSource->asHomeAreaCode,
+			:pSource->asCalledCode,
+			:pSource->asBillingAreaCode,
+			:pSource->asCardAreaCode,
+			:pSource->asDistanceType,
+			:pSource->asOriFileName,
+			:pSource->asState,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch ZNW_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE ZNW_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=ZNW_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sRecordType,		pSource->asRecordType[iCurPos]);
+		strcpy(p->sStreamNumber,	pSource->asStreamNumber[iCurPos]);
+		strcpy(p->sServiceKey,		pSource->asServiceKey[iCurPos]);
+		strcpy(p->sBillingMode,		pSource->asBillingMode[iCurPos]);
+		strcpy(p->sChargeRecordID,	pSource->asChargeRecordID[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sCalledNbr,		pSource->asCalledNbr[iCurPos]);
+		strcpy(p->sTranslatedNbr,	pSource->asTranslatedNbr[iCurPos]);
+		strcpy(p->sLocationNbr,		pSource->asLocationNbr[iCurPos]);
+		strcpy(p->sBillingFlag,		pSource->asBillingFlag[iCurPos]);
+		strcpy(p->sBillingNbr,		pSource->asBillingNbr[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+		strcpy(p->sStopTime,		pSource->asStopTime[iCurPos]);
+
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iTotalFee=			pSource->aiTotalFee[iCurPos];
+
+		strcpy(p->sBearCapability,	pSource->asBearCapability[iCurPos]);
+		strcpy(p->sTariffClass,		pSource->asTariffClass[iCurPos]);
+		strcpy(p->sBillType,		pSource->asBillType[iCurPos]);
+		strcpy(p->sUserID,		pSource->asUserID[iCurPos]);
+		strcpy(p->sServiceNbr,		pSource->asServiceNbr[iCurPos]);
+
+		p->iCount=			pSource->aiCount[iCurPos];
+		p->iBaseFee=			pSource->aiBaseFee[iCurPos];
+		p->iBountyFee=			pSource->aiBountyFee[iCurPos];
+		p->iAddFee=			pSource->aiAddFee[iCurPos];
+
+		strcpy(p->sTransParam,		pSource->asTransParam[iCurPos]);
+		strcpy(p->sCallparttobecharger,	pSource->asCallparttobecharger[iCurPos]);
+		strcpy(p->sScpID,		pSource->asScpID[iCurPos]);
+		strcpy(p->sCauseOfCallend,	pSource->asCauseOfCallend[iCurPos]);
+		strcpy(p->sServiceModulator,	pSource->asServiceModulator[iCurPos]);
+		strcpy(p->sServiceType,		pSource->asServiceType[iCurPos]);
+		strcpy(p->sCardID,		pSource->asCardID[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sCalledCode,		pSource->asCalledCode[iCurPos]);
+		strcpy(p->sBillingAreaCode,	pSource->asBillingAreaCode[iCurPos]);
+		strcpy(p->sCardAreaCode,	pSource->asCardAreaCode[iCurPos]);
+		strcpy(p->sDistanceType,	pSource->asDistanceType[iCurPos]);
+		strcpy(p->sOriFileName,		pSource->asOriFileName[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sRecordType);
+		AllTrim(p->sStreamNumber);
+		AllTrim(p->sServiceKey);
+		AllTrim(p->sBillingMode);
+		AllTrim(p->sChargeRecordID);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sCalledNbr);
+		AllTrim(p->sTranslatedNbr);
+		AllTrim(p->sLocationNbr);
+		AllTrim(p->sBillingFlag);
+		AllTrim(p->sBillingNbr);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sStopTime);
+		AllTrim(p->sBearCapability);
+		AllTrim(p->sTariffClass);
+		AllTrim(p->sBillType);
+		AllTrim(p->sUserID);
+		AllTrim(p->sServiceNbr);
+		AllTrim(p->sTransParam);
+		AllTrim(p->sCallparttobecharger);
+		AllTrim(p->sScpID);
+		AllTrim(p->sCauseOfCallend);
+		AllTrim(p->sServiceModulator);
+		AllTrim(p->sServiceType);
+		AllTrim(p->sCardID);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sCalledCode);
+		AllTrim(p->sBillingAreaCode);
+		AllTrim(p->sCardAreaCode);
+		AllTrim(p->sDistanceType);
+		AllTrim(p->sOriFileName);
+		AllTrim(p->sState);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SMG_TICKET中用结构缓冲方式取数据*/
+int EGetSmgTicketToStruct(struct SmgTicketStruct *p,
+	struct SmgTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(MESSAGE_ID,' '),\n\
+				nvl(SMS_TYPE,' '),\n\
+				nvl(SUB_TYPE,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(SP_CODE,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(SP_SERVICE_CODE,' '),\n\
+				nvl(BILL_TYPE,' '),\n\
+				nvl(INFO_FEE,' '),\n\
+				nvl(PRIORITY,' '),\n\
+				nvl(MSG_LEN,' '),\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(SMG,' '),\n\
+				nvl(TSMG,' '),\n\
+				nvl(SMC,' '),\n\
+				nvl(RECV_DATE_TIME,' '),\n\
+				nvl(DONE_DATE_TIME,' '),\n\
+				nvl(MSG_ID,' '),\n\
+				nvl(OPP_MSG_ID,' '),\n\
+				nvl(CALLING_NBR,' '),\n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				nvl(STATE,' '),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMG_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE SMG_TICKETSCR SMG_TICKETCR");
+
+		EXEC SQL DECLARE SMG_TICKETCR CURSOR FOR SMG_TICKETSCR;
+		CheckSqlError("Declare SMG_TICKETCR");
+
+		EXEC SQL OPEN SMG_TICKETCR;
+		CheckSqlError("Open SMG_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMG_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMG_TICKETCR INTO
+			:pSource->asMessageID,
+			:pSource->asSmsType,
+			:pSource->asSubType,
+			:pSource->asMsisdn,
+			:pSource->asSpCode,
+			:pSource->asOtherParty,
+			:pSource->asSpServiceCode,
+			:pSource->asBillType,
+			:pSource->asInfoFee,
+			:pSource->asPriority,
+			:pSource->asMsgLen,
+			:pSource->asHomeAreaCode,
+			:pSource->asSmg,
+			:pSource->asTsmg,
+			:pSource->asSmc,
+			:pSource->asRecvDateTime,
+			:pSource->asDoneDateTime,
+			:pSource->asMsgID,
+			:pSource->asOppMsgID,
+			:pSource->asCallingNbr,
+			:pSource->aiTicketTypeID,
+			:pSource->asState,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch SMG_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMG_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMG_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sMessageID,		pSource->asMessageID[iCurPos]);
+		strcpy(p->sSmsType,		pSource->asSmsType[iCurPos]);
+		strcpy(p->sSubType,		pSource->asSubType[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sSpCode,		pSource->asSpCode[iCurPos]);
+		strcpy(p->sOtherParty,		pSource->asOtherParty[iCurPos]);
+		strcpy(p->sSpServiceCode,	pSource->asSpServiceCode[iCurPos]);
+		strcpy(p->sBillType,		pSource->asBillType[iCurPos]);
+		strcpy(p->sInfoFee,		pSource->asInfoFee[iCurPos]);
+		strcpy(p->sPriority,		pSource->asPriority[iCurPos]);
+		strcpy(p->sMsgLen,		pSource->asMsgLen[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sSmg,			pSource->asSmg[iCurPos]);
+		strcpy(p->sTsmg,		pSource->asTsmg[iCurPos]);
+		strcpy(p->sSmc,			pSource->asSmc[iCurPos]);
+		strcpy(p->sRecvDateTime,	pSource->asRecvDateTime[iCurPos]);
+		strcpy(p->sDoneDateTime,	pSource->asDoneDateTime[iCurPos]);
+		strcpy(p->sMsgID,		pSource->asMsgID[iCurPos]);
+		strcpy(p->sOppMsgID,		pSource->asOppMsgID[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sMessageID);
+		AllTrim(p->sSmsType);
+		AllTrim(p->sSubType);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sSpCode);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sSpServiceCode);
+		AllTrim(p->sBillType);
+		AllTrim(p->sInfoFee);
+		AllTrim(p->sPriority);
+		AllTrim(p->sMsgLen);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sSmg);
+		AllTrim(p->sTsmg);
+		AllTrim(p->sSmc);
+		AllTrim(p->sRecvDateTime);
+		AllTrim(p->sDoneDateTime);
+		AllTrim(p->sMsgID);
+		AllTrim(p->sOppMsgID);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sState);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SMSUP_INTF_TICKET中用结构缓冲方式取数据*/
+int EGetSmsupIntfTicketToStruct(struct SmsupIntfTicketStruct *p,
+	struct SmsupIntfTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(RECORD_TYPE,' '),\n\
+				nvl(MSG_TYPE,' '),\n\
+				nvl(SP_PROV_CODE,0),\n\
+				nvl(SMG,-1),\n\
+				nvl(SP_CODE,0),\n\
+				nvl(FW_SMG,0),\n\
+				nvl(FW_SMG_PROV,0),\n\
+				nvl(MIN_START_TIME,' '),\n\
+				nvl(MAX_START_TIME,' '),\n\
+				nvl(MO_CNT1,0),\n\
+				nvl(MO_CNT2,0),\n\
+				nvl(MF_CNT1,0),\n\
+				nvl(MF_CNT2,0),\n\
+				to_char(nvl(FEE1,0)),\n\
+				to_char(nvl(FEE2,0)),\n\
+				nvl(HOME_PROV_CODE,0),\n\
+				nvl(ROAM_FEE1,0),\n\
+				nvl(ROAM_FEE2,0),\n\
+				nvl(INFO_FEE1,0),\n\
+				nvl(INFO_FEE2,0),\n\
+				nvl(ROAM_NFEE1,0),\n\
+				nvl(ROAM_NFEE2,0),\n\
+				nvl(RESERVE1,' '),\n\
+				nvl(STATE,' '),\n\
+				to_char(nvl(UPDATE_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMSUP_INTF_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE SMSUP_INTF_TICKETSCR SMSUP_INTF_TICKETCR");
+
+		EXEC SQL DECLARE SMSUP_INTF_TICKETCR CURSOR FOR SMSUP_INTF_TICKETSCR;
+		CheckSqlError("Declare SMSUP_INTF_TICKETCR");
+
+		EXEC SQL OPEN SMSUP_INTF_TICKETCR;
+		CheckSqlError("Open SMSUP_INTF_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMSUP_INTF_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMSUP_INTF_TICKETCR INTO
+			:pSource->asRecordType,
+			:pSource->asMsgType,
+			:pSource->aiSpProvCode,
+			:pSource->aiSmg,
+			:pSource->aiSpCode,
+			:pSource->aiFwSmg,
+			:pSource->aiFwSmgProv,
+			:pSource->asMinStartTime,
+			:pSource->asMaxStartTime,
+			:pSource->asMoCnt1,
+			:pSource->asMoCnt2,
+			:pSource->asMfCnt1,
+			:pSource->asMfCnt2,
+			:pSource->asFee1,
+			:pSource->asFee2,
+			:pSource->aiHomeProvCode,
+			:pSource->asRoamFee1,
+			:pSource->asRoamFee2,
+			:pSource->asInfoFee1,
+			:pSource->asInfoFee2,
+			:pSource->asRoamNfee1,
+			:pSource->asRoamNfee2,
+			:pSource->asReserve1,
+			:pSource->asState,
+			:pSource->asUpdateDate,
+			:pSource->asDealDate,
+			:pSource->asSourceID;
+		CheckSqlError("Fetch SMSUP_INTF_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMSUP_INTF_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMSUP_INTF_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sRecordType,		pSource->asRecordType[iCurPos]);
+		strcpy(p->sMsgType,		pSource->asMsgType[iCurPos]);
+
+		p->iSpProvCode=			pSource->aiSpProvCode[iCurPos];
+		p->iSmg=			pSource->aiSmg[iCurPos];
+		p->iSpCode=			pSource->aiSpCode[iCurPos];
+		p->iFwSmg=			pSource->aiFwSmg[iCurPos];
+		p->iFwSmgProv=			pSource->aiFwSmgProv[iCurPos];
+
+		strcpy(p->sMinStartTime,	pSource->asMinStartTime[iCurPos]);
+		strcpy(p->sMaxStartTime,	pSource->asMaxStartTime[iCurPos]);
+		strcpy(p->sMoCnt1,		pSource->asMoCnt1[iCurPos]);
+		strcpy(p->sMoCnt2,		pSource->asMoCnt2[iCurPos]);
+		strcpy(p->sMfCnt1,		pSource->asMfCnt1[iCurPos]);
+		strcpy(p->sMfCnt2,		pSource->asMfCnt2[iCurPos]);
+		strcpy(p->sFee1,		pSource->asFee1[iCurPos]);
+		strcpy(p->sFee2,		pSource->asFee2[iCurPos]);
+
+		p->iHomeProvCode=		pSource->aiHomeProvCode[iCurPos];
+
+		strcpy(p->sRoamFee1,		pSource->asRoamFee1[iCurPos]);
+		strcpy(p->sRoamFee2,		pSource->asRoamFee2[iCurPos]);
+		strcpy(p->sInfoFee1,		pSource->asInfoFee1[iCurPos]);
+		strcpy(p->sInfoFee2,		pSource->asInfoFee2[iCurPos]);
+		strcpy(p->sRoamNfee1,		pSource->asRoamNfee1[iCurPos]);
+		strcpy(p->sRoamNfee2,		pSource->asRoamNfee2[iCurPos]);
+		strcpy(p->sReserve1,		pSource->asReserve1[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sUpdateDate,		pSource->asUpdateDate[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+
+		AllTrim(p->sRecordType);
+		AllTrim(p->sMsgType);
+		AllTrim(p->sMinStartTime);
+		AllTrim(p->sMaxStartTime);
+		AllTrim(p->sMoCnt1);
+		AllTrim(p->sMoCnt2);
+		AllTrim(p->sMfCnt1);
+		AllTrim(p->sMfCnt2);
+		AllTrim(p->sFee1);
+		AllTrim(p->sFee2);
+		AllTrim(p->sRoamFee1);
+		AllTrim(p->sRoamFee2);
+		AllTrim(p->sInfoFee1);
+		AllTrim(p->sInfoFee2);
+		AllTrim(p->sRoamNfee1);
+		AllTrim(p->sRoamNfee2);
+		AllTrim(p->sReserve1);
+		AllTrim(p->sState);
+		AllTrim(p->sUpdateDate);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SMS_TICKET中用结构缓冲方式取数据*/
+int EGetSmsTicketToStruct(struct SmsTicketStruct *p,
+	struct SmsTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(TICKET_TYPE_ID,-1),\n\
+				nvl(CALL_TYPE,'07'),\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(CALLED_CODE,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(MSG_LEN,-1),\n\
+				nvl(MSG_ID,' '),\n\
+				nvl(SMSC,' '),\n\
+				nvl(SMG,' '),\n\
+				nvl(TSMG,' '),\n\
+				nvl(USER_TYPE,' '),\n\
+				nvl(CALLED_TYPE,' '),\n\
+				nvl(SP_ACC_NBR,' '),\n\
+				nvl(SP_SERVICE_CODE,' '),\n\
+				nvl(SP_CODE,' '),\n\
+				nvl(BASE_FEE,-1),\n\
+				nvl(INFO_FEE,-1),\n\
+				nvl(RENT_FEE,-1),\n\
+				nvl(OTHER_FEE,-1),\n\
+				nvl(IN_FEE,-1),\n\
+				nvl(OUT_FEE,-1),\n\
+				nvl(ORI_CALL_TYPE,'00'),\n\
+				nvl(RESERVE,' '),\n\
+				nvl(SP_PROV_CODE,' '),\n\
+				nvl(HOME_PROV_CODE,' '),\n\
+				nvl(SCP_FLAG,' '),\n\
+				nvl(CALLING_TYPE_ID,0),\n\
+				nvl(BILL_TYPE,' '),\n\
+				nvl(ERR_CODE,' '),\n\
+				nvl(FILE_NAME,' '),\n\
+				nvl(MODULE,' '),\n\
+				nvl(AREA_CODE,' '),\n\
+				nvl(STATE,' '),\n\
+				to_char(nvl(UPDATE_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMS_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE SMS_TICKETSCR SMS_TICKETCR");
+
+		EXEC SQL DECLARE SMS_TICKETCR CURSOR FOR SMS_TICKETSCR;
+		CheckSqlError("Declare SMS_TICKETCR");
+
+		EXEC SQL OPEN SMS_TICKETCR;
+		CheckSqlError("Open SMS_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMS_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMS_TICKETCR INTO
+			:pSource->aiTicketTypeID,
+			:pSource->asCallType,
+			:pSource->asHomeAreaCode,
+			:pSource->asMsisdn,
+			:pSource->asCalledCode,
+			:pSource->asOtherParty,
+			:pSource->asStartTime,
+			:pSource->aiMsgLen,
+			:pSource->asMsgID,
+			:pSource->asSmsc,
+			:pSource->asSmg,
+			:pSource->asTsmg,
+			:pSource->asUserType,
+			:pSource->asCalledType,
+			:pSource->asSpAccNbr,
+			:pSource->asSpServiceCode,
+			:pSource->asSpCode,
+			:pSource->aiBaseFee,
+			:pSource->aiInfoFee,
+			:pSource->aiRentFee,
+			:pSource->aiOtherFee,
+			:pSource->aiInFee,
+			:pSource->aiOutFee,
+			:pSource->asOriCallType,
+			:pSource->asReserve,
+			:pSource->asSpProvCode,
+			:pSource->asHomeProvCode,
+			:pSource->asScpFlag,
+			:pSource->aiCallingTypeID,
+			:pSource->asBillType,
+			:pSource->asErrCode,
+			:pSource->asFileName,
+			:pSource->asModule,
+			:pSource->asAreaCode,
+			:pSource->asState,
+			:pSource->asUpdateDate,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch SMS_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMS_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMS_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sCalledCode,		pSource->asCalledCode[iCurPos]);
+		strcpy(p->sOtherParty,		pSource->asOtherParty[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+
+		p->iMsgLen=			pSource->aiMsgLen[iCurPos];
+
+		strcpy(p->sMsgID,		pSource->asMsgID[iCurPos]);
+		strcpy(p->sSmsc,		pSource->asSmsc[iCurPos]);
+		strcpy(p->sSmg,			pSource->asSmg[iCurPos]);
+		strcpy(p->sTsmg,		pSource->asTsmg[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sCalledType,		pSource->asCalledType[iCurPos]);
+		strcpy(p->sSpAccNbr,		pSource->asSpAccNbr[iCurPos]);
+		strcpy(p->sSpServiceCode,	pSource->asSpServiceCode[iCurPos]);
+		strcpy(p->sSpCode,		pSource->asSpCode[iCurPos]);
+
+		p->iBaseFee=			pSource->aiBaseFee[iCurPos];
+		p->iInfoFee=			pSource->aiInfoFee[iCurPos];
+		p->iRentFee=			pSource->aiRentFee[iCurPos];
+		p->iOtherFee=			pSource->aiOtherFee[iCurPos];
+		p->iInFee=			pSource->aiInFee[iCurPos];
+		p->iOutFee=			pSource->aiOutFee[iCurPos];
+
+		strcpy(p->sOriCallType,		pSource->asOriCallType[iCurPos]);
+		strcpy(p->sReserve,		pSource->asReserve[iCurPos]);
+
+		strcpy(p->sSpProvCode,		pSource->asSpProvCode[iCurPos]);
+		strcpy(p->sHomeProvCode,	pSource->asHomeProvCode[iCurPos]);
+		strcpy(p->sScpFlag,		pSource->asScpFlag[iCurPos]);
+		p->iCallingTypeID=		pSource->aiCallingTypeID[iCurPos];
+		strcpy(p->sBillType,		pSource->asBillType[iCurPos]);
+
+
+		strcpy(p->sErrCode,		pSource->asErrCode[iCurPos]);
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sModule,		pSource->asModule[iCurPos]);
+		strcpy(p->sAreaCode,		pSource->asAreaCode[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sUpdateDate,		pSource->asUpdateDate[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sCallType);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sCalledCode);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sMsgID);
+		AllTrim(p->sSmsc);
+		AllTrim(p->sSmg);
+		AllTrim(p->sTsmg);
+		AllTrim(p->sUserType);
+		AllTrim(p->sCalledType);
+		AllTrim(p->sSpAccNbr);
+		AllTrim(p->sSpServiceCode);
+		AllTrim(p->sSpCode);
+		AllTrim(p->sOriCallType);
+		AllTrim(p->sReserve);
+
+		AllTrim(p->sSpProvCode);
+		AllTrim(p->sHomeProvCode);
+		AllTrim(p->sScpFlag);
+		AllTrim(p->sBillType);
+
+		AllTrim(p->sErrCode);
+		AllTrim(p->sFileName);
+		AllTrim(p->sModule);
+		AllTrim(p->sAreaCode);
+		AllTrim(p->sState);
+		AllTrim(p->sUpdateDate);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从NSMS_TICKET中用结构缓冲方式取数据*/
+int EGetNsmsTicketToStruct(struct NsmsTicketStruct *p,
+	struct NsmsTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(TICKET_TYPE_ID,-1),\n\
+				nvl(CALL_TYPE,'-1'),\n\
+				nvl(HOME_AREA_CODE,'-1'),\n\
+				nvl(MSISDN,'-1'),\n\
+				nvl(CALLED_CODE,'-1'),\n\
+				nvl(OTHER_PARTY,'-1'),\n\
+				nvl(START_TIME,'-1'),\n\
+				nvl(MSG_LEN,-1),\n\
+				nvl(MSG_ID,'-1'),\n\
+				nvl(OPP_MSG_ID,'-1'),\n\
+				nvl(SUB_TYPE,'-1'),\n\
+				nvl(SMSC,'-1'),\n\
+				nvl(SMG,'-1'),\n\
+				nvl(TSMG,'-1'),\n\
+				nvl(USER_TYPE,'-1'),\n\
+				nvl(CALLED_TYPE,'-1'),\n\
+				nvl(SP_ACC_NBR,'-1'),\n\
+				nvl(SP_SERVICE_CODE,'-1'),\n\
+				nvl(SP_CODE,'-1'),\n\
+				nvl(BASE_FEE,-1),\n\
+				nvl(INFO_FEE,-1),\n\
+				nvl(RENT_FEE,-1),\n\
+				nvl(OTHER_FEE,-1),\n\
+				nvl(IN_FEE,-1),\n\
+				nvl(OUT_FEE,-1),\n\
+				nvl(ORI_CALL_TYPE,'-1'),\n\
+				nvl(RESERVE,'-1'),\n\
+				nvl(SP_PROV_CODE,'-1'),\n\
+				nvl(HOME_PROV_CODE,'-1'),\n\
+				nvl(SCP_FLAG,'-1'),\n\
+				nvl(CALLING_TYPE_ID,-1),\n\
+				nvl(BILL_TYPE,'-1'),\n\
+				nvl(ERR_CODE,'-1'),\n\
+				nvl(FILE_NAME,'-1'),\n\
+				nvl(MODULE,'-1'),\n\
+				nvl(AREA_CODE,'-1'),\n\
+				nvl(STATE,'-1'),\n\
+				to_char(nvl(UPDATE_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,'-1'),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE NSMS_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE NSMS_TICKETSCR NSMS_TICKETCR");
+
+		EXEC SQL DECLARE NSMS_TICKETCR CURSOR FOR NSMS_TICKETSCR;
+		CheckSqlError("Declare NSMS_TICKETCR");
+
+		EXEC SQL OPEN NSMS_TICKETCR;
+		CheckSqlError("Open NSMS_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE NSMS_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH NSMS_TICKETCR INTO
+			:pSource->aiTicketTypeID,
+			:pSource->asCallType,
+			:pSource->asHomeAreaCode,
+			:pSource->asMsisdn,
+			:pSource->asCalledCode,
+			:pSource->asOtherParty,
+			:pSource->asStartTime,
+			:pSource->aiMsgLen,
+			:pSource->asMsgID,
+			:pSource->asOppMsgID,
+			:pSource->asSubType,
+			:pSource->asSmsc,
+			:pSource->asSmg,
+			:pSource->asTsmg,
+			:pSource->asUserType,
+			:pSource->asCalledType,
+			:pSource->asSpAccNbr,
+			:pSource->asSpServiceCode,
+			:pSource->asSpCode,
+			:pSource->aiBaseFee,
+			:pSource->aiInfoFee,
+			:pSource->aiRentFee,
+			:pSource->aiOtherFee,
+			:pSource->aiInFee,
+			:pSource->aiOutFee,
+			:pSource->asOriCallType,
+			:pSource->asReserve,
+			:pSource->asSpProvCode,
+			:pSource->asHomeProvCode,
+			:pSource->asScpFlag,
+			:pSource->aiCallingTypeID,
+			:pSource->asBillType,
+			:pSource->asErrCode,
+			:pSource->asFileName,
+			:pSource->asModule,
+			:pSource->asAreaCode,
+			:pSource->asState,
+			:pSource->asUpdateDate,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch NSMS_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE NSMS_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=NSMS_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sCalledCode,		pSource->asCalledCode[iCurPos]);
+		strcpy(p->sOtherParty,		pSource->asOtherParty[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+
+		p->iMsgLen=			pSource->aiMsgLen[iCurPos];
+
+		strcpy(p->sMsgID,		pSource->asMsgID[iCurPos]);
+		strcpy(p->sOppMsgID,		pSource->asOppMsgID[iCurPos]);
+		strcpy(p->sSubType,		pSource->asSubType[iCurPos]);
+		strcpy(p->sSmsc,		pSource->asSmsc[iCurPos]);
+		strcpy(p->sSmg,			pSource->asSmg[iCurPos]);
+		strcpy(p->sTsmg,		pSource->asTsmg[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sCalledType,		pSource->asCalledType[iCurPos]);
+		strcpy(p->sSpAccNbr,		pSource->asSpAccNbr[iCurPos]);
+		strcpy(p->sSpServiceCode,	pSource->asSpServiceCode[iCurPos]);
+		strcpy(p->sSpCode,		pSource->asSpCode[iCurPos]);
+
+		p->iBaseFee=			pSource->aiBaseFee[iCurPos];
+		p->iInfoFee=			pSource->aiInfoFee[iCurPos];
+		p->iRentFee=			pSource->aiRentFee[iCurPos];
+		p->iOtherFee=			pSource->aiOtherFee[iCurPos];
+		p->iInFee=			pSource->aiInFee[iCurPos];
+		p->iOutFee=			pSource->aiOutFee[iCurPos];
+
+		strcpy(p->sOriCallType,		pSource->asOriCallType[iCurPos]);
+		strcpy(p->sReserve,		pSource->asReserve[iCurPos]);
+		strcpy(p->sSpProvCode,		pSource->asSpProvCode[iCurPos]);
+		strcpy(p->sHomeProvCode,	pSource->asHomeProvCode[iCurPos]);
+		strcpy(p->sScpFlag,		pSource->asScpFlag[iCurPos]);
+
+		p->iCallingTypeID=		pSource->aiCallingTypeID[iCurPos];
+
+		strcpy(p->sBillType,		pSource->asBillType[iCurPos]);
+		strcpy(p->sErrCode,		pSource->asErrCode[iCurPos]);
+		strcpy(p->sFileName,		pSource->asFileName[iCurPos]);
+		strcpy(p->sModule,		pSource->asModule[iCurPos]);
+		strcpy(p->sAreaCode,		pSource->asAreaCode[iCurPos]);
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sUpdateDate,		pSource->asUpdateDate[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,		pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sCallType);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sCalledCode);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sMsgID);
+		AllTrim(p->sOppMsgID);
+		AllTrim(p->sSubType);
+		AllTrim(p->sSmsc);
+		AllTrim(p->sSmg);
+		AllTrim(p->sTsmg);
+		AllTrim(p->sUserType);
+		AllTrim(p->sCalledType);
+		AllTrim(p->sSpAccNbr);
+		AllTrim(p->sSpServiceCode);
+		AllTrim(p->sSpCode);
+		AllTrim(p->sOriCallType);
+		AllTrim(p->sReserve);
+		AllTrim(p->sSpProvCode);
+		AllTrim(p->sHomeProvCode);
+		AllTrim(p->sScpFlag);
+		AllTrim(p->sBillType);
+		AllTrim(p->sErrCode);
+		AllTrim(p->sFileName);
+		AllTrim(p->sModule);
+		AllTrim(p->sAreaCode);
+		AllTrim(p->sState);
+		AllTrim(p->sUpdateDate);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从TELECOM_TICKET中用结构缓冲方式取数据*/
+int EGetTelecomTicketToStruct(struct TelecomTicketStruct *p,
+	struct TelecomTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(CALLING_AREA_CODE,' '),\n\
+				nvl(CALLING_NBR,' '),\n\
+				nvl(CALLED_AREA_CODE,' '),\n\
+				nvl(CALLED_NBR,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(DURATION,-1),\n\
+				nvl(CHARGE,-1),\n\
+				nvl(TALK_TYPE_ID,-1),\n\
+				nvl(O_CALLING_NBR,' '),\n\
+				nvl(O_CALLED_NBR,' '),\n\
+				nvl(TRUNK_IN,' '),\n\
+				nvl(TRUNK_OUT,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE TELECOM_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE TELECOM_TICKETSCR TELECOM_TICKETCR");
+
+		EXEC SQL DECLARE TELECOM_TICKETCR CURSOR FOR TELECOM_TICKETSCR;
+		CheckSqlError("Declare TELECOM_TICKETCR");
+
+		EXEC SQL OPEN TELECOM_TICKETCR;
+		CheckSqlError("Open TELECOM_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE TELECOM_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH TELECOM_TICKETCR INTO
+			:pSource->asCallingAreaCode,
+			:pSource->asCallingNbr,
+			:pSource->asCalledAreaCode,
+			:pSource->asCalledNbr,
+			:pSource->asStartTime,
+			:pSource->aiDuration,
+			:pSource->aiCharge,
+			:pSource->aiTalkTypeID,
+			:pSource->asOCallingNbr,
+			:pSource->asOCalledNbr,
+			:pSource->asTrunkIn,
+			:pSource->asTrunkOut;
+		CheckSqlError("Fetch TELECOM_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE TELECOM_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=TELECOM_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sCallingAreaCode,	pSource->asCallingAreaCode[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sCalledAreaCode,	pSource->asCalledAreaCode[iCurPos]);
+		strcpy(p->sCalledNbr,		pSource->asCalledNbr[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iCharge=			pSource->aiCharge[iCurPos];
+		p->iTalkTypeID=			pSource->aiTalkTypeID[iCurPos];
+
+		strcpy(p->sOCallingNbr,		pSource->asOCallingNbr[iCurPos]);
+		strcpy(p->sOCalledNbr,		pSource->asOCalledNbr[iCurPos]);
+		strcpy(p->sTrunkIn,		pSource->asTrunkIn[iCurPos]);
+		strcpy(p->sTrunkOut,		pSource->asTrunkOut[iCurPos]);
+
+		AllTrim(p->sCallingAreaCode);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sCalledAreaCode);
+		AllTrim(p->sCalledNbr);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sOCallingNbr);
+		AllTrim(p->sOCalledNbr);
+		AllTrim(p->sTrunkIn);
+		AllTrim(p->sTrunkOut);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从DMP_TICKET中用结构缓冲方式取数据*/
+int EGetDmpTicketToStruct(struct DmpTicketStruct *p,
+	struct DmpTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(DURATION,' '),\n\
+				nvl(LOCATION,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE DMP_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE DMP_TICKETSCR DMP_TICKETCR");
+
+		EXEC SQL DECLARE DMP_TICKETCR CURSOR FOR DMP_TICKETSCR;
+		CheckSqlError("Declare DMP_TICKETCR");
+
+		EXEC SQL OPEN DMP_TICKETCR;
+		CheckSqlError("Open DMP_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE DMP_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH DMP_TICKETCR INTO
+			:pSource->asCallType,
+			:pSource->asMsisdn,
+			:pSource->asOtherParty,
+			:pSource->asStartTime,
+			:pSource->asDuration,
+			:pSource->asLocation;
+		CheckSqlError("Fetch DMP_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE DMP_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=DMP_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sCallType,	pSource->asCallType[iCurPos]);
+		strcpy(p->sMsisdn,	pSource->asMsisdn[iCurPos]);
+		strcpy(p->sOtherParty,	pSource->asOtherParty[iCurPos]);
+		strcpy(p->sStartTime,	pSource->asStartTime[iCurPos]);
+		strcpy(p->sDuration,	pSource->asDuration[iCurPos]);
+		strcpy(p->sLocation,	pSource->asLocation[iCurPos]);
+
+		AllTrim(p->sCallType);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sDuration);
+		AllTrim(p->sLocation);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/**************以下是增加短信原始话单、短信统计、SP实收结算的部分功能*****/
+
+/*批量数据动态从SMCDMA_TICKET中用结构缓冲方式取数据*/
+int EGetSmcdmaTicketToStruct(struct SmcdmaTicketStruct *p,
+	struct SmcdmaTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(REC_NO,' '),\n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(CALLING_NBR,' '),\n\
+				nvl(CALLED_NBR,' '),\n\
+				nvl(REGISTER_TIME,' '),\n\
+				nvl(SEND_TIME,' '),\n\
+				nvl(MSG_LEN,0),\n\
+				nvl(LAST_STATUS,' '),\n\
+				nvl(SERVICE_TYPE,' '),\n\
+				nvl(SERVICE_CODE,' '),\n\
+				nvl(LAND_TYPE,' '),\n\
+				nvl(PRIORITY,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMCDMA_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE SMCDMA_TICKETSCR SMCDMA_TICKETCR");
+
+		EXEC SQL DECLARE SMCDMA_TICKETCR CURSOR FOR SMCDMA_TICKETSCR;
+		CheckSqlError("Declare SMCDMA_TICKETCR");
+
+		EXEC SQL OPEN SMCDMA_TICKETCR;
+		CheckSqlError("Open SMCDMA_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMCDMA_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMCDMA_TICKETCR INTO
+			:pSource->asRecNo,
+			:pSource->asCallType,
+			:pSource->asCallingNbr,
+			:pSource->asCalledNbr,
+			:pSource->asRegisterTime,
+			:pSource->asSendTime,
+			:pSource->aiMsgLen,
+			:pSource->asLastStatus,
+			:pSource->asServiceType,
+			:pSource->asServiceCode,
+			:pSource->asLandType,
+			:pSource->asPriority;
+		CheckSqlError("Fetch SMCDMA_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMCDMA_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMCDMA_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sRecNo,		pSource->asRecNo[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sCalledNbr,		pSource->asCalledNbr[iCurPos]);
+		strcpy(p->sRegisterTime,	pSource->asRegisterTime[iCurPos]);
+		strcpy(p->sSendTime,		pSource->asSendTime[iCurPos]);
+
+		p->iMsgLen=			pSource->aiMsgLen[iCurPos];
+
+		strcpy(p->sLastStatus,		pSource->asLastStatus[iCurPos]);
+		strcpy(p->sServiceType,		pSource->asServiceType[iCurPos]);
+		strcpy(p->sServiceCode,		pSource->asServiceCode[iCurPos]);
+		strcpy(p->sLandType,		pSource->asLandType[iCurPos]);
+		strcpy(p->sPriority,		pSource->asPriority[iCurPos]);
+
+		AllTrim(p->sRecNo);
+		AllTrim(p->sCallType);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sCalledNbr);
+		AllTrim(p->sRegisterTime);
+		AllTrim(p->sSendTime);
+		AllTrim(p->sLastStatus);
+		AllTrim(p->sServiceType);
+		AllTrim(p->sServiceCode);
+		AllTrim(p->sLandType);
+		AllTrim(p->sPriority);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SMGSM_TICKET中用结构缓冲方式取数据*/
+int EGetSmgsmTicketToStruct(struct SmgsmTicketStruct *p,
+	struct SmgsmTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(REQ_NO,' '),\n\
+				nvl(MSG_ID,' '),\n\
+				nvl(CALLING_NBR,' '),\n\
+				nvl(CALLING_TON,' '),\n\
+				nvl(CALLING_NPI,' '),\n\
+				nvl(CALLED_NBR,' '),\n\
+				nvl(CALLED_TON,' '),\n\
+				nvl(CALLED_NPI,' '),\n\
+				nvl(REGISTER_TIME,' '),\n\
+				nvl(SEND_TIME,' '),\n\
+				nvl(PRIORITY,' '),\n\
+				nvl(SSR,' '),\n\
+				nvl(PID,' '),\n\
+				nvl(DCS,' '),\n\
+				nvl(MSG_LEN,0),\n\
+				nvl(LAST_STATUS,' '),\n\
+				nvl(ERR_CODE,' '),\n\
+				nvl(MSG_TYPE,' '),\n\
+				nvl(SERVICE_TYPE,' '),\n\
+				nvl(PPS_FLAG,' '),\n\
+				nvl(ORG_ACCOUNT,' '),\n\
+				nvl(DEST_ACCOUNT,' '),\n\
+				nvl(RIGHT_RESULT,' '),\n\
+				nvl(UDHI,' '),\n\
+				nvl(MR,' '),\n\
+				nvl(RN,' '),\n\
+				nvl(MN,' '),\n\
+				nvl(SN,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMGSM_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE SMGSM_TICKETSCR SMGSM_TICKETCR");
+
+		EXEC SQL DECLARE SMGSM_TICKETCR CURSOR FOR SMGSM_TICKETSCR;
+		CheckSqlError("Declare SMGSM_TICKETCR");
+
+		EXEC SQL OPEN SMGSM_TICKETCR;
+		CheckSqlError("Open SMGSM_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMGSM_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMGSM_TICKETCR INTO
+			:pSource->asReqNo,
+			:pSource->asMsgID,
+			:pSource->asCallingNbr,
+			:pSource->asCallingTon,
+			:pSource->asCallingNpi,
+			:pSource->asCalledNbr,
+			:pSource->asCalledTon,
+			:pSource->asCalledNpi,
+			:pSource->asRegisterTime,
+			:pSource->asSendTime,
+			:pSource->asPriority,
+			:pSource->asSsr,
+			:pSource->asPid,
+			:pSource->asDcs,
+			:pSource->aiMsgLen,
+			:pSource->asLastStatus,
+			:pSource->asErrCode,
+			:pSource->asMsgType,
+			:pSource->asServiceType,
+			:pSource->asPpsFlag,
+			:pSource->asOrgAccount,
+			:pSource->asDestAccount,
+			:pSource->asRightResult,
+			:pSource->asUdhi,
+			:pSource->asMr,
+			:pSource->asRn,
+			:pSource->asMn,
+			:pSource->asSn;
+		CheckSqlError("Fetch SMGSM_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMGSM_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMGSM_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sReqNo,		pSource->asReqNo[iCurPos]);
+		strcpy(p->sMsgID,		pSource->asMsgID[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sCallingTon,		pSource->asCallingTon[iCurPos]);
+		strcpy(p->sCallingNpi,		pSource->asCallingNpi[iCurPos]);
+		strcpy(p->sCalledNbr,		pSource->asCalledNbr[iCurPos]);
+		strcpy(p->sCalledTon,		pSource->asCalledTon[iCurPos]);
+		strcpy(p->sCalledNpi,		pSource->asCalledNpi[iCurPos]);
+		strcpy(p->sRegisterTime,	pSource->asRegisterTime[iCurPos]);
+		strcpy(p->sSendTime,		pSource->asSendTime[iCurPos]);
+		strcpy(p->sPriority,		pSource->asPriority[iCurPos]);
+		strcpy(p->sSsr,			pSource->asSsr[iCurPos]);
+		strcpy(p->sPid,			pSource->asPid[iCurPos]);
+		strcpy(p->sDcs,			pSource->asDcs[iCurPos]);
+
+		p->iMsgLen=			pSource->aiMsgLen[iCurPos];
+
+		strcpy(p->sLastStatus,		pSource->asLastStatus[iCurPos]);
+		strcpy(p->sErrCode,		pSource->asErrCode[iCurPos]);
+		strcpy(p->sMsgType,		pSource->asMsgType[iCurPos]);
+		strcpy(p->sServiceType,		pSource->asServiceType[iCurPos]);
+		strcpy(p->sPpsFlag,		pSource->asPpsFlag[iCurPos]);
+		strcpy(p->sOrgAccount,		pSource->asOrgAccount[iCurPos]);
+		strcpy(p->sDestAccount,		pSource->asDestAccount[iCurPos]);
+		strcpy(p->sRightResult,		pSource->asRightResult[iCurPos]);
+		strcpy(p->sUdhi,		pSource->asUdhi[iCurPos]);
+		strcpy(p->sMr,			pSource->asMr[iCurPos]);
+		strcpy(p->sRn,			pSource->asRn[iCurPos]);
+		strcpy(p->sMn,			pSource->asMn[iCurPos]);
+		strcpy(p->sSn,			pSource->asSn[iCurPos]);
+
+		AllTrim(p->sReqNo);
+		AllTrim(p->sMsgID);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sCallingTon);
+		AllTrim(p->sCallingNpi);
+		AllTrim(p->sCalledNbr);
+		AllTrim(p->sCalledTon);
+		AllTrim(p->sCalledNpi);
+		AllTrim(p->sRegisterTime);
+		AllTrim(p->sSendTime);
+		AllTrim(p->sPriority);
+		AllTrim(p->sSsr);
+		AllTrim(p->sPid);
+		AllTrim(p->sDcs);
+		AllTrim(p->sLastStatus);
+		AllTrim(p->sErrCode);
+		AllTrim(p->sMsgType);
+		AllTrim(p->sServiceType);
+		AllTrim(p->sPpsFlag);
+		AllTrim(p->sOrgAccount);
+		AllTrim(p->sDestAccount);
+		AllTrim(p->sRightResult);
+		AllTrim(p->sUdhi);
+		AllTrim(p->sMr);
+		AllTrim(p->sRn);
+		AllTrim(p->sMn);
+		AllTrim(p->sSn);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+int EGetSmmobTicketToStruct(struct SmmobTicketStruct *p,
+	struct SmmobTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(REG_NO,' '),\n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(USER_TYPE,' '),\n\
+				nvl(CALLING_NBR,' '),\n\
+				nvl(CALLED_NBR,' '),\n\
+				nvl(CITY_CODE,' '),\n\
+				nvl(LAST_STATUS,' '),\n\
+				nvl(MSG_LEN,0),\n\
+				nvl(SMG,' '),\n\
+				nvl(TSMG,' '),\n\
+				nvl(SERVICE_CODE,' '),\n\
+				nvl(SMSC,' '),\n\
+				nvl(REGISTER_TIME,' '),\n\
+				nvl(SEND_TIME,' '),\n\
+				nvl(RESERVE,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMMOB_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE SMMOB_TICKETSCR SMMOB_TICKETCR");
+
+		EXEC SQL DECLARE SMMOB_TICKETCR CURSOR FOR SMMOB_TICKETSCR;
+		CheckSqlError("Declare SMMOB_TICKETCR");
+
+		EXEC SQL OPEN SMMOB_TICKETCR;
+		CheckSqlError("Open SMMOB_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMMOB_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMMOB_TICKETCR INTO
+			:pSource->asRegNo,
+			:pSource->asCallType,
+			:pSource->asUserType,
+			:pSource->asCallingNbr,
+			:pSource->asCalledNbr,
+			:pSource->asCityCode,
+			:pSource->asLastStatus,
+			:pSource->aiMsgLen,
+			:pSource->asSmg,
+			:pSource->asTsmg,
+			:pSource->asServiceCode,
+			:pSource->asSmsc,
+			:pSource->asRegisterTime,
+			:pSource->asSendTime,
+			:pSource->asReserve;
+		CheckSqlError("Fetch SMMOB_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMMOB_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMMOB_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sRegNo,		pSource->asRegNo[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sCalledNbr,		pSource->asCalledNbr[iCurPos]);
+		strcpy(p->sCityCode,		pSource->asCityCode[iCurPos]);
+		strcpy(p->sLastStatus,		pSource->asLastStatus[iCurPos]);
+
+		p->iMsgLen=			pSource->aiMsgLen[iCurPos];
+
+		strcpy(p->sSmg,			pSource->asSmg[iCurPos]);
+		strcpy(p->sTsmg,		pSource->asTsmg[iCurPos]);
+		strcpy(p->sServiceCode,		pSource->asServiceCode[iCurPos]);
+		strcpy(p->sSmsc,		pSource->asSmsc[iCurPos]);
+		strcpy(p->sRegisterTime,	pSource->asRegisterTime[iCurPos]);
+		strcpy(p->sSendTime,		pSource->asSendTime[iCurPos]);
+		strcpy(p->sReserve,		pSource->asReserve[iCurPos]);
+
+		AllTrim(p->sRegNo);
+		AllTrim(p->sCallType);
+		AllTrim(p->sUserType);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sCalledNbr);
+		AllTrim(p->sCityCode);
+		AllTrim(p->sLastStatus);
+		AllTrim(p->sSmg);
+		AllTrim(p->sTsmg);
+		AllTrim(p->sServiceCode);
+		AllTrim(p->sSmsc);
+		AllTrim(p->sRegisterTime);
+		AllTrim(p->sSendTime);
+		AllTrim(p->sReserve);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SMTEL_TICKET中用结构缓冲方式取数据*/
+int EGetSmtelTicketToStruct(struct SmtelTicketStruct *p,
+	struct SmtelTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(REG_NO,' '),\n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(USER_TYPE,' '),\n\
+				nvl(CALLING_NBR,' '),\n\
+				nvl(CALLED_NBR,' '),\n\
+				nvl(CITY_CODE,' '),\n\
+				nvl(LAST_STATUS,' '),\n\
+				nvl(MSG_LEN,0),\n\
+				nvl(SMG,' '),\n\
+				nvl(TSMG,' '),\n\
+				nvl(SERVICE_CODE,' '),\n\
+				nvl(SMSC,' '),\n\
+				nvl(REGISTER_TIME,' '),\n\
+				nvl(SEND_TIME,' '),\n\
+				nvl(RESERVE,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMTEL_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE SMTEL_TICKETSCR SMTEL_TICKETCR");
+
+		EXEC SQL DECLARE SMTEL_TICKETCR CURSOR FOR SMTEL_TICKETSCR;
+		CheckSqlError("Declare SMTEL_TICKETCR");
+
+		EXEC SQL OPEN SMTEL_TICKETCR;
+		CheckSqlError("Open SMTEL_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMTEL_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMTEL_TICKETCR INTO
+			:pSource->asRegNo,
+			:pSource->asCallType,
+			:pSource->asUserType,
+			:pSource->asCallingNbr,
+			:pSource->asCalledNbr,
+			:pSource->asCityCode,
+			:pSource->asLastStatus,
+			:pSource->aiMsgLen,
+			:pSource->asSmg,
+			:pSource->asTsmg,
+			:pSource->asServiceCode,
+			:pSource->asSmsc,
+			:pSource->asRegisterTime,
+			:pSource->asSendTime,
+			:pSource->asReserve;
+		CheckSqlError("Fetch SMTEL_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMTEL_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMTEL_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sRegNo,		pSource->asRegNo[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sCalledNbr,		pSource->asCalledNbr[iCurPos]);
+		strcpy(p->sCityCode,		pSource->asCityCode[iCurPos]);
+		strcpy(p->sLastStatus,		pSource->asLastStatus[iCurPos]);
+
+		p->iMsgLen=			pSource->aiMsgLen[iCurPos];
+
+		strcpy(p->sSmg,			pSource->asSmg[iCurPos]);
+		strcpy(p->sTsmg,		pSource->asTsmg[iCurPos]);
+		strcpy(p->sServiceCode,		pSource->asServiceCode[iCurPos]);
+		strcpy(p->sSmsc,		pSource->asSmsc[iCurPos]);
+		strcpy(p->sRegisterTime,	pSource->asRegisterTime[iCurPos]);
+		strcpy(p->sSendTime,		pSource->asSendTime[iCurPos]);
+		strcpy(p->sReserve,		pSource->asReserve[iCurPos]);
+
+		AllTrim(p->sRegNo);
+		AllTrim(p->sCallType);
+		AllTrim(p->sUserType);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sCalledNbr);
+		AllTrim(p->sCityCode);
+		AllTrim(p->sLastStatus);
+		AllTrim(p->sSmg);
+		AllTrim(p->sTsmg);
+		AllTrim(p->sServiceCode);
+		AllTrim(p->sSmsc);
+		AllTrim(p->sRegisterTime);
+		AllTrim(p->sSendTime);
+		AllTrim(p->sReserve);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SMSP1_TICKET中用结构缓冲方式取数据*/
+int EGetSmsp1TicketToStruct(struct Smsp1TicketStruct *p,
+	struct Smsp1TicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(REG_NO,' '),\n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(USER_TYPE,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(SP_CODE,' '),\n\
+				nvl(SP_HOME_SMG,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(SP_ACC_NBR,' '),\n\
+				nvl(SERVICE_CODE,' '),\n\
+				nvl(BILLING_TYPE,' '),\n\
+				nvl(INFO_FEE,0),\n\
+				nvl(RENT_FEE,0),\n\
+				nvl(RETURN_FEE,0),\n\
+				nvl(BILL_TYPE,' '),\n\
+				nvl(MO_FLAG,' '),\n\
+				nvl(LAST_STATUS,' '),\n\
+				nvl(PRIORITY,' '),\n\
+				nvl(MSG_CNT,0),\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(SMG,' '),\n\
+				nvl(TSMG,' '),\n\
+				nvl(SMSC,' '),\n\
+				nvl(REGISTER_TIME,' '),\n\
+				nvl(SEND_TIME,' '),\n\
+				nvl(RESERVE,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMSP1_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE SMSP1_TICKETSCR SMSP1_TICKETCR");
+
+		EXEC SQL DECLARE SMSP1_TICKETCR CURSOR FOR SMSP1_TICKETSCR;
+		CheckSqlError("Declare SMSP1_TICKETCR");
+
+		EXEC SQL OPEN SMSP1_TICKETCR;
+		CheckSqlError("Open SMSP1_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMSP1_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMSP1_TICKETCR INTO
+			:pSource->asRegNo,
+			:pSource->asCallType,
+			:pSource->asUserType,
+			:pSource->asMsisdn,
+			:pSource->asSpCode,
+			:pSource->asSpHomeSmg,
+			:pSource->asOtherParty,
+			:pSource->asSpAccNbr,
+			:pSource->asServiceCode,
+			:pSource->asBillingType,
+			:pSource->aiInfoFee,
+			:pSource->aiRentFee,
+			:pSource->aiReturnFee,
+			:pSource->asBillType,
+			:pSource->asMoFlag,
+			:pSource->asLastStatus,
+			:pSource->asPriority,
+			:pSource->aiMsgCnt,
+			:pSource->asHomeAreaCode,
+			:pSource->asSmg,
+			:pSource->asTsmg,
+			:pSource->asSmsc,
+			:pSource->asRegisterTime,
+			:pSource->asSendTime,
+			:pSource->asReserve;
+		CheckSqlError("Fetch SMSP1_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMSP1_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMSP1_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sRegNo,		pSource->asRegNo[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sSpCode,		pSource->asSpCode[iCurPos]);
+		strcpy(p->sSpHomeSmg,		pSource->asSpHomeSmg[iCurPos]);
+		strcpy(p->sOtherParty,		pSource->asOtherParty[iCurPos]);
+		strcpy(p->sSpAccNbr,		pSource->asSpAccNbr[iCurPos]);
+		strcpy(p->sServiceCode,		pSource->asServiceCode[iCurPos]);
+		strcpy(p->sBillingType,		pSource->asBillingType[iCurPos]);
+
+		p->iInfoFee=			pSource->aiInfoFee[iCurPos];
+		p->iRentFee=			pSource->aiRentFee[iCurPos];
+		p->iReturnFee=			pSource->aiReturnFee[iCurPos];
+
+		strcpy(p->sBillType,		pSource->asBillType[iCurPos]);
+		strcpy(p->sMoFlag,		pSource->asMoFlag[iCurPos]);
+		strcpy(p->sLastStatus,		pSource->asLastStatus[iCurPos]);
+		strcpy(p->sPriority,		pSource->asPriority[iCurPos]);
+
+		p->iMsgCnt=			pSource->aiMsgCnt[iCurPos];
+
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sSmg,			pSource->asSmg[iCurPos]);
+		strcpy(p->sTsmg,		pSource->asTsmg[iCurPos]);
+		strcpy(p->sSmsc,		pSource->asSmsc[iCurPos]);
+		strcpy(p->sRegisterTime,	pSource->asRegisterTime[iCurPos]);
+		strcpy(p->sSendTime,		pSource->asSendTime[iCurPos]);
+		strcpy(p->sReserve,		pSource->asReserve[iCurPos]);
+
+		AllTrim(p->sRegNo);
+		AllTrim(p->sCallType);
+		AllTrim(p->sUserType);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sSpCode);
+		AllTrim(p->sSpHomeSmg);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sSpAccNbr);
+		AllTrim(p->sServiceCode);
+		AllTrim(p->sBillingType);
+		AllTrim(p->sBillType);
+		AllTrim(p->sMoFlag);
+		AllTrim(p->sLastStatus);
+		AllTrim(p->sPriority);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sSmg);
+		AllTrim(p->sTsmg);
+		AllTrim(p->sSmsc);
+		AllTrim(p->sRegisterTime);
+		AllTrim(p->sSendTime);
+		AllTrim(p->sReserve);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SP1XFJ_TICKET中用结构缓冲方式取数据*/
+int EGetSp1xfjTicketToStruct(struct Sp1xfjTicketStruct *p,
+	struct Sp1xfjTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(SEQ_NUMBER,'-1'),\n\
+				nvl(RECORD_TYPE,'-1'),\n\
+				nvl(SP_CODE,'-1'),\n\
+				nvl(SP_LOGIN_NAME,'-1'),\n\
+				nvl(MS_IP_ADDRESS,'-1'),\n\
+				nvl(SP_SRV_TYPE,'-1'),\n\
+				nvl(SP_SRV_TYPE_NAME,'-1'),\n\
+				nvl(SP_SERVICE_TYPE,'-1'),\n\
+				nvl(SP_SERVICE_CODE,'-1'),\n\
+				nvl(SP_SERVICE_NAME,'-1'),\n\
+				nvl(CONTENT_CODE,'-1'),\n\
+				nvl(CONTENT_NAME,'-1'),\n\
+				nvl(MSISDN,'-1'),\n\
+				nvl(IMSI,'-1'),\n\
+				nvl(NAI,'-1'),\n\
+				nvl(NAI_DOMAIN,'-1'),\n\
+				nvl(START_TIME,'-1'),\n\
+				nvl(STOP_TIME,'-1'),\n\
+				nvl(ACTION_COUNT,'-1'),\n\
+				nvl(ACTIVE_TIME,'-1'),\n\
+				nvl(DATA_COUNT_TERMINATION,'-1'),\n\
+				nvl(DATA_COUNT_ORIGINATION,'-1'),\n\
+				nvl(DATA_COUNT_TOTAL,'-1'),\n\
+				nvl(PRE_DISCNT_FEE,'-1'),\n\
+				nvl(POST_DISCNT_FEE,'-1'),\n\
+				nvl(DISCNT_FEE,'-1'),\n\
+				nvl(RATE_UNIT,'-1'),\n\
+				nvl(FEE_TYPE,'-1'),\n\
+				nvl(FEE_RATE_DESC_CODE,'-1'),\n\
+				nvl(DISCNT_DESC_CODE,'-1'),\n\
+				nvl(URL,'-1'),\n\
+				nvl(SYS_ID,'-1'),\n\
+				nvl(SYS_INTRA_KEY,'-1'),\n\
+				nvl(USER_TYPE,'-1'),\n\
+				nvl(OTHER_PARTY,'-1'),\n\
+				nvl(BILL_TYPE,'-1'),\n\
+				nvl(NOUSED1,'-1'),\n\
+				nvl(NOUSED2,'-1'),\n\
+				nvl(NOUSED3,'-1'),\n\
+				nvl(NOUSED4,'-1')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SP1XFJ_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE SP1XFJ_TICKETSCR SP1XFJ_TICKETCR");
+
+		EXEC SQL DECLARE SP1XFJ_TICKETCR CURSOR FOR SP1XFJ_TICKETSCR;
+		CheckSqlError("Declare SP1XFJ_TICKETCR");
+
+		EXEC SQL OPEN SP1XFJ_TICKETCR;
+		CheckSqlError("Open SP1XFJ_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SP1XFJ_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SP1XFJ_TICKETCR INTO
+			:pSource->asSeqNumber,
+			:pSource->asRecordType,
+			:pSource->asSpCode,
+			:pSource->asSpLoginName,
+			:pSource->asMsIpAddress,
+			:pSource->asSpSrvType,
+			:pSource->asSpSrvTypeName,
+			:pSource->asSpServiceType,
+			:pSource->asSpServiceCode,
+			:pSource->asSpServiceName,
+			:pSource->asContentCode,
+			:pSource->asContentName,
+			:pSource->asMsisdn,
+			:pSource->asImsi,
+			:pSource->asNai,
+			:pSource->asNaiDomain,
+			:pSource->asStartTime,
+			:pSource->asStopTime,
+			:pSource->asActionCount,
+			:pSource->asActiveTime,
+			:pSource->asDataCountTermination,
+			:pSource->asDataCountOrigination,
+			:pSource->asDataCountTotal,
+			:pSource->asPreDiscntFee,
+			:pSource->asPostDiscntFee,
+			:pSource->asDiscntFee,
+			:pSource->asRateUnit,
+			:pSource->asFeeType,
+			:pSource->asFeeRateDescCode,
+			:pSource->asDiscntDescCode,
+			:pSource->asUrl,
+			:pSource->asSysID,
+			:pSource->asSysIntraKey,
+			:pSource->asUserType,
+			:pSource->asOtherParty,
+			:pSource->asBillType,
+			:pSource->asNoused1,
+			:pSource->asNoused2,
+			:pSource->asNoused3,
+			:pSource->asNoused4;
+		CheckSqlError("Fetch SP1XFJ_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SP1XFJ_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SP1XFJ_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sSeqNumber,			pSource->asSeqNumber[iCurPos]);
+		strcpy(p->sRecordType,			pSource->asRecordType[iCurPos]);
+		strcpy(p->sSpCode,			pSource->asSpCode[iCurPos]);
+		strcpy(p->sSpLoginName,			pSource->asSpLoginName[iCurPos]);
+		strcpy(p->sMsIpAddress,			pSource->asMsIpAddress[iCurPos]);
+		strcpy(p->sSpSrvType,			pSource->asSpSrvType[iCurPos]);
+		strcpy(p->sSpSrvTypeName,		pSource->asSpSrvTypeName[iCurPos]);
+		strcpy(p->sSpServiceType,		pSource->asSpServiceType[iCurPos]);
+		strcpy(p->sSpServiceCode,		pSource->asSpServiceCode[iCurPos]);
+		strcpy(p->sSpServiceName,		pSource->asSpServiceName[iCurPos]);
+		strcpy(p->sContentCode,			pSource->asContentCode[iCurPos]);
+		strcpy(p->sContentName,			pSource->asContentName[iCurPos]);
+		strcpy(p->sMsisdn,			pSource->asMsisdn[iCurPos]);
+		strcpy(p->sImsi,			pSource->asImsi[iCurPos]);
+		strcpy(p->sNai,				pSource->asNai[iCurPos]);
+		strcpy(p->sNaiDomain,			pSource->asNaiDomain[iCurPos]);
+		strcpy(p->sStartTime,			pSource->asStartTime[iCurPos]);
+		strcpy(p->sStopTime,			pSource->asStopTime[iCurPos]);
+		strcpy(p->sActionCount,			pSource->asActionCount[iCurPos]);
+		strcpy(p->sActiveTime,			pSource->asActiveTime[iCurPos]);
+		strcpy(p->sDataCountTermination,	pSource->asDataCountTermination[iCurPos]);
+		strcpy(p->sDataCountOrigination,	pSource->asDataCountOrigination[iCurPos]);
+		strcpy(p->sDataCountTotal,		pSource->asDataCountTotal[iCurPos]);
+		strcpy(p->sPreDiscntFee,		pSource->asPreDiscntFee[iCurPos]);
+		strcpy(p->sPostDiscntFee,		pSource->asPostDiscntFee[iCurPos]);
+		strcpy(p->sDiscntFee,			pSource->asDiscntFee[iCurPos]);
+		strcpy(p->sRateUnit,			pSource->asRateUnit[iCurPos]);
+		strcpy(p->sFeeType,			pSource->asFeeType[iCurPos]);
+		strcpy(p->sFeeRateDescCode,		pSource->asFeeRateDescCode[iCurPos]);
+		strcpy(p->sDiscntDescCode,		pSource->asDiscntDescCode[iCurPos]);
+		strcpy(p->sUrl,				pSource->asUrl[iCurPos]);
+		strcpy(p->sSysID,			pSource->asSysID[iCurPos]);
+		strcpy(p->sSysIntraKey,			pSource->asSysIntraKey[iCurPos]);
+		strcpy(p->sUserType,			pSource->asUserType[iCurPos]);
+		strcpy(p->sOtherParty,			pSource->asOtherParty[iCurPos]);
+		strcpy(p->sBillType,			pSource->asBillType[iCurPos]);
+		strcpy(p->sNoused1,			pSource->asNoused1[iCurPos]);
+		strcpy(p->sNoused2,			pSource->asNoused2[iCurPos]);
+		strcpy(p->sNoused3,			pSource->asNoused3[iCurPos]);
+		strcpy(p->sNoused4,			pSource->asNoused4[iCurPos]);
+
+		AllTrim(p->sSeqNumber);
+		AllTrim(p->sRecordType);
+		AllTrim(p->sSpCode);
+		AllTrim(p->sSpLoginName);
+		AllTrim(p->sMsIpAddress);
+		AllTrim(p->sSpSrvType);
+		AllTrim(p->sSpSrvTypeName);
+		AllTrim(p->sSpServiceType);
+		AllTrim(p->sSpServiceCode);
+		AllTrim(p->sSpServiceName);
+		AllTrim(p->sContentCode);
+		AllTrim(p->sContentName);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sImsi);
+		AllTrim(p->sNai);
+		AllTrim(p->sNaiDomain);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sStopTime);
+		AllTrim(p->sActionCount);
+		AllTrim(p->sActiveTime);
+		AllTrim(p->sDataCountTermination);
+		AllTrim(p->sDataCountOrigination);
+		AllTrim(p->sDataCountTotal);
+		AllTrim(p->sPreDiscntFee);
+		AllTrim(p->sPostDiscntFee);
+		AllTrim(p->sDiscntFee);
+		AllTrim(p->sRateUnit);
+		AllTrim(p->sFeeType);
+		AllTrim(p->sFeeRateDescCode);
+		AllTrim(p->sDiscntDescCode);
+		AllTrim(p->sUrl);
+		AllTrim(p->sSysID);
+		AllTrim(p->sSysIntraKey);
+		AllTrim(p->sUserType);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sBillType);
+		AllTrim(p->sNoused1);
+		AllTrim(p->sNoused2);
+		AllTrim(p->sNoused3);
+		AllTrim(p->sNoused4);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SMSPFJ_TICKET中用结构缓冲方式取数据*/
+int EGetSmspfjTicketToStruct(struct SmspfjTicketStruct *p,
+	struct SmspfjTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(BUSI_TYPE,'-1'),\n\
+				nvl(CALL_TYPE,'-1'),\n\
+				nvl(MSISDN,'-1'),\n\
+				nvl(USER_TYPE,'-1'),\n\
+				nvl(HOME_AREA_CODE,'-1'),\n\
+				nvl(CALLING_NBR,'-1'),\n\
+				nvl(CALLED_NBR,'-1'),\n\
+				nvl(SP_CODE,'-1'),\n\
+				nvl(SP_SERVICE_CODE,'-1'),\n\
+				nvl(FEE_TYPE,'-1'),\n\
+				nvl(DURATION,'-1'),\n\
+				nvl(CNT,'-1'),\n\
+				nvl(START_TIME,'-1'),\n\
+				nvl(BASE_FEE,'-1'),\n\
+				nvl(INFO_FEE,'-1'),\n\
+				nvl(RENT_FEE,'-1'),\n\
+				nvl(INFO_FEE_TYPE,'-1'),\n\
+				nvl(ORI_FILE_NAME,'-1'),\n\
+				nvl(RESERVE,'-1')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMSPFJ_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE SMSPFJ_TICKETSCR SMSPFJ_TICKETCR");
+
+		EXEC SQL DECLARE SMSPFJ_TICKETCR CURSOR FOR SMSPFJ_TICKETSCR;
+		CheckSqlError("Declare SMSPFJ_TICKETCR");
+
+		EXEC SQL OPEN SMSPFJ_TICKETCR;
+		CheckSqlError("Open SMSPFJ_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMSPFJ_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMSPFJ_TICKETCR INTO
+			:pSource->asBusiType,
+			:pSource->asCallType,
+			:pSource->asMsisdn,
+			:pSource->asUserType,
+			:pSource->asHomeAreaCode,
+			:pSource->asCallingNbr,
+			:pSource->asCalledNbr,
+			:pSource->asSpCode,
+			:pSource->asSpServiceCode,
+			:pSource->asFeeType,
+			:pSource->asDuration,
+			:pSource->asCnt,
+			:pSource->asStartTime,
+			:pSource->asBaseFee,
+			:pSource->asInfoFee,
+			:pSource->asRentFee,
+			:pSource->asInfoFeeType,
+			:pSource->asOriFileName,
+			:pSource->asReserve;
+		CheckSqlError("Fetch SMSPFJ_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMSPFJ_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMSPFJ_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sBusiType,		pSource->asBusiType[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sCallingNbr,		pSource->asCallingNbr[iCurPos]);
+		strcpy(p->sCalledNbr,		pSource->asCalledNbr[iCurPos]);
+		strcpy(p->sSpCode,		pSource->asSpCode[iCurPos]);
+		strcpy(p->sSpServiceCode,	pSource->asSpServiceCode[iCurPos]);
+		strcpy(p->sFeeType,		pSource->asFeeType[iCurPos]);
+		strcpy(p->sDuration,		pSource->asDuration[iCurPos]);
+		strcpy(p->sCnt,			pSource->asCnt[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+		strcpy(p->sBaseFee,		pSource->asBaseFee[iCurPos]);
+		strcpy(p->sInfoFee,		pSource->asInfoFee[iCurPos]);
+		strcpy(p->sRentFee,		pSource->asRentFee[iCurPos]);
+		strcpy(p->sInfoFeeType,		pSource->asInfoFeeType[iCurPos]);
+		strcpy(p->sOriFileName,		pSource->asOriFileName[iCurPos]);
+		strcpy(p->sReserve,		pSource->asReserve[iCurPos]);
+
+		AllTrim(p->sBusiType);
+		AllTrim(p->sCallType);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sUserType);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sCallingNbr);
+		AllTrim(p->sCalledNbr);
+		AllTrim(p->sSpCode);
+		AllTrim(p->sSpServiceCode);
+		AllTrim(p->sFeeType);
+		AllTrim(p->sDuration);
+		AllTrim(p->sCnt);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sBaseFee);
+		AllTrim(p->sInfoFee);
+		AllTrim(p->sRentFee);
+		AllTrim(p->sInfoFeeType);
+		AllTrim(p->sOriFileName);
+		AllTrim(p->sReserve);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SMS_STAT中用结构缓冲方式取数据*/
+int EGetSmsStatToStruct(struct SmsStatStruct *p,struct SmsStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[4096];
+
+		sprintf(statement,"\
+			SELECT \
+				nvl(RECORD_TYPE,'-1'),\
+				nvl(CALL_TYPE,'-1'),\
+				nvl(MSISDN,'-1'),\
+				nvl(USER_TYPE,'-1'),\
+				nvl(HOME_AREA_CODE,'-1'),\
+				nvl(START_TIME,'-1'),\
+				nvl(BASE_FEE,-1),\
+				nvl(INFO_FEE,-1),\
+				nvl(ORI_FILE_NAME,'-1')\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMS_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE SMS_STATSCR SMS_STATCR");
+
+		EXEC SQL DECLARE SMS_STATCR CURSOR FOR SMS_STATSCR;
+		CheckSqlError("Declare SMS_STATCR");
+
+		EXEC SQL OPEN SMS_STATCR;
+		CheckSqlError("Open SMS_STATCR;");
+
+		pSource->iFirstFlag = FALSE;
+		pSource->iBufEmpty = TRUE;
+		pSource->iFetchRecNum = 0;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMS_STATCR INTO
+			:pSource->asRecordType,
+			:pSource->asCallType,
+			:pSource->asMsisdn,
+			:pSource->asUserType,
+			:pSource->asHomeAreaCode,
+			:pSource->asStartTime,
+			:pSource->aiBaseFee,
+			:pSource->aiInfoFee,
+			:pSource->asOriFileName;
+		CheckSqlError("Fetch SMS_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMS_STATCR;
+
+			return FALSE;
+		}
+
+		if((pSource->iEndFlag=(pSource->iRecCnt!=SMS_STAT_BUFLEN_IN))!=0)
+			pSource->iRecCnt++;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sRecordType,		pSource->asRecordType[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sStartTime,		pSource->asStartTime[iCurPos]);
+
+		p->iBaseFee=			pSource->aiBaseFee[iCurPos];
+		p->iInfoFee=			pSource->aiInfoFee[iCurPos];
+
+		strcpy(p->sOriFileName,		pSource->asOriFileName[iCurPos]);
+
+		AllTrim(p->sRecordType);
+		AllTrim(p->sCallType);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sUserType);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sOriFileName);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt){
+
+		if(pSource->iEndFlag){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMS_STATCR;
+
+			return FALSE;
+		}
+		pSource->iBufEmpty=TRUE;
+	}
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SMSP_NBR_RENT_STAT中用结构缓冲方式取数据*/
+int EGetSmspNbrRentStatToStruct(struct SmspNbrRentStatStruct *p,
+	struct SmspNbrRentStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				BILLING_CYCLE_ID,\n\
+				USER_TYPE,\n\
+				MSISDN,\n\
+				nvl(SP_CODE,'-1'),\n\
+				nvl(SP_ACC_NBR,'-1'),\n\
+				SP_SERVICE_CODE,\n\
+				BILLING_TYPE,\n\
+				RENT_RATE,\n\
+				MO_FLAG,\n\
+				HOME_AREA_CODE,\n\
+				to_char(CREATED_DATE,'yyyymmddhh24miss'),\n\
+				to_char(nvl(UPDATED_DATE,SYSDATE+3000),'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMSP_NBR_RENT_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE SMSP_NBR_RENT_STATSCR SMSP_NBR_RENT_STATCR");
+
+		EXEC SQL DECLARE SMSP_NBR_RENT_STATCR CURSOR FOR SMSP_NBR_RENT_STATSCR;
+		CheckSqlError("Declare SMSP_NBR_RENT_STATCR");
+
+		EXEC SQL OPEN SMSP_NBR_RENT_STATCR;
+		CheckSqlError("Open SMSP_NBR_RENT_STATCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMSP_NBR_RENT_STATCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMSP_NBR_RENT_STATCR INTO
+			:pSource->asBillingCycleID,
+			:pSource->asUserType,
+			:pSource->asMsisdn,
+			:pSource->asSpCode,
+			:pSource->asSpAccNbr,
+			:pSource->asSpServiceCode,
+			:pSource->asBillingType,
+			:pSource->aiRentRate,
+			:pSource->asMoFlag,
+			:pSource->asHomeAreaCode,
+			:pSource->asCreatedDate,
+			:pSource->asUpdatedDate;
+		CheckSqlError("Fetch SMSP_NBR_RENT_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMSP_NBR_RENT_STATCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMSP_NBR_RENT_STAT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sBillingCycleID,	pSource->asBillingCycleID[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sSpCode,		pSource->asSpCode[iCurPos]);
+		strcpy(p->sSpAccNbr,		pSource->asSpAccNbr[iCurPos]);
+		strcpy(p->sSpServiceCode,	pSource->asSpServiceCode[iCurPos]);
+		strcpy(p->sBillingType,		pSource->asBillingType[iCurPos]);
+
+		p->iRentRate=			pSource->aiRentRate[iCurPos];
+
+		strcpy(p->sMoFlag,		pSource->asMoFlag[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sCreatedDate,		pSource->asCreatedDate[iCurPos]);
+		strcpy(p->sUpdatedDate,		pSource->asUpdatedDate[iCurPos]);
+
+		AllTrim(p->sBillingCycleID);
+		AllTrim(p->sUserType);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sSpCode);
+		AllTrim(p->sSpAccNbr);
+		AllTrim(p->sSpServiceCode);
+		AllTrim(p->sBillingType);
+		AllTrim(p->sMoFlag);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sCreatedDate);
+		AllTrim(p->sUpdatedDate);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从R_SMS_NBR_STAT中用结构缓冲方式取数据*/
+int EGetSmsNbrStatToStruct(struct RSmsNbrStatStruct *p,
+	struct RSmsNbrStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				BILLING_CYCLE_ID,\n\
+				TICKET_TYPE,\n\
+				USER_TYPE,\n\
+				MSISDN,\n\
+				TOTAL_COMM_FEE,\n\
+				MO_CNT,\n\
+				MT_CNT,\n\
+				MIN_START_TIME,\n\
+				MAX_START_TIME,\n\
+				HOME_AREA_CODE,\n\
+				to_char(CREATED_DATE,'yyyymmddhh24miss'),\n\
+				to_char(nvl(UPDATED_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMS_NBR_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE SMS_NBR_STATSCR SMS_NBR_STATCR");
+
+		EXEC SQL DECLARE SMS_NBR_STATCR CURSOR FOR SMS_NBR_STATSCR;
+		CheckSqlError("Declare SMS_NBR_STATCR");
+
+		EXEC SQL OPEN SMS_NBR_STATCR;
+		CheckSqlError("Open SMS_NBR_STATCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMS_NBR_STATCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMS_NBR_STATCR INTO
+			:pSource->asBillingCycleID,
+			:pSource->asTicketType,
+			:pSource->asUserType,
+			:pSource->asMsisdn,
+			:pSource->aiTotalCommFee,
+			:pSource->aiMoCnt,
+			:pSource->aiMtCnt,
+			:pSource->asMinStartTime,
+			:pSource->asMaxStartTime,
+			:pSource->asHomeAreaCode,
+			:pSource->asCreatedDate,
+			:pSource->asUpdatedDate,
+			:pSource->asRowID;
+		CheckSqlError("Fetch SMS_NBR_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMS_NBR_STATCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMS_NBR_STAT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sBillingCycleID,	pSource->asBillingCycleID[iCurPos]);
+		strcpy(p->sTicketType,		pSource->asTicketType[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+
+		p->iTotalCommFee=		pSource->aiTotalCommFee[iCurPos];
+		p->iMoCnt=			pSource->aiMoCnt[iCurPos];
+		p->iMtCnt=			pSource->aiMtCnt[iCurPos];
+
+		strcpy(p->sMinStartTime,	pSource->asMinStartTime[iCurPos]);
+		strcpy(p->sMaxStartTime,	pSource->asMaxStartTime[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sCreatedDate,		pSource->asCreatedDate[iCurPos]);
+		strcpy(p->sUpdatedDate,		pSource->asUpdatedDate[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sBillingCycleID);
+		AllTrim(p->sTicketType);
+		AllTrim(p->sUserType);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sMinStartTime);
+		AllTrim(p->sMaxStartTime);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sCreatedDate);
+		AllTrim(p->sUpdatedDate);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SMSP_SP_STAT中用结构缓冲方式取数据*/
+int EGetSmspSpStatToStruct(struct RSmspSpStatStruct *p,
+	struct RSmspSpStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				BILLING_CYCLE_ID,\n\
+				USER_TYPE,\n\
+				nvl(SP_CODE,'-1'),\n\
+				nvl(SP_ACC_NBR,'-1'),\n\
+				MIN_START_TIME,\n\
+				MAX_START_TIME,\n\
+				MO_CNT,\n\
+				MT_CNT,\n\
+				nvl(TOTAL_CNT,-1),\n\
+				TOTAL_FEE,\n\
+				TOTAL_INFO_FEE,\n\
+				TOTAL_COMM_FEE,\n\
+				nvl(TOTAL_RENT_FEE,-1),\n\
+				HOME_AREA_CODE,\n\
+				to_char(CREATED_DATE,'yyyymmddhh24miss'),\n\
+				to_char(nvl(UPDATED_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMSP_SP_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE SMSP_SP_STATSCR SMSP_SP_STATCR");
+
+		EXEC SQL DECLARE SMSP_SP_STATCR CURSOR FOR SMSP_SP_STATSCR;
+		CheckSqlError("Declare SMSP_SP_STATCR");
+
+		EXEC SQL OPEN SMSP_SP_STATCR;
+		CheckSqlError("Open SMSP_SP_STATCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMSP_SP_STATCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMSP_SP_STATCR INTO
+			:pSource->asBillingCycleID,
+			:pSource->asUserType,
+			:pSource->asSpCode,
+			:pSource->asSpAccNbr,
+			:pSource->asMinStartTime,
+			:pSource->asMaxStartTime,
+			:pSource->aiMoCnt,
+			:pSource->aiMtCnt,
+			:pSource->aiTotalCnt,
+			:pSource->aiTotalFee,
+			:pSource->aiTotalInfoFee,
+			:pSource->aiTotalCommFee,
+			:pSource->aiTotalRentFee,
+			:pSource->asHomeAreaCode,
+			:pSource->asCreatedDate,
+			:pSource->asUpdatedDate,
+			:pSource->asRowID;
+		CheckSqlError("Fetch SMSP_SP_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMSP_SP_STATCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMSP_SP_STAT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sBillingCycleID,	pSource->asBillingCycleID[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sSpCode,		pSource->asSpCode[iCurPos]);
+		strcpy(p->sSpAccNbr,		pSource->asSpAccNbr[iCurPos]);
+		strcpy(p->sMinStartTime,	pSource->asMinStartTime[iCurPos]);
+		strcpy(p->sMaxStartTime,	pSource->asMaxStartTime[iCurPos]);
+
+		p->iMoCnt=			pSource->aiMoCnt[iCurPos];
+		p->iMtCnt=			pSource->aiMtCnt[iCurPos];
+		p->iTotalCnt=			pSource->aiTotalCnt[iCurPos];
+		p->iTotalFee=			pSource->aiTotalFee[iCurPos];
+		p->iTotalInfoFee=		pSource->aiTotalInfoFee[iCurPos];
+		p->iTotalCommFee=		pSource->aiTotalCommFee[iCurPos];
+		p->iTotalRentFee=		pSource->aiTotalRentFee[iCurPos];
+
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sCreatedDate,		pSource->asCreatedDate[iCurPos]);
+		strcpy(p->sUpdatedDate,		pSource->asUpdatedDate[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sBillingCycleID);
+		AllTrim(p->sUserType);
+		AllTrim(p->sSpCode);
+		AllTrim(p->sSpAccNbr);
+		AllTrim(p->sMinStartTime);
+		AllTrim(p->sMaxStartTime);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sCreatedDate);
+		AllTrim(p->sUpdatedDate);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SMSP_NBR_STAT中用结构缓冲方式取数据*/
+int EGetSmspNbrStatToStruct(struct RSmspNbrStatStruct *p,
+	struct RSmspNbrStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(TICKET_TYPE_ID,-1),\n\
+				BILLING_CYCLE_ID,\n\
+				USER_TYPE,\n\
+				MSISDN,\n\
+				TOTAL_FEE,\n\
+				TOTAL_INFO_FEE,\n\
+				TOTAL_COMM_FEE,\n\
+				nvl(TOTAL_RENT_FEE,-1),\n\
+				nvl(SP_CODE,'-1'),\n\
+				nvl(SP_SERVICE_CODE,'-1'),\n\
+				nvl(SP_ACC_NBR,'-1'),\n\
+				MO_CNT,\n\
+				MT_CNT,\n\
+				nvl(TOTAL_CNT,-1),\n\
+				MIN_START_TIME,\n\
+				MAX_START_TIME,\n\
+				HOME_AREA_CODE,\n\
+				to_char(CREATED_DATE,'yyyymmddhh24miss'),\n\
+				to_char(nvl(UPDATED_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SMSP_NBR_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE SMSP_NBR_STATSCR SMSP_NBR_STATCR");
+
+		EXEC SQL DECLARE SMSP_NBR_STATCR CURSOR FOR SMSP_NBR_STATSCR;
+		CheckSqlError("Declare SMSP_NBR_STATCR");
+
+		EXEC SQL OPEN SMSP_NBR_STATCR;
+		CheckSqlError("Open SMSP_NBR_STATCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SMSP_NBR_STATCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SMSP_NBR_STATCR INTO
+			:pSource->aiTicketTypeID,
+			:pSource->asBillingCycleID,
+			:pSource->asUserType,
+			:pSource->asMsisdn,
+			:pSource->aiTotalFee,
+			:pSource->aiTotalInfoFee,
+			:pSource->aiTotalCommFee,
+			:pSource->aiTotalRentFee,
+			:pSource->asSpCode,
+			:pSource->asSpServiceCode,
+			:pSource->asSpAccNbr,
+			:pSource->aiMoCnt,
+			:pSource->aiMtCnt,
+			:pSource->aiTotalCnt,
+			:pSource->asMinStartTime,
+			:pSource->asMaxStartTime,
+			:pSource->asHomeAreaCode,
+			:pSource->asCreatedDate,
+			:pSource->asUpdatedDate,
+			:pSource->asRowID;
+		CheckSqlError("Fetch SMSP_NBR_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SMSP_NBR_STATCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SMSP_NBR_STAT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sBillingCycleID,	pSource->asBillingCycleID[iCurPos]);
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+
+		p->iTotalFee=			pSource->aiTotalFee[iCurPos];
+		p->iTotalInfoFee=		pSource->aiTotalInfoFee[iCurPos];
+		p->iTotalCommFee=		pSource->aiTotalCommFee[iCurPos];
+		p->iTotalRentFee=		pSource->aiTotalRentFee[iCurPos];
+
+		strcpy(p->sSpCode,		pSource->asSpCode[iCurPos]);
+		strcpy(p->sSpServiceCode,	pSource->asSpServiceCode[iCurPos]);
+		strcpy(p->sSpAccNbr,		pSource->asSpAccNbr[iCurPos]);
+
+		p->iMoCnt=			pSource->aiMoCnt[iCurPos];
+		p->iMtCnt=			pSource->aiMtCnt[iCurPos];
+		p->iTotalCnt=			pSource->aiTotalCnt[iCurPos];
+
+		strcpy(p->sMinStartTime,	pSource->asMinStartTime[iCurPos]);
+		strcpy(p->sMaxStartTime,	pSource->asMaxStartTime[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sCreatedDate,		pSource->asCreatedDate[iCurPos]);
+		strcpy(p->sUpdatedDate,		pSource->asUpdatedDate[iCurPos]);
+		strcpy(p->sRowID,		pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sBillingCycleID);
+		AllTrim(p->sUserType);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sSpCode);
+		AllTrim(p->sSpServiceCode);
+		AllTrim(p->sSpAccNbr);
+		AllTrim(p->sMinStartTime);
+		AllTrim(p->sMaxStartTime);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sCreatedDate);
+		AllTrim(p->sUpdatedDate);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SP_ACCT_ITEM中用结构缓冲方式取数据*/
+int EGetSpAcctItemToStruct(struct SpAcctItemStruct *p,
+	struct SpAcctItemStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				MSISDN,\n\
+				BILLING_CYCLE_ID,\n\
+				nvl(PAY_CYCLE_ID,'-1'),\n\
+				nvl(SP_CODE,'-1'),\n\
+				nvl(SP_SERVICE_CODE,'-1'),\n\
+				nvl(CHARGE,'-1'),\n\
+				nvl(TICKET_TYPE_ID,-1),\n\
+				nvl(SERVICE_CODE,'-1'),\n\
+				to_char(nvl(PAY_TIME,SYSDATE+3000),'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SP_ACCT_ITEMSCR FROM :statement;
+		CheckSqlError(" PREPARE SP_ACCT_ITEMSCR SP_ACCT_ITEMCR");
+
+		EXEC SQL DECLARE SP_ACCT_ITEMCR CURSOR FOR SP_ACCT_ITEMSCR;
+		CheckSqlError("Declare SP_ACCT_ITEMCR");
+
+		EXEC SQL OPEN SP_ACCT_ITEMCR;
+		CheckSqlError("Open SP_ACCT_ITEMCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SP_ACCT_ITEMCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SP_ACCT_ITEMCR INTO
+			:pSource->asMsisdn,
+			:pSource->asBillingCycleID,
+			:pSource->asPayCycleID,
+			:pSource->asSpCode,
+			:pSource->asSpServiceCode,
+			:pSource->asCharge,
+			:pSource->aiTicketTypeID,
+			:pSource->asServiceCode,
+			:pSource->asPayTime;
+		CheckSqlError("Fetch SP_ACCT_ITEMCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SP_ACCT_ITEMCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SP_ACCT_ITEM_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sBillingCycleID,	pSource->asBillingCycleID[iCurPos]);
+		strcpy(p->sPayCycleID,		pSource->asPayCycleID[iCurPos]);
+		strcpy(p->sSpCode,		pSource->asSpCode[iCurPos]);
+		strcpy(p->sSpServiceCode,	pSource->asSpServiceCode[iCurPos]);
+		strcpy(p->sCharge,		pSource->asCharge[iCurPos]);
+
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sServiceCode,		pSource->asServiceCode[iCurPos]);
+		strcpy(p->sPayTime,		pSource->asPayTime[iCurPos]);
+
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sBillingCycleID);
+		AllTrim(p->sPayCycleID);
+		AllTrim(p->sSpCode);
+		AllTrim(p->sSpServiceCode);
+		AllTrim(p->sCharge);
+		AllTrim(p->sServiceCode);
+		AllTrim(p->sPayTime);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从SERV_CARD中用结构缓冲方式取数据*/
+int EGetServCardToStruct(struct ServCardStruct *p,
+	struct ServCardStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				ACC_NBR,\n\
+				AREA_CODE,\n\
+				nvl(AREA_CODE_NAME,' '),\n\
+				nvl(AREA_NAME,' '),\n\
+				nvl(CUST_NANE,' '),\n\
+				nvl(TYPE_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SERV_CARDSCR FROM :statement;
+		CheckSqlError(" PREPARE SERV_CARDSCR SERV_CARDCR");
+
+		EXEC SQL DECLARE SERV_CARDCR CURSOR FOR SERV_CARDSCR;
+		CheckSqlError("Declare SERV_CARDCR");
+
+		EXEC SQL OPEN SERV_CARDCR;
+		CheckSqlError("Open SERV_CARDCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SERV_CARDCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SERV_CARDCR INTO
+			:pSource->asAccNbr,
+			:pSource->asAreaCode,
+			:pSource->asAreaCodeName,
+			:pSource->asAreaName,
+			:pSource->asCustNane,
+			:pSource->aiTypeID;
+		CheckSqlError("Fetch SERV_CARDCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SERV_CARDCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SERV_CARD_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sAccNbr,		pSource->asAccNbr[iCurPos]);
+		strcpy(p->sAreaCode,		pSource->asAreaCode[iCurPos]);
+		strcpy(p->sAreaCodeName,	pSource->asAreaCodeName[iCurPos]);
+		strcpy(p->sAreaName,		pSource->asAreaName[iCurPos]);
+		strcpy(p->sCustNane,		pSource->asCustNane[iCurPos]);
+
+		p->iTypeID=			pSource->aiTypeID[iCurPos];
+
+		AllTrim(p->sAccNbr);
+		AllTrim(p->sAreaCode);
+		AllTrim(p->sAreaCodeName);
+		AllTrim(p->sAreaName);
+		AllTrim(p->sCustNane);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从MSISDN_STAT中用结构缓冲方式取数据*/
+int EGetMsisdnStatToStruct(struct MsisdnStatStruct *p,
+	struct MsisdnStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				MSISDN,\n\
+				AREA_CODE,\n\
+				AREA_ID,\n\
+				NET_TYPE,\n\
+				CALL_TYPE,\n\
+				SERVICE_TYPE,\n\
+				TOTAL_DURATION,\n\
+				TOTAL_MIN,\n\
+				TOTAL_CNT,\n\
+				TOTAL_FEE1,\n\
+				TOTAL_FEE2,\n\
+				TOTAL_FEE3,\n\
+				BILLING_CYCLE_ID,\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE MSISDN_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE MSISDN_STATSCR MSISDN_STATCR");
+
+		EXEC SQL DECLARE MSISDN_STATCR CURSOR FOR MSISDN_STATSCR;
+		CheckSqlError("Declare MSISDN_STATCR");
+
+		EXEC SQL OPEN MSISDN_STATCR;
+		CheckSqlError("Open MSISDN_STATCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE MSISDN_STATCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH MSISDN_STATCR INTO
+			:pSource->asMsisdn,
+			:pSource->asAreaCode,
+			:pSource->aiAreaID,
+			:pSource->asNetType,
+			:pSource->asCallType,
+			:pSource->asServiceType,
+			:pSource->aiTotalDuration,
+			:pSource->aiTotalMin,
+			:pSource->aiTotalCnt,
+			:pSource->aiTotalFee1,
+			:pSource->aiTotalFee2,
+			:pSource->aiTotalFee3,
+			:pSource->asBillingCycleID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch MSISDN_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE MSISDN_STATCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=MSISDN_STAT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sMsisdn,		pSource->asMsisdn[iCurPos]);
+		strcpy(p->sAreaCode,		pSource->asAreaCode[iCurPos]);
+
+		p->iAreaID=			pSource->aiAreaID[iCurPos];
+
+		strcpy(p->sNetType,		pSource->asNetType[iCurPos]);
+		strcpy(p->sCallType,		pSource->asCallType[iCurPos]);
+		strcpy(p->sServiceType,		pSource->asServiceType[iCurPos]);
+
+		p->iTotalDuration=		pSource->aiTotalDuration[iCurPos];
+		p->iTotalMin=			pSource->aiTotalMin[iCurPos];
+		p->iTotalCnt=			pSource->aiTotalCnt[iCurPos];
+		p->iTotalFee1=			pSource->aiTotalFee1[iCurPos];
+		p->iTotalFee2=			pSource->aiTotalFee2[iCurPos];
+		p->iTotalFee3=			pSource->aiTotalFee3[iCurPos];
+
+		strcpy(p->sBillingCycleID,	pSource->asBillingCycleID[iCurPos]);
+		strcpy(p->sRowID,               pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sAreaCode);
+		AllTrim(p->sNetType);
+		AllTrim(p->sCallType);
+		AllTrim(p->sServiceType);
+		AllTrim(p->sBillingCycleID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+/*批量数据动态从SETT_TYPE_RELATION中用结构缓冲方式取数据*/
+int EGetSettTypeRelationToStruct(struct SettTypeRelationStruct *p,
+	struct SettTypeRelationStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				nvl(SETT_TYPE,' '),\n\
+				nvl(CARRIER_ID,' '),\n\
+				nvl(TARIFF_TYPE,' '),\n\
+				nvl(PRIORITY,0),\n\
+				nvl(USER_TYPE,' '),\n\
+				nvl(COUNTY_FLAG,' '),\n\
+				nvl(REMARK,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SETT_TYPE_RELATIONSCR FROM :statement;
+		CheckSqlError(" PREPARE SETT_TYPE_RELATIONSCR SETT_TYPE_RELATIONCR");
+
+		EXEC SQL DECLARE SETT_TYPE_RELATIONCR CURSOR FOR SETT_TYPE_RELATIONSCR;
+		CheckSqlError("Declare SETT_TYPE_RELATIONCR");
+
+		EXEC SQL OPEN SETT_TYPE_RELATIONCR;
+		CheckSqlError("Open SETT_TYPE_RELATIONCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SETT_TYPE_RELATIONCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SETT_TYPE_RELATIONCR INTO
+			:pSource->aiTicketTypeID,
+			:pSource->asSettType,
+			:pSource->asCarrierID,
+			:pSource->asTariffType,
+			:pSource->aiPriority,
+			:pSource->asUserType,
+			:pSource->asCountyFlag,
+			:pSource->asRemark;
+		CheckSqlError("Fetch SETT_TYPE_RELATIONCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SETT_TYPE_RELATIONCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SETT_TYPE_RELATION_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iTicketTypeID=	pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sSettType,	pSource->asSettType[iCurPos]);
+		strcpy(p->sCarrierID,	pSource->asCarrierID[iCurPos]);
+		strcpy(p->sTariffType,	pSource->asTariffType[iCurPos]);
+
+		p->iPriority=		pSource->aiPriority[iCurPos];
+
+		strcpy(p->sUserType,	pSource->asUserType[iCurPos]);
+		strcpy(p->sCountyFlag,	pSource->asCountyFlag[iCurPos]);
+		strcpy(p->sRemark,	pSource->asRemark[iCurPos]);
+
+		AllTrim(p->sSettType);
+		AllTrim(p->sCarrierID);
+		AllTrim(p->sTariffType);
+		AllTrim(p->sUserType);
+		AllTrim(p->sCountyFlag);
+		AllTrim(p->sRemark);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从SETT_SUM_DAY中用结构缓冲方式取数据*/
+int EGetSettSumDayToStruct(struct SettSumDayStruct *p,
+	struct SettSumDayStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(TICKET_TYPE_ID,0),\n\
+				nvl(VISIT_AREA_CODE,' '),\n\
+				nvl(STAT_MONTH,' '),\n\
+				nvl(HOME_AREA_CODE,' '),\n\
+				nvl(CALLED_CODE,' '),\n\
+				nvl(START_DATE,' '),\n\
+				nvl(CALLING_CARRIER_ID,0),\n\
+				nvl(CALLED_CARRIER_ID,0),\n\
+				nvl(THIRD_CARRIER_ID,0),\n\
+				nvl(USER_TYPE,' '),\n\
+				nvl(IP_ACC_NBR,' '),\n\
+				nvl(DURATION_CNT,0),\n\
+				nvl(DURATION,0),\n\
+				nvl(SETT_CNT,0),\n\
+				nvl(TOTAL_FEE,0),\n\
+				nvl(COUNT,0),\n\
+				nvl(STATE,' '),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE SETT_SUM_DAYSCR FROM :statement;
+		CheckSqlError(" PREPARE SETT_SUM_DAYSCR SETT_SUM_DAYCR");
+
+		EXEC SQL DECLARE SETT_SUM_DAYCR CURSOR FOR SETT_SUM_DAYSCR;
+		CheckSqlError("Declare SETT_SUM_DAYCR");
+
+		EXEC SQL OPEN SETT_SUM_DAYCR;
+		CheckSqlError("Open SETT_SUM_DAYCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE SETT_SUM_DAYCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH SETT_SUM_DAYCR INTO
+			:pSource->aiTicketTypeID,
+			:pSource->asVisitAreaCode,
+			:pSource->asStatMonth,
+			:pSource->asHomeAreaCode,
+			:pSource->asCalledCode,
+			:pSource->asStartDate,
+			:pSource->aiCallingCarrierID,
+			:pSource->aiCalledCarrierID,
+			:pSource->aiThirdCarrierID,
+			:pSource->asUserType,
+			:pSource->asIpAccNbr,
+			:pSource->aiDurationCnt,
+			:pSource->aiDuration,
+			:pSource->aiSettCnt,
+			:pSource->aiTotalFee,
+			:pSource->aiCount,
+			:pSource->asState,
+			:pSource->asDealDate;
+		CheckSqlError("Fetch SETT_SUM_DAYCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE SETT_SUM_DAYCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=SETT_SUM_DAY_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		p->iTicketTypeID=		pSource->aiTicketTypeID[iCurPos];
+
+		strcpy(p->sVisitAreaCode,	pSource->asVisitAreaCode[iCurPos]);
+		strcpy(p->sStatMonth,		pSource->asStatMonth[iCurPos]);
+		strcpy(p->sHomeAreaCode,	pSource->asHomeAreaCode[iCurPos]);
+		strcpy(p->sCalledCode,		pSource->asCalledCode[iCurPos]);
+		strcpy(p->sStartDate,		pSource->asStartDate[iCurPos]);
+
+		p->iCallingCarrierID=		pSource->aiCallingCarrierID[iCurPos];
+		p->iCalledCarrierID=		pSource->aiCalledCarrierID[iCurPos];
+		p->iThirdCarrierID=		pSource->aiThirdCarrierID[iCurPos];
+
+		strcpy(p->sUserType,		pSource->asUserType[iCurPos]);
+		strcpy(p->sIpAccNbr,		pSource->asIpAccNbr[iCurPos]);
+
+		p->iDurationCnt=		pSource->aiDurationCnt[iCurPos];
+		p->iDuration=			pSource->aiDuration[iCurPos];
+		p->iSettCnt=			pSource->aiSettCnt[iCurPos];
+		p->iTotalFee=			pSource->aiTotalFee[iCurPos];
+		p->iCount=			pSource->aiCount[iCurPos];
+
+		strcpy(p->sState,		pSource->asState[iCurPos]);
+		strcpy(p->sDealDate,		pSource->asDealDate[iCurPos]);
+
+		AllTrim(p->sStatMonth);
+		AllTrim(p->sHomeAreaCode);
+		AllTrim(p->sCalledCode);
+		AllTrim(p->sStartDate);
+		AllTrim(p->sUserType);
+		AllTrim(p->sIpAccNbr);
+		AllTrim(p->sState);
+		AllTrim(p->sDealDate);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+int EGetDownVoipStatToStruct(struct DownVoipStatStruct *p,
+	struct DownVoipStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(CALLING_USER_TYPE,' '),\n\
+				nvl(IN_CITY_CODE,' '),\n\
+				nvl(OUT_CITY_CODE,' '),\n\
+				to_char(nvl(TOLL_FEE1,0)),\n\
+				to_char(nvl(DURATION1,0)),\n\
+				to_char(nvl(CNT1,0)),\n\
+				to_char(nvl(TOLL_FEE2,0)),\n\
+				to_char(nvl(DURATION2,0)),\n\
+				to_char(nvl(CNT2,0)),\n\
+				to_char(nvl(TOLL_FEE3,0)),\n\
+				to_char(nvl(DURATION3,0)),\n\
+				to_char(nvl(CNT3,0)),\n\
+				to_char(nvl(TOLL_FEE4,0)),\n\
+				to_char(nvl(DURATION4,0)),\n\
+				to_char(nvl(CNT4,0)),\n\
+				to_char(nvl(TOLL_FEE5,0)),\n\
+				to_char(nvl(DURATION5,0)),\n\
+				to_char(nvl(CNT5,0)),\n\
+				to_char(nvl(TOLL_FEE6,0)),\n\
+				to_char(nvl(DURATION6,0)),\n\
+				to_char(nvl(CNT6,0)),\n\
+				nvl(SETT_MONTH,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE DOWN_VOIP_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE DOWN_VOIP_STATSCR DOWN_VOIP_STATCR");
+
+		EXEC SQL DECLARE DOWN_VOIP_STATCR CURSOR FOR DOWN_VOIP_STATSCR;
+		CheckSqlError("Declare DOWN_VOIP_STATCR");
+
+		EXEC SQL OPEN DOWN_VOIP_STATCR;
+		CheckSqlError("Open DOWN_VOIP_STATCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE DOWN_VOIP_STATCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH DOWN_VOIP_STATCR INTO
+			:pSource->asCallingUserType,
+			:pSource->asInCityCode,
+			:pSource->asOutCityCout,
+			:pSource->asTollFee1,
+			:pSource->asDuration1,
+			:pSource->asCnt1,
+			:pSource->asTollFee2,
+			:pSource->asDuration2,
+			:pSource->asCnt2,
+			:pSource->asTollFee3,
+			:pSource->asDuration3,
+			:pSource->asCnt3,
+			:pSource->asTollFee4,
+			:pSource->asDuration4,
+			:pSource->asCnt4,
+			:pSource->asTollFee5,
+			:pSource->asDuration5,
+			:pSource->asCnt5,
+			:pSource->asTollFee6,
+			:pSource->asDuration6,
+			:pSource->asCnt6,
+			:pSource->asSettMonth;
+		CheckSqlError("Fetch DOWN_VOIP_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE DOWN_VOIP_STATCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=DOWN_VOIP_STAT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sCallingUserType,	pSource->asCallingUserType[iCurPos]);
+		strcpy(p->sInCityCode,		pSource->asInCityCode[iCurPos]);
+		strcpy(p->sOutCityCout,		pSource->asOutCityCout[iCurPos]);
+		strcpy(p->sTollFee1,		pSource->asTollFee1[iCurPos]);
+		strcpy(p->sDuration1,		pSource->asDuration1[iCurPos]);
+		strcpy(p->sCnt1,		pSource->asCnt1[iCurPos]);
+		strcpy(p->sTollFee2,		pSource->asTollFee2[iCurPos]);
+		strcpy(p->sDuration2,		pSource->asDuration2[iCurPos]);
+		strcpy(p->sCnt2,		pSource->asCnt2[iCurPos]);
+		strcpy(p->sTollFee3,		pSource->asTollFee3[iCurPos]);
+		strcpy(p->sDuration3,		pSource->asDuration3[iCurPos]);
+		strcpy(p->sCnt3,		pSource->asCnt3[iCurPos]);
+		strcpy(p->sTollFee4,		pSource->asTollFee4[iCurPos]);
+		strcpy(p->sDuration4,		pSource->asDuration4[iCurPos]);
+		strcpy(p->sCnt4,		pSource->asCnt4[iCurPos]);
+		strcpy(p->sTollFee5,		pSource->asTollFee5[iCurPos]);
+		strcpy(p->sDuration5,		pSource->asDuration5[iCurPos]);
+		strcpy(p->sCnt5,		pSource->asCnt5[iCurPos]);
+		strcpy(p->sTollFee6,		pSource->asTollFee6[iCurPos]);
+		strcpy(p->sDuration6,		pSource->asDuration6[iCurPos]);
+		strcpy(p->sCnt6,		pSource->asCnt6[iCurPos]);
+		strcpy(p->sSettMonth,		pSource->asSettMonth[iCurPos]);
+
+		AllTrim(p->sCallingUserType);
+		AllTrim(p->sInCityCode);
+		AllTrim(p->sOutCityCout);
+		AllTrim(p->sTollFee1);
+		AllTrim(p->sDuration1);
+		AllTrim(p->sCnt1);
+		AllTrim(p->sTollFee2);
+		AllTrim(p->sDuration2);
+		AllTrim(p->sCnt2);
+		AllTrim(p->sTollFee3);
+		AllTrim(p->sDuration3);
+		AllTrim(p->sCnt3);
+		AllTrim(p->sTollFee4);
+		AllTrim(p->sDuration4);
+		AllTrim(p->sCnt4);
+		AllTrim(p->sTollFee5);
+		AllTrim(p->sDuration5);
+		AllTrim(p->sCnt5);
+		AllTrim(p->sTollFee6);
+		AllTrim(p->sDuration6);
+		AllTrim(p->sCnt6);
+		AllTrim(p->sSettMonth);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从DOWN_TOLL_STAT中用结构缓冲方式取数据*/
+int EGetDownTollStatToStruct(struct DownTollStatStruct *p,
+	struct DownTollStatStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(CALLING_USER_TYPE,' '),\n\
+				nvl(IN_CITY_CODE,' '),\n\
+				nvl(OUT_CITY_CODE,' '),\n\
+				to_char(nvl(TOLL_FEE1,0)),\n\
+				to_char(nvl(DURATION1,0)),\n\
+				to_char(nvl(CNT1,0)),\n\
+				to_char(nvl(TOLL_FEE2,0)),\n\
+				to_char(nvl(DURATION2,0)),\n\
+				to_char(nvl(CNT2,0)),\n\
+				to_char(nvl(TOLL_FEE3,0)),\n\
+				to_char(nvl(DURATION3,0)),\n\
+				to_char(nvl(CNT3,0)),\n\
+				nvl(SETT_MONTH,' ')\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE DOWN_TOLL_STATSCR FROM :statement;
+		CheckSqlError(" PREPARE DOWN_TOLL_STATSCR DOWN_TOLL_STATCR");
+
+		EXEC SQL DECLARE DOWN_TOLL_STATCR CURSOR FOR DOWN_TOLL_STATSCR;
+		CheckSqlError("Declare DOWN_TOLL_STATCR");
+
+		EXEC SQL OPEN DOWN_TOLL_STATCR;
+		CheckSqlError("Open DOWN_TOLL_STATCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE DOWN_TOLL_STATCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH DOWN_TOLL_STATCR INTO
+			:pSource->asCallingUserType,
+			:pSource->asInCityCode,
+			:pSource->asOutCityCout,
+			:pSource->asTollFee1,
+			:pSource->asDuration1,
+			:pSource->asCnt1,
+			:pSource->asTollFee2,
+			:pSource->asDuration2,
+			:pSource->asCnt2,
+			:pSource->asTollFee3,
+			:pSource->asDuration3,
+			:pSource->asCnt3,
+			:pSource->asSettMonth;
+		CheckSqlError("Fetch DOWN_TOLL_STATCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE DOWN_TOLL_STATCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=DOWN_TOLL_STAT_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sCallingUserType,	pSource->asCallingUserType[iCurPos]);
+		strcpy(p->sInCityCode,		pSource->asInCityCode[iCurPos]);
+		strcpy(p->sOutCityCout,		pSource->asOutCityCout[iCurPos]);
+		strcpy(p->sTollFee1,		pSource->asTollFee1[iCurPos]);
+		strcpy(p->sDuration1,		pSource->asDuration1[iCurPos]);
+		strcpy(p->sCnt1,		pSource->asCnt1[iCurPos]);
+		strcpy(p->sTollFee2,		pSource->asTollFee2[iCurPos]);
+		strcpy(p->sDuration2,		pSource->asDuration2[iCurPos]);
+		strcpy(p->sCnt2,		pSource->asCnt2[iCurPos]);
+		strcpy(p->sTollFee3,		pSource->asTollFee3[iCurPos]);
+		strcpy(p->sDuration3,		pSource->asDuration3[iCurPos]);
+		strcpy(p->sCnt3,		pSource->asCnt3[iCurPos]);
+		strcpy(p->sSettMonth,		pSource->asSettMonth[iCurPos]);
+
+		AllTrim(p->sCallingUserType);
+		AllTrim(p->sInCityCode);
+		AllTrim(p->sOutCityCout);
+		AllTrim(p->sTollFee1);
+		AllTrim(p->sDuration1);
+		AllTrim(p->sCnt1);
+		AllTrim(p->sTollFee2);
+		AllTrim(p->sDuration2);
+		AllTrim(p->sCnt2);
+		AllTrim(p->sTollFee3);
+		AllTrim(p->sDuration3);
+		AllTrim(p->sCnt3);
+		AllTrim(p->sSettMonth);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从X_STR_TICKET中用结构缓冲方式取数据*/
+int EGetXStrTicketToStruct(struct XStrTicketStruct *p,
+	struct XStrTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				X_STR,\n\
+				SOURCE_ID,\n\
+				ROW_ID\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE X_STR_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE X_STR_TICKETSCR X_STR_TICKETCR");
+
+		EXEC SQL DECLARE X_STR_TICKETCR CURSOR FOR X_STR_TICKETSCR;
+		CheckSqlError("Declare X_STR_TICKETCR");
+
+		EXEC SQL OPEN X_STR_TICKETCR;
+		CheckSqlError("Open X_STR_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE X_STR_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH X_STR_TICKETCR INTO
+			:pSource->asXStr,
+			:pSource->asSourceID,
+			:pSource->asRowID;
+		CheckSqlError("Fetch X_STR_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE X_STR_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=X_STR_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sXStr,	pSource->asXStr[iCurPos]);
+		strcpy(p->sSourceID,	pSource->asSourceID[iCurPos]);
+		strcpy(p->sRowID,	pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sXStr);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从MY_TAB_COLUMNS中用结构缓冲方式取数据*/
+int EGetMyTabColumnsToStruct(struct MyTabColumnsStruct *p,
+	struct MyTabColumnsStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(TABLE_NAME,' '),\n\
+				nvl(DATA_TYPE,' '),\n\
+				nvl(COLUMN_NAME,' '),\n\
+				nvl(LEN,0),\n\
+				nvl(SCALE,0),\n\
+				nvl(NULLABLE,' '),\n\
+				nvl(COLUMN_ID,0)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE MY_TAB_COLUMNSSCR FROM :statement;
+		CheckSqlError(" PREPARE MY_TAB_COLUMNSSCR MY_TAB_COLUMNSCR");
+
+		EXEC SQL DECLARE MY_TAB_COLUMNSCR CURSOR FOR MY_TAB_COLUMNSSCR;
+		CheckSqlError("Declare MY_TAB_COLUMNSCR");
+
+		EXEC SQL OPEN MY_TAB_COLUMNSCR;
+		CheckSqlError("Open MY_TAB_COLUMNSCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE MY_TAB_COLUMNSCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH MY_TAB_COLUMNSCR INTO
+			:pSource->asTableName,
+			:pSource->asDataType,
+			:pSource->asColumnName,
+			:pSource->aiLen,
+			:pSource->aiScale,
+			:pSource->asNullable,
+			:pSource->aiColumnID;
+		CheckSqlError("Fetch MY_TAB_COLUMNSCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE MY_TAB_COLUMNSCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=MY_TAB_COLUMNS_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sTableName,	pSource->asTableName[iCurPos]);
+		strcpy(p->sDataType,	pSource->asDataType[iCurPos]);
+		strcpy(p->sColumnName,	pSource->asColumnName[iCurPos]);
+
+		p->iLen=		pSource->aiLen[iCurPos];
+		p->iScale=		pSource->aiScale[iCurPos];
+
+		strcpy(p->sNullable,	pSource->asNullable[iCurPos]);
+
+		p->iColumnID=		pSource->aiColumnID[iCurPos];
+
+		AllTrim(p->sTableName);
+		AllTrim(p->sDataType);
+		AllTrim(p->sColumnName);
+		AllTrim(p->sNullable);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}
+
+/*批量数据动态从ERR_TICKET中用结构缓冲方式取数据*/
+int EGetErrTicketToStruct(struct ErrTicketStruct *p,
+	struct ErrTicketStructIn *pSource)
+{
+
+	int  iCurPos=pSource->iCurPos;
+	char *sTableName=pSource->sTableName;
+	char *sCondition=pSource->sCondition;
+
+	if(pSource->iFirstFlag){
+
+/* CURSOR DEFINE */
+		char statement[8192];
+
+		sprintf(statement,"\n\
+			SELECT \n\
+				nvl(RECORD_TYPE,' '),\n\
+				nvl(CALL_TYPE,' '),\n\
+				nvl(MSISDN,' '),\n\
+				nvl(OTHER_PARTY,' '),\n\
+				nvl(START_TIME,' '),\n\
+				nvl(DURATION,' '),\n\
+				nvl(IMSI,' '),\n\
+				nvl(MSC,' '),\n\
+				nvl(RESERVE1,' '),\n\
+				nvl(RESERVE2,' '),\n\
+				nvl(RESERVE3,' '),\n\
+				nvl(RESERVE4,' '),\n\
+				nvl(ORI_SOURCE_ID,' '),\n\
+				nvl(ORI_FILE_NAME,' '),\n\
+				nvl(LINE,0),\n\
+				nvl(ERR_CODE,' '),\n\
+				nvl(FILE_NAME,' '),\n\
+				nvl(MODULE,' '),\n\
+				nvl(AREA_CODE,' '),\n\
+				nvl(STATE,' '),\n\
+				to_char(nvl(UPDATE_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				to_char(nvl(DEAL_DATE,SYSDATE+3000),'yyyymmddhh24miss'),\n\
+				nvl(SOURCE_ID,' '),\n\
+				nvl(ERR_REC,' '),\n\
+				rowidtochar(ROWID)\n\
+			FROM %s %s",sTableName,sCondition);
+
+		EXEC SQL PREPARE ERR_TICKETSCR FROM :statement;
+		CheckSqlError(" PREPARE ERR_TICKETSCR ERR_TICKETCR");
+
+		EXEC SQL DECLARE ERR_TICKETCR CURSOR FOR ERR_TICKETSCR;
+		CheckSqlError("Declare ERR_TICKETCR");
+
+		EXEC SQL OPEN ERR_TICKETCR;
+		CheckSqlError("Open ERR_TICKETCR;");
+
+
+		pSource->iFirstFlag = pSource->iEndFlag = FALSE;
+		pSource->iFetchRecNum = pSource->iCurPos = 0;
+		pSource->iBufEmpty = TRUE;
+	}
+
+	if(pSource->iEndFlag==TRUE&&iCurPos==pSource->iRecCnt){
+
+		pSource->iBufEmpty=TRUE;
+		pSource->iCurPos=0;
+		pSource->iFetchRecNum=0;
+		pSource->iEndFlag=FALSE;
+		pSource->iFirstFlag=TRUE;
+
+		EXEC SQL CLOSE ERR_TICKETCR;
+
+		return FALSE;
+	}
+
+	if(pSource->iBufEmpty||!pSource->iFetchRecNum){
+
+/* FETCH */
+		EXEC SQL FETCH ERR_TICKETCR INTO
+			:pSource->asRecordType,
+			:pSource->asCallType,
+			:pSource->asMsisdn,
+			:pSource->asOtherParty,
+			:pSource->asStartTime,
+			:pSource->asDuration,
+			:pSource->asImsi,
+			:pSource->asMsc,
+			:pSource->asReserve1,
+			:pSource->asReserve2,
+			:pSource->asReserve3,
+			:pSource->asReserve4,
+			:pSource->asOriSourceID,
+			:pSource->asOriFileName,
+			:pSource->aiLine,
+			:pSource->asErrCode,
+			:pSource->asFileName,
+			:pSource->asModule,
+			:pSource->asAreaCode,
+			:pSource->asState,
+			:pSource->asUpdateDate,
+			:pSource->asDealDate,
+			:pSource->asSourceID,
+			:pSource->asErrRec,
+			:pSource->asRowID;
+		CheckSqlError("Fetch ERR_TICKETCR");
+
+		pSource->iRecCnt=FetchColNum-pSource->iFetchRecNum;
+
+		if(!pSource->iRecCnt){
+
+			pSource->iBufEmpty=TRUE;
+			pSource->iCurPos=0;
+			pSource->iFetchRecNum=0;
+			pSource->iEndFlag=FALSE;
+			pSource->iFirstFlag=TRUE;
+
+			EXEC SQL CLOSE ERR_TICKETCR;
+
+			return FALSE;
+		}
+
+		if(pSource->iRecCnt!=ERR_TICKET_BUFLEN_IN)
+			pSource->iEndFlag = TRUE;
+
+		pSource->iFetchRecNum=FetchColNum;
+		pSource->iCurPos=0;
+		iCurPos=0;
+		pSource->iBufEmpty=FALSE;
+	}
+
+/* 从缓冲区取数据*/
+		strcpy(p->sRecordType,	pSource->asRecordType[iCurPos]);
+		strcpy(p->sCallType,	pSource->asCallType[iCurPos]);
+		strcpy(p->sMsisdn,	pSource->asMsisdn[iCurPos]);
+		strcpy(p->sOtherParty,	pSource->asOtherParty[iCurPos]);
+		strcpy(p->sStartTime,	pSource->asStartTime[iCurPos]);
+		strcpy(p->sDuration,	pSource->asDuration[iCurPos]);
+		strcpy(p->sImsi,	pSource->asImsi[iCurPos]);
+		strcpy(p->sMsc,		pSource->asMsc[iCurPos]);
+		strcpy(p->sReserve1,	pSource->asReserve1[iCurPos]);
+		strcpy(p->sReserve2,	pSource->asReserve2[iCurPos]);
+		strcpy(p->sReserve3,	pSource->asReserve3[iCurPos]);
+		strcpy(p->sReserve4,	pSource->asReserve4[iCurPos]);
+		strcpy(p->sOriSourceID,	pSource->asOriSourceID[iCurPos]);
+		strcpy(p->sOriFileName,	pSource->asOriFileName[iCurPos]);
+
+		p->iLine=		pSource->aiLine[iCurPos];
+
+		strcpy(p->sErrCode,	pSource->asErrCode[iCurPos]);
+		strcpy(p->sFileName,	pSource->asFileName[iCurPos]);
+		strcpy(p->sModule,	pSource->asModule[iCurPos]);
+		strcpy(p->sAreaCode,	pSource->asAreaCode[iCurPos]);
+		strcpy(p->sState,	pSource->asState[iCurPos]);
+		strcpy(p->sUpdateDate,	pSource->asUpdateDate[iCurPos]);
+		strcpy(p->sDealDate,	pSource->asDealDate[iCurPos]);
+		strcpy(p->sSourceID,	pSource->asSourceID[iCurPos]);
+		strcpy(p->sErrRec,	pSource->asErrRec[iCurPos]);
+		
+		strcpy(p->sRowID,	pSource->asRowID[iCurPos]);
+
+		AllTrim(p->sRecordType);
+		AllTrim(p->sCallType);
+		AllTrim(p->sMsisdn);
+		AllTrim(p->sOtherParty);
+		AllTrim(p->sStartTime);
+		AllTrim(p->sDuration);
+		AllTrim(p->sImsi);
+		AllTrim(p->sMsc);
+		AllTrim(p->sReserve1);
+		AllTrim(p->sReserve2);
+		AllTrim(p->sReserve3);
+		AllTrim(p->sReserve4);
+		AllTrim(p->sOriSourceID);
+		AllTrim(p->sOriFileName);
+		AllTrim(p->sErrCode);
+		AllTrim(p->sFileName);
+		AllTrim(p->sModule);
+		AllTrim(p->sAreaCode);
+		AllTrim(p->sState);
+		AllTrim(p->sUpdateDate);
+		AllTrim(p->sDealDate);
+		AllTrim(p->sSourceID);
+		AllTrim(p->sErrRec);
+		AllTrim(p->sRowID);
+
+	iCurPos++;
+
+	if(iCurPos==pSource->iRecCnt)
+		pSource->iBufEmpty=TRUE;
+	pSource->iCurPos=iCurPos;
+	return TRUE;
+}

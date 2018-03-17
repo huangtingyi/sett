@@ -1,0 +1,44 @@
+{
+/*声明输出部分*/
+goto aa;
+	setfilefmt("txt");
+	initdate(300);
+setfmt(st_call_type	 ," ", "%-2s",posp(   "0:2"));
+setfmt(st_city_code	 ," ", "%-5s",posp(   "2:5"));
+setfmt(st_msisdn	 ," ","%-15s",posp(  "7:15"));
+setfmt(st_other_party	 ," ","%-24s",posp( "22:24"));
+setfmt(st_start_time	 ," ","%-14s",posp( "46:14"));
+setfmt(it_duration	 ," ", "%06d",posp(  "60:6"));
+setfmt(st_msc		 ," ","%-15s",posp( "66:15"));
+setfmt(st_smsp		 ," ","%-15s",posp( "81:15"));
+setfmt(st_user_type	 ," ", "%-1s",posp(  "96:1"));
+setfmt(st_sp_acc_nbr	 ," ", "%-9s",posp(  "97:9"));
+setfmt(st_sp_service_code," ","%-10s",posp("106:10"));
+setfmt(st_sp_code	 ," ", "%-5s",posp( "116:5"));
+setfmt(it_fee1		 ," ", "%06d",posp( "121:6"));
+setfmt(it_fee2		 ," ", "%06d",posp( "127:6"));
+setfmt(it_fee3		 ," ", "%06d",posp( "133:6"));
+setfmt(it_fee4		 ," ", "%06d",posp( "139:6"));
+aa:
+ticketvalid=1;
+if(trimcut(t_ori,0,1)=="#"){ticketvalid=-2;return;}
+st_call_type	  =IA5STRING(gettabpos(t_ori,tabp("0:1")));
+st_city_code	  ="";
+st_msisdn	  =IA5STRING(gettabpos(t_ori,tabp("1:1")));
+st_other_party	  =IA5STRING(gettabpos(t_ori,tabp("2:1")));
+st_start_time	  =IA5STRING(gettabpos(t_ori,tabp("4:1")));;
+it_duration	  =atoi(IA5STRING(gettabpos(t_ori,tabp("5:1"))));
+st_msc		  =IA5STRING(gettabpos(t_ori,tabp("6:1")));
+st_smsp		  =IA5STRING(gettabpos(t_ori,tabp("6:1")));
+st_user_type	  ="0";
+st_sp_acc_nbr	  =IA5STRING(gettabpos(t_ori,tabp("2:1")));
+st_sp_service_code=IA5STRING(gettabpos(t_ori,tabp("3:1")));;
+st_sp_code	  =IA5STRING(gettabpos(t_ori,tabp("2:1")));
+it_fee1		  =0;
+it_fee2		  =0;
+it_fee3		  =0;
+it_fee4	          =0;
+if(maxdatadate(substr(st_start_time,0,8))<0) ticketvalid=-1;
+
+
+}
